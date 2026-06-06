@@ -1,4 +1,4 @@
-namespace Titanic.Entity.Orm
+﻿namespace Titanic.Entity.Orm
 {
     /// <summary>
     /// Направление сортировки Entity ORM.
