@@ -263,6 +263,30 @@ namespace Titanic.Test.Entity
         }
 
         [SkippableFact]
+        public void EntityOrm_23A_ESQ_StartsWithFilter_ShouldMatch()
+        {
+            CreateDepartment("EO23A_First");
+            CreateDepartment("XX23A_Second");
+
+            var esq = DepartmentQuery();
+            esq.AddStartsWithFilter("Name", "EO23A_");
+
+            Assert.Equal("EO23A_First", esq.GetEntityCollection().Single().Get<string>("Name"));
+        }
+
+        [SkippableFact]
+        public void EntityOrm_23B_ESQ_EndsWithFilter_ShouldMatch()
+        {
+            CreateDepartment("EO23B_Target");
+            CreateDepartment("EO23B_Ignore");
+
+            var esq = DepartmentQuery();
+            esq.AddEndsWithFilter("Name", "_Target");
+
+            Assert.Equal("EO23B_Target", esq.GetEntityCollection().Single().Get<string>("Name"));
+        }
+
+        [SkippableFact]
         public void EntityOrm_24_ESQ_NotEqualFilter_ShouldExclude()
         {
             CreateDepartment("EO24_A");

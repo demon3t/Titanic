@@ -98,7 +98,7 @@ namespace Titanic.Test.Db.Integration
             var count = Db.Select()
                 .Column(Func.Count(Column.Asterisk()))
                 .From("departments").As("t")
-                .Where("name").IsContains("I06_")
+                .Where("name").IsLike("%I06_%")
                 .ExecuteScalar<int>();
 
             Assert.Equal(5, count);
@@ -366,7 +366,7 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("04")
+                .Where("name").IsLike("%04%")
                 .OrderBy("name", desc: true)
                 .ExecuteReader(r => rows.Add(r.Get<string>("name")));
 
@@ -383,7 +383,7 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("L05_")
+                .Where("name").IsLike("%L05_%")
                 .OrderBy("name")
                 .Limit(2)
                 .Take(2)
@@ -400,7 +400,7 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("06")
+                .Where("name").IsLike("%06%")
                 .OrderBy("name")
                 .ExecuteReader(r => rows.Add(r.Get<string>("name")));
 
@@ -416,7 +416,7 @@ namespace Titanic.Test.Db.Integration
             var count = Db.Select()
                 .Column(Func.Count(Column.Asterisk()))
                 .From("departments").As("t")
-                .Where("name").IsContains("D07")
+                .Where("name").IsLike("%D07%")
                 .ExecuteScalar<int>();
 
             Assert.Equal(2, count);
@@ -478,7 +478,7 @@ namespace Titanic.Test.Db.Integration
         }
 
         [SkippableFact]
-        public void Select_11_Contains()
+        public void Select_11_Like()
         {
             InsertDepartment("Alpha11");
             InsertDepartment("Alphabet11");
@@ -487,7 +487,7 @@ namespace Titanic.Test.Db.Integration
             var count = Db.Select()
                 .Column(Func.Count(Column.Asterisk()))
                 .From("departments").As("t")
-                .Where("name").IsContains("Alpha")
+                .Where("name").IsLike("%Alpha%")
                 .ExecuteScalar<int>();
 
             Assert.Equal(2, count);
@@ -534,9 +534,9 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             var first = Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("U14_");
+                .Where("name").IsLike("%U14_%");
             var second = Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("U14_");
+                .Where("name").IsLike("%U14_%");
 
             first.Union(second)
                 .OrderBy("name")
@@ -729,7 +729,7 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("Offset27_")
+                .Where("name").IsLike("%Offset27_%")
                 .OrderBy("name")
                 .Limit(10)
                 .Skip(1)
@@ -749,7 +749,7 @@ namespace Titanic.Test.Db.Integration
 
             var rows = new List<string>();
             Db.Select().Column("name").From("departments").As("t")
-                .Where("name").IsContains("Page28_")
+                .Where("name").IsLike("%Page28_%")
                 .OrderBy("name")
                 .Limit(2)
                 .Page(2, 2)
@@ -803,7 +803,7 @@ namespace Titanic.Test.Db.Integration
         }
 
         [SkippableFact]
-        public void Select_31_NotContains_ShouldExcludeMatchingRows()
+        public void Select_31_NotLike_ShouldExcludeMatchingRows()
         {
             InsertDepartment("Bad31_A");
             InsertDepartment("Bad31_B");
@@ -813,8 +813,8 @@ namespace Titanic.Test.Db.Integration
             Db.Select()
                 .Column("name")
                 .From("departments").As("t")
-                .Where("name").Not().IsContains("Bad31_")
-                .Where("name").IsContains("31_")
+                .Where("name").Not().IsLike("%Bad31_%")
+                .Where("name").IsLike("%31_%")
                 .OrderBy("name")
                 .ExecuteReader(r => rows.Add(r.Get<string>("name")));
 
@@ -851,7 +851,7 @@ namespace Titanic.Test.Db.Integration
             var rows = Db.Select()
                 .Column("name")
                 .From("departments").As("t")
-                .Where("name").IsContains("Reader33_")
+                .Where("name").IsLike("%Reader33_%")
                 .OrderBy("name")
                 .ExecuteReader(r => r.Get<string>("name"));
 
@@ -869,7 +869,7 @@ namespace Titanic.Test.Db.Integration
             var rows = Db.Select()
                 .Column("name")
                 .From("departments").As("t")
-                .Where("name").IsContains("Reader34_")
+                .Where("name").IsLike("%Reader34_%")
                 .OrderBy("name")
                 .ExecuteReader((IDataReader r) => r.GetString(r.GetOrdinal("name")));
 
@@ -887,7 +887,7 @@ namespace Titanic.Test.Db.Integration
             var query = Db.Select()
                 .Column("name")
                 .From("departments").As("t")
-                .Where("name").IsContains("Reader35_")
+                .Where("name").IsLike("%Reader35_%")
                 .OrderBy("name");
 
             var rows = Db.ExecuteReader(query, r => r.Get<string>("name"));
@@ -935,6 +935,7 @@ namespace Titanic.Test.Db.Integration
         #endregion Helpers
     }
 }
+
 
 
 

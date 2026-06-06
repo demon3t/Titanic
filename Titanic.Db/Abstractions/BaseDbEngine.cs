@@ -178,9 +178,12 @@ namespace Titanic.Db.Abstractions
                 throw new InvalidOperationException($"Binary expression '{expression.Operator}' must contain exactly two operands");
             }
 
-            if (expression.ConditionOperatorType == ConditionOperator.Contains)
+            if (expression.ConditionOperatorType is ConditionOperator.Contains
+                or ConditionOperator.StartsWith
+                or ConditionOperator.EndsWith
+                or ConditionOperator.ILike)
             {
-                return BuildContainsExpression(expression, context);
+                return BuildPatternMatchExpression(expression, context);
             }
 
             var op = expression.ConditionOperatorType.HasValue
@@ -190,21 +193,34 @@ namespace Titanic.Db.Abstractions
             return $"({expression.Children[0].ToSql(context)} {op} {expression.Children[1].ToSql(context)})";
         }
 
-        private string BuildContainsExpression(QueryExpression expression, QueryBuildContext context)
+        private string BuildPatternMatchExpression(QueryExpression expression, QueryBuildContext context)
         {
             var leftSql = $"{GetSqlFunctionSql(SqlFunction.Upper)}({expression.Children[0].ToSql(context)})";
-            var rightSql = BuildContainsValueExpression(expression.Children[1], context);
+            var rightSql = BuildPatternValueExpression(expression, expression.Children[1], context);
             return $"({leftSql} LIKE {rightSql})";
         }
 
-        private string BuildContainsValueExpression(QueryExpression expression, QueryBuildContext context)
+        private string BuildPatternValueExpression(QueryExpression owner, QueryExpression expression, QueryBuildContext context)
         {
             var upperSql = GetSqlFunctionSql(SqlFunction.Upper);
+            var value = ApplyPattern(owner.ConditionOperatorType, expression.Value);
             return expression.ExpressionType switch
             {
-                ExpressionType.Parameter => $"{upperSql}({context.AddParameter($"%{expression.Value}%")})",
-                ExpressionType.Const => $"{upperSql}({FormatConstValue($"%{expression.Value}%")})",
-                _ => throw new NotSupportedException("Contains supports only parameter or constant right operand.")
+                ExpressionType.Parameter => $"{upperSql}({context.AddParameter(value)})",
+                ExpressionType.Const => $"{upperSql}({FormatConstValue(value)})",
+                _ => throw new NotSupportedException("Pattern match supports only parameter or constant right operand.")
+            };
+        }
+
+        private static object? ApplyPattern(ConditionOperator? conditionOperator, object? value)
+        {
+            return conditionOperator switch
+            {
+                ConditionOperator.Contains => $"%{value}%",
+                ConditionOperator.StartsWith => $"{value}%",
+                ConditionOperator.EndsWith => $"%{value}",
+                ConditionOperator.ILike => value,
+                _ => value
             };
         }
 
@@ -223,7 +239,9 @@ namespace Titanic.Db.Abstractions
                 ConditionOperator.LessThanOrEqual => "<=",
                 ConditionOperator.In => "IN",
                 ConditionOperator.NotIn => "NOT IN",
-                ConditionOperator.Contains => "LIKE",
+                ConditionOperator.Like => "LIKE",
+                ConditionOperator.NotLike => "NOT LIKE",
+                ConditionOperator.ILike => "ILIKE",
                 ConditionOperator.IsNull => "IS NULL",
                 ConditionOperator.IsNotNull => "IS NOT NULL",
                 _ => throw new NotSupportedException($"Condition operator {conditionOperator} is not supported")

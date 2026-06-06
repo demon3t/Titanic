@@ -143,6 +143,9 @@ X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 | `10` | `ILike` | PostgreSQL ILIKE, если поддерживается провайдером. |
 | `11` | `IsNull` | Значение отсутствует. |
 | `12` | `IsNotNull` | Значение заполнено. |
+| `13` | `Contains` | Поиск по вхождению без ручного `%...%`. |
+| `14` | `StartsWith` | Поиск по началу строки без ручного `%`. |
+| `15` | `EndsWith` | Поиск по концу строки без ручного `%`. |
 ## Единая модель операции
 
 `POST {Api.Path}` принимает объект `EntityApiRequest`.
@@ -298,9 +301,12 @@ type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
 | `3` | `GreaterThanOrEqual` | `value` | Больше или равно. |
 | `4` | `LessThan` | `value` | Меньше. |
 | `5` | `LessThanOrEqual` | `value` | Меньше или равно. |
-| `8` | `Like` | `value` | SQL LIKE. |
+| `13` | `Contains` | `value` | Case-insensitive contains, `%` добавляются backend-ом. |
+| `14` | `StartsWith` | `value` | Case-insensitive starts-with, `%` добавляется backend-ом справа. |
+| `15` | `EndsWith` | `value` | Case-insensitive ends-with, `%` добавляется backend-ом слева. |
+| `8` | `Like` | `value` | Низкоуровневый SQL LIKE. Шаблон с `%` должен быть подготовлен клиентом. |
 | `10` | `ILike` | `value` | Case-insensitive LIKE, если поддерживается провайдером. |
-| `9` | `NotLike` | `value` | NOT LIKE. |
+| `9` | `NotLike` | `value` | NOT LIKE. Шаблон с `%` должен быть подготовлен клиентом. |
 | `11` | `IsNull` | без `value` | Значение отсутствует. |
 | `12` | `IsNotNull` | без `value` | Значение заполнено. |
 | `6` | `In` | subquery | Сейчас рассчитано на backend-subquery, для UI напрямую обычно не использовать. |
@@ -324,7 +330,7 @@ type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
 Пример условия:
 
 ```text
-Name LIKE 'A%' AND (Email LIKE '%@t.com' OR Salary >= 1000)
+Name starts with 'A' AND (Email contains '@t.com' OR Salary >= 1000)
 ```
 
 JSON:
@@ -340,11 +346,11 @@ JSON:
     "filters": {
       "logicalOperation": 0,
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "A%" },
+        { "path": "Name", "comparisonType": 14, "value": "A" },
         {
           "logicalOperation": 1,
           "items": [
-            { "path": "Email", "comparisonType": 8, "value": "%@t.com" },
+            { "path": "Email", "comparisonType": 13, "value": "@t.com" },
             { "path": "Salary", "comparisonType": 3, "value": 1000 }
           ]
         }
@@ -453,7 +459,7 @@ X-Entity-Key: postman-local-user
       "isEnabled": true,
       "logicalOperation": 0,
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "%Department%" }
+        { "path": "Name", "comparisonType": 13, "value": "Department" }
       ]
     },
     "orders": [
@@ -901,7 +907,7 @@ function buildSaveRequest(tableName: string, values: Record<string, unknown>): E
     ],
     "filters": {
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "%eng%" }
+        { "path": "Name", "comparisonType": 13, "value": "eng" }
       ]
     },
     "orders": [

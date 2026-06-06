@@ -5,9 +5,8 @@ namespace Titanic.Db.Builders
 {
     /// <summary>
     /// Билдер условий HAVING.
-    /// Позволяет задавать условия группировки с поддержкой AND/OR.
     /// </summary>
-    /// <typeparam name="TParent"> Тип родительского билдера. </typeparam>
+    /// <typeparam name="TParent">Тип родительского билдера.</typeparam>
     internal class HavingBuilder<TParent>
     {
         #region Поля
@@ -55,8 +54,8 @@ namespace Titanic.Db.Builders
         public HavingBuilder<TParent> LessThanOrEqual(string columnName, QueryExpression value)
             => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.LessThanOrEqual, value));
 
-        public HavingBuilder<TParent> Contains(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value));
+        public HavingBuilder<TParent> Like(string columnName, QueryExpression value)
+            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Like, value));
 
         public HavingBuilder<TParent> IsNull(string columnName)
             => Add(QueryExpression.IsNull(columnName));
@@ -91,7 +90,7 @@ namespace Titanic.Db.Builders
         #region Методы
 
         /// <summary>
-        /// Завершить контекст HAVING и вернуть родительский билдер.
+        /// Завершить построение HAVING и вернуть родительский билдер.
         /// </summary>
         public TParent End()
         {

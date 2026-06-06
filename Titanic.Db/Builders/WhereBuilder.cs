@@ -4,9 +4,9 @@ using Titanic.Db.Enums;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Билдер условий WHERE/HAVING/ON.
+    /// Билдер условий WHERE, HAVING и ON.
     /// </summary>
-    /// <typeparam name="TParent"> Тип родительского билдера. </typeparam>
+    /// <typeparam name="TParent">Тип родительского билдера.</typeparam>
     public class WhereBuilder<TParent>
     {
         #region Поля
@@ -80,13 +80,13 @@ namespace Titanic.Db.Builders
         public WhereBuilder<TParent> NotIn(string columnName, BaseQuery subQuery)
             => Add(QueryExpression.NotIn(columnName, subQuery));
 
-        public WhereBuilder<TParent> Contains(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value));
+        public WhereBuilder<TParent> Like(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Like, value));
 
-        public WhereBuilder<TParent> Contains(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Contains, value));
+        public WhereBuilder<TParent> Like(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Like, value));
 
-        public WhereBuilder<TParent> NotContains(string columnName, QueryExpression value) => Add(QueryExpression.Not(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value)));
+        public WhereBuilder<TParent> NotLike(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.NotLike, value));
 
-        public WhereBuilder<TParent> NotContains(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Not(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Contains, value)));
+        public WhereBuilder<TParent> NotLike(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.NotLike, value));
 
         public WhereBuilder<TParent> IsNull(string columnName) => Add(QueryExpression.IsNull(columnName));
 
@@ -151,7 +151,7 @@ namespace Titanic.Db.Builders
         #region Методы
 
         /// <summary>
-        /// Завершить контекст WHERE и вернуть родительский билдер.
+        /// Завершить построение условий и вернуть родительский билдер.
         /// </summary>
         public TParent End()
         {
@@ -164,8 +164,7 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Применить условия и вернуть родительский билдер.
-        /// Внутренний метод — не вызывать напрямую из пользовательского кода.
+        /// Применить накопленные условия и вернуть родительский билдер.
         /// </summary>
         internal TParent Apply()
         {

@@ -202,7 +202,7 @@ var rows = EntityManager
     .AddColumn("Name")
     .AddColumn("DepartmentId", "Department")
     .AddColumn("DepartmentId.Name", "DepartmentName")
-    .AddFilter(ConditionOperator.Like, "Email", "%@company.com")
+    .AddFilter(ConditionOperator.Contains, "Email", "@company.com")
     .OrderBy("Name")
     .GetEntityCollection();
 
@@ -265,7 +265,7 @@ var rows = EntityManager
     .AddColumn("Name")
     .AddColumn("DepartmentId.Name", "DepartmentName")
     .AddFilter(ConditionOperator.Equal, "DepartmentId.Name", "Engineering")
-    .AddFilter(ConditionOperator.Like, "Email", "%@company.com")
+    .AddFilter(ConditionOperator.Contains, "Email", "@company.com")
     .GetEntityCollection();
 ```
 
@@ -355,7 +355,7 @@ Entity API публикует два endpoint-а на базовом пути м
       "isEnabled": true,
       "logicalOperation": "And",
       "items": [
-        { "path": "Name", "comparisonType": "Like", "value": "%John%" }
+        { "path": "Name", "comparisonType": 13, "value": "John" }
       ]
     },
     "orders": [

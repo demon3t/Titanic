@@ -55,6 +55,21 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
+        /// Добавить фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter AddContains(string path, object? value) => Add(path, ConditionOperator.Contains, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter AddStartsWith(string path, object? value) => Add(path, ConditionOperator.StartsWith, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter AddEndsWith(string path, object? value) => Add(path, ConditionOperator.EndsWith, value);
+
+        /// <summary>
         /// Добавить фильтр диапазона.
         /// </summary>
         /// <param name="path"> ORM-путь колонки. </param>

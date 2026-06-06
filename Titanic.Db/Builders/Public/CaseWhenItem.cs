@@ -3,7 +3,7 @@ using Titanic.Db.Abstractions;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Этап выбора оператора сравнения для WHEN.
+    /// Этап выбора оператора сравнения для CASE WHEN.
     /// </summary>
     public class CaseWhenItem
     {
@@ -52,11 +52,11 @@ namespace Titanic.Db.Builders
         public CaseThenItem IsLessOrEqual(object? value)
             => IsLessOrEqual(QueryExpression.Param(value));
 
-        public CaseThenItem IsContains(QueryExpression right)
-            => Build(Enums.ConditionOperator.Contains, right);
+        public CaseThenItem IsLike(QueryExpression right)
+            => Build(Enums.ConditionOperator.Like, right);
 
-        public CaseThenItem IsContains(object? value)
-            => IsContains(QueryExpression.Param(value));
+        public CaseThenItem IsLike(object? value)
+            => IsLike(QueryExpression.Param(value));
 
         private CaseThenItem Build(Enums.ConditionOperator op, QueryExpression right)
         {

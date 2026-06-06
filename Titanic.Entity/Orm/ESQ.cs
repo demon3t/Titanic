@@ -103,6 +103,24 @@ namespace Titanic.Entity.Orm
         public EntityQueryFilter CreateFilter(ConditionOperator comparisonType, string columnPath, object? value)
             => new EntityQueryFilter(columnPath, comparisonType).WithValue(value);
 
+        /// <summary>
+        /// Создать фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter CreateContainsFilter(string columnPath, object? value)
+            => CreateFilter(ConditionOperator.Contains, columnPath, value);
+
+        /// <summary>
+        /// Создать фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter CreateStartsWithFilter(string columnPath, object? value)
+            => CreateFilter(ConditionOperator.StartsWith, columnPath, value);
+
+        /// <summary>
+        /// Создать фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter CreateEndsWithFilter(string columnPath, object? value)
+            => CreateFilter(ConditionOperator.EndsWith, columnPath, value);
+
         public EntityQueryFilter CreateIsNullFilter(string columnPath)
             => new EntityQueryFilter(columnPath, ConditionOperator.IsNull);
 
@@ -114,6 +132,24 @@ namespace Titanic.Entity.Orm
 
         public EntityQueryFilter AddFilter(ConditionOperator comparisonType, string columnPath, object? value = null)
             => Filters.Add(columnPath, comparisonType, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter AddContainsFilter(string columnPath, object? value)
+            => Filters.AddContains(columnPath, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter AddStartsWithFilter(string columnPath, object? value)
+            => Filters.AddStartsWith(columnPath, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter AddEndsWithFilter(string columnPath, object? value)
+            => Filters.AddEndsWith(columnPath, value);
 
         public EntityQueryFilter AddBetweenFilter(string columnPath, object? from, object? to)
             => Filters.AddBetween(columnPath, from, to);
@@ -309,6 +345,8 @@ namespace Titanic.Entity.Orm
                 ConditionOperator.LessThan => BuildBinary(left, ConditionOperator.LessThan, Column.Parameter(filter.Value)),
                 ConditionOperator.LessThanOrEqual => BuildBinary(left, ConditionOperator.LessThanOrEqual, Column.Parameter(filter.Value)),
                 ConditionOperator.Contains => BuildBinary(left, ConditionOperator.Contains, Column.Parameter(filter.Value)),
+                ConditionOperator.StartsWith => BuildBinary(left, ConditionOperator.StartsWith, Column.Parameter(filter.Value)),
+                ConditionOperator.EndsWith => BuildBinary(left, ConditionOperator.EndsWith, Column.Parameter(filter.Value)),
                 ConditionOperator.IsNull => BuildUnary(left, ConditionOperator.IsNull),
                 ConditionOperator.IsNotNull => BuildUnary(left, ConditionOperator.IsNotNull),
                 ConditionOperator.In or ConditionOperator.NotIn => BuildInExpression(left, filter),

@@ -172,6 +172,50 @@ namespace Titanic.Test.Entity
         }
 
         [Fact]
+        public void EntitySelectBuilder_ShouldBuildStartsWithFilter()
+        {
+            var build = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
+                .AddColumn("Name")
+                .Where("Name").IsStartsWith("Dev")
+                .Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	(UPPER("t0"."name") LIKE UPPER(@p0))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "Dev%");
+        }
+
+        [Fact]
+        public void EntitySelectBuilder_ShouldBuildEndsWithFilter()
+        {
+            var build = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
+                .AddColumn("Name")
+                .Where("Name").IsEndsWith("Ops")
+                .Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	(UPPER("t0"."name") LIKE UPPER(@p0))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "%Ops");
+        }
+
+        [Fact]
         public void EntitySelectBuilder_ShouldMaterializeDictionaryBackedRecord()
         {
             var record = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
@@ -567,11 +611,11 @@ namespace Titanic.Test.Entity
               "filters": {
                 "logicalOperation": 0,
                 "items": [
-                  { "path": "Name", "comparisonType": 8, "value": "A" },
+                  { "path": "Name", "comparisonType": 13, "value": "A" },
                   {
                     "logicalOperation": 1,
                     "items": [
-                      { "path": "Email", "comparisonType": 8, "value": "@t.com" },
+                      { "path": "Email", "comparisonType": 13, "value": "@t.com" },
                       { "path": "Salary", "comparisonType": 3, "value": 1000 }
                     ]
                   }
@@ -812,6 +856,30 @@ namespace Titanic.Test.Entity
         }
 
         [Fact]
+        public void ESQ_ShouldBuildStartsWithAndEndsWithFilters()
+        {
+            var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
+            esq.AddColumn("Name");
+            esq.AddStartsWithFilter("Name", "Dev");
+            esq.AddEndsWithFilter("Email", "@t.com");
+
+            var build = esq.Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	((UPPER("t0"."name") LIKE UPPER(@p0)) AND (UPPER("t0"."email") LIKE UPPER(@p1)))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "Dev%", "%@t.com");
+        }
+
+        [Fact]
         public void ESQJsonModel_LocalizedAggregationGroupBy_ShouldGroupPhysicalColumns()
         {
             var cultureId = Guid.Parse("55555555-5555-5555-5555-555555555555");
@@ -939,6 +1007,7 @@ namespace Titanic.Test.Entity
         }
     }
 }
+
 
 
 
