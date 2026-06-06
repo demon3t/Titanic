@@ -116,6 +116,45 @@ app.MapTitanicEntityApi();
 app.Run();
 ```
 
+## Пример конфигурации
+
+```json
+{
+  "TitanicEntity": {
+    "Managers": [
+      {
+        "Name": "posgreTest",
+        "DbProviderName": "posgreTest",
+        "ManagerType": "MyApp.EntityManagers.PostgresEntityManager, MyApp",
+        "EntityModelNamespaces": [
+          "MyApp.EntityModels.*"
+        ],
+        "Api": {
+          "AutoRegisterEndpoint": true,
+          "Path": "/entity/posgreTest",
+          "AuthorizationHeaderName": "X-Entity-Key",
+          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+          "DefaultBatchExecutionMode": "Sequential"
+        },
+        "ValidateDatabaseSchemaOnCompile": true,
+        "Options": {
+          "MaxReadRowCount": 20000
+        }
+      }
+    ]
+  }
+}
+```
+
+Ключевые настройки:
+
+- `DbProviderName` — имя провайдера, зарегистрированного в `Titanic.Db`.
+- `ManagerType` — тип пользовательского менеджера поверх `BaseEntityManager`.
+- `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
+- `Api.Path` — базовый route для HTTP API конкретного менеджера.
+- `Api.AuthorizationProviderType` — тип провайдера, который авторизует запрос и возвращает `UserConnection`.
+- `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
+
 ## Что важно знать про слой
 
 - имя таблицы в `[Entity("...")]` задаётся без схемы;
