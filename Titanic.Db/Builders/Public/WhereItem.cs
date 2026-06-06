@@ -149,26 +149,15 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>Добавить условие IS NULL или IS NOT NULL после <see cref="Not"/>.</summary>
+        /// <summary>Добавить условие IS NULL. После <see cref="Not"/> формируется отрицание над IS NULL.</summary>
         public TQuery IsNull()
         {
             if (_negated)
             {
-                return _addWhere(IsNotNullExpr());
+                return _addWhere(QueryExpression.Not(IsNullExpr()));
             }
 
             return _addWhere(IsNullExpr());
-        }
-
-        /// <summary>Добавить условие IS NOT NULL.</summary>
-        public TQuery IsNotNull()
-        {
-            if (_negated)
-            {
-                return _addWhere(IsNullExpr());
-            }
-
-            return _addWhere(IsNotNullExpr());
         }
 
         /// <summary>Добавить условие IN по подзапросу. После <see cref="Not"/> формируется NOT IN.</summary>
@@ -283,9 +272,5 @@ namespace Titanic.Db.Builders
                 ? QueryExpression.IsNull(_columnName)
                 : QueryExpression.IsNull(_alias, _columnName);
 
-        private QueryExpression IsNotNullExpr()
-            => string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.IsNotNull(_columnName)
-                : QueryExpression.IsNotNull(_alias, _columnName);
     }
 }

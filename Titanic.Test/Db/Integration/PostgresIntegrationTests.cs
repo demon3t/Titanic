@@ -687,7 +687,7 @@ namespace Titanic.Test.Db.Integration
             var count = Db.Select()
                 .Column(Func.Count(Column.Asterisk()))
                 .From("employees").As("e")
-                .Where("e", "department_id").IsNotNull()
+                .Where("e", "department_id").Not().IsNull()
                 .ExecuteScalar<int>();
 
             Assert.True(count >= 1);

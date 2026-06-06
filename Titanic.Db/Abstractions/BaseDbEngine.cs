@@ -294,7 +294,7 @@ namespace Titanic.Db.Abstractions
         {
             if (expression.Children.Count != 1)
             {
-                throw new InvalidOperationException($"Unary expression '{expression.Operator}' must contain exactly one operand");
+                throw new InvalidOperationException($"Unary expression '{GetUnaryOperatorDebugName(expression)}' must contain exactly one operand");
             }
 
             if (expression.ConditionOperatorType.HasValue)
@@ -303,12 +303,41 @@ namespace Titanic.Db.Abstractions
                 return $"({expression.Children[0].ToSql(context)} {op})";
             }
 
-            return expression.Operator switch
+            return expression.UnaryOperatorType switch
             {
-                "NOT" => $"NOT ({expression.Children[0].ToSql(context)})",
-                "EXISTS" => $"EXISTS {expression.Children[0].ToSql(context)}",
+                UnaryOperator.Not => BuildNotUnaryExpression(expression.Children[0], context),
+                UnaryOperator.Exists => $"EXISTS {expression.Children[0].ToSql(context)}",
+                UnaryOperator.None when !string.IsNullOrWhiteSpace(expression.Operator) => $"({expression.Children[0].ToSql(context)} {expression.Operator})",
                 _ => $"({expression.Children[0].ToSql(context)} {expression.Operator})"
             };
+        }
+
+        private static string GetUnaryOperatorDebugName(QueryExpression expression)
+        {
+            return expression.UnaryOperatorType != UnaryOperator.None
+                ? expression.UnaryOperatorType.ToString()
+                : expression.Operator ?? string.Empty;
+        }
+
+        private static string BuildNotUnaryExpression(QueryExpression childExpression, QueryBuildContext context)
+        {
+            if (childExpression.ExpressionType == ExpressionType.Unary && childExpression.ConditionOperatorType.HasValue)
+            {
+                var invertedOperator = childExpression.ConditionOperatorType.Value switch
+                {
+                    ConditionOperator.IsNull => ConditionOperator.IsNotNull,
+                    ConditionOperator.IsNotNull => ConditionOperator.IsNull,
+                    _ => (ConditionOperator?)null
+                };
+
+                if (invertedOperator.HasValue)
+                {
+                    var op = context.Engine.GetConditionOperatorSql(invertedOperator.Value);
+                    return $"({childExpression.Children[0].ToSql(context)} {op})";
+                }
+            }
+
+            return $"NOT ({childExpression.ToSql(context)})";
         }
 
         private static string BuildGroupExpression(QueryExpression expression, QueryBuildContext context)

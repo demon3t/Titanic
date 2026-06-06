@@ -325,7 +325,7 @@ namespace Titanic.Test.Db
                 .Column("id")
                 .Column("name")
                 .From("pending_users").As("p")
-                .Where("name").IsNotNull()
+                .Where("name").Not().IsNull()
                 .And("status").IsEqual(Column.Parameter("approved"));
 
             var query = _provider.Insert("users")

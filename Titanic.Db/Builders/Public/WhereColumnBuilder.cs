@@ -82,10 +82,6 @@ namespace Titanic.Db.Abstractions
         public TParent IsNull()
             => Add(_alias != null ? QueryExpression.IsNull(_alias, _columnName) : QueryExpression.IsNull(_columnName));
 
-        /// <summary>Колонка IS NOT NULL.</summary>
-        public TParent IsNotNull()
-            => Add(_alias != null ? QueryExpression.IsNotNull(_alias, _columnName) : QueryExpression.IsNotNull(_columnName));
-
         /// <summary>Колонка IN (подзапрос).</summary>
         public TParent In(BaseQuery subQuery)
             => Add(QueryExpression.Binary(ColumnExpr(), ConditionOperator.In, QueryExpression.SubQuery(subQuery)));

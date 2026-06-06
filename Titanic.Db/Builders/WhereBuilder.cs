@@ -92,10 +92,6 @@ namespace Titanic.Db.Builders
 
         public WhereBuilder<TParent> IsNull(string alias, string columnName) => Add(QueryExpression.IsNull(alias, columnName));
 
-        public WhereBuilder<TParent> IsNotNull(string columnName) => Add(QueryExpression.IsNotNull(columnName));
-
-        public WhereBuilder<TParent> IsNotNull(string alias, string columnName) => Add(QueryExpression.IsNotNull(alias, columnName));
-
         public WhereBuilder<TParent> Exists(BaseQuery subQuery) => Add(QueryExpression.Exists(subQuery));
 
         public WhereBuilder<TParent> NotExists(BaseQuery subQuery) => Add(QueryExpression.Not(QueryExpression.Exists(subQuery)));

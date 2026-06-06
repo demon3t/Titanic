@@ -60,9 +60,6 @@ namespace Titanic.Db.Builders
         public HavingBuilder<TParent> IsNull(string columnName)
             => Add(QueryExpression.IsNull(columnName));
 
-        public HavingBuilder<TParent> IsNotNull(string columnName)
-            => Add(QueryExpression.IsNotNull(columnName));
-
         public HavingBuilder<TParent> Exists(BaseQuery subQuery)
             => Add(QueryExpression.Exists(subQuery));
 
