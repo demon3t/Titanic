@@ -46,19 +46,10 @@ namespace Titanic.Db.Enums
         NotIn = 7,
 
         /// <summary>
-        /// LIKE.
+        /// Регистронезависимое contains-сравнение.
+        /// Формируется как UPPER(column) LIKE UPPER(%value%).
         /// </summary>
-        Like = 8,
-
-        /// <summary>
-        /// NOT LIKE.
-        /// </summary>
-        NotLike = 9,
-
-        /// <summary>
-        /// PostgreSQL ILIKE.
-        /// </summary>
-        ILike = 10,
+        Contains = 8,
 
         /// <summary>
         /// Проверка на NULL.

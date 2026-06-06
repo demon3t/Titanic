@@ -154,12 +154,9 @@ namespace Titanic.Db.Abstractions
         internal static QueryExpression Less(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.LessThan, value);
         internal static QueryExpression LessOrEqual(string columnName, object? value) => Compare(columnName, ConditionOperator.LessThanOrEqual, Param(value));
         internal static QueryExpression LessOrEqual(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.LessThanOrEqual, Param(value));
-        internal static QueryExpression Like(string columnName, object? value) => Compare(columnName, ConditionOperator.Like, Param(value));
-        internal static QueryExpression Like(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.Like, Param(value));
-        internal static QueryExpression Like(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.Like, value);
-        internal static QueryExpression NotLike(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.NotLike, value);
-        internal static QueryExpression ILike(string columnName, object? value) => Compare(columnName, ConditionOperator.ILike, Param(value));
-        internal static QueryExpression ILike(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.ILike, Param(value));
+        internal static QueryExpression Contains(string columnName, object? value) => Compare(columnName, ConditionOperator.Contains, Param(value));
+        internal static QueryExpression Contains(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.Contains, Param(value));
+        internal static QueryExpression Contains(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.Contains, value);
 
         internal static QueryExpression IsNull(string columnName)
             => new(ExpressionType.Unary, conditionOperator: ConditionOperator.IsNull, expressions: new[] { Column(columnName) });

@@ -722,15 +722,4 @@ namespace Titanic.Entity.Orm
             string? DisplayAlias,
             bool IsHidden = false);
     }
-
-    /// <summary>
-    /// Generic convenience wrapper over the non-generic builder.
-    /// </summary>
-    public sealed class EntitySelectBuilder<TEntity> : EntitySelectBuilder
-    {
-        public EntitySelectBuilder(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, typeof(TEntity), userConnection)
-        {
-        }
-    }
 }

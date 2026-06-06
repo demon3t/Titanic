@@ -239,25 +239,25 @@ namespace Titanic.Test.Entity
         }
 
         [SkippableFact]
-        public void EntityOrm_22_ESQ_LikeFilter_ShouldMatch()
+        public void EntityOrm_22_ESQ_ContainsFilter_ShouldMatch()
         {
             CreateDepartment("EO22_A");
             CreateDepartment("EO22_B");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Like, "Name", "EO22_%");
+            esq.AddFilter(ConditionOperator.Contains, "Name", "EO22_");
 
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
 
         [SkippableFact]
-        public void EntityOrm_23_ESQ_NotLikeFilter_ShouldExclude()
+        public void EntityOrm_23_ESQ_NotContainsFilter_ShouldExclude()
         {
             CreateDepartment("EO23_Bad");
             CreateDepartment("EO23_Good");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.NotLike, "Name", "%Bad");
+            esq.AddFilter(ConditionOperator.Contains, "Name", "Bad").Not();
 
             Assert.Equal("EO23_Good", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -327,7 +327,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO30_NotNull", "value");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Like, "Name", "EO30_%");
+            esq.AddFilter(ConditionOperator.Contains, "Name", "EO30_");
             esq.AddIsNullFilter("Description");
 
             Assert.Equal("EO30_Null", esq.GetEntityCollection().Single().Get<string>("Name"));
@@ -340,7 +340,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO31_NotNull", "value");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Like, "Name", "EO31_%");
+            esq.AddFilter(ConditionOperator.Contains, "Name", "EO31_");
             esq.AddIsNotNullFilter("Description");
 
             Assert.Equal("EO31_NotNull", esq.GetEntityCollection().Single().Get<string>("Name"));

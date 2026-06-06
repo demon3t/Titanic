@@ -80,13 +80,13 @@ namespace Titanic.Db.Builders
         public WhereBuilder<TParent> NotIn(string columnName, BaseQuery subQuery)
             => Add(QueryExpression.NotIn(columnName, subQuery));
 
-        public WhereBuilder<TParent> Like(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Like, value));
+        public WhereBuilder<TParent> Contains(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value));
 
-        public WhereBuilder<TParent> Like(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Like, value));
+        public WhereBuilder<TParent> Contains(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Contains, value));
 
-        public WhereBuilder<TParent> NotLike(string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.NotLike, value));
+        public WhereBuilder<TParent> NotContains(string columnName, QueryExpression value) => Add(QueryExpression.Not(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value)));
 
-        public WhereBuilder<TParent> NotLike(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.NotLike, value));
+        public WhereBuilder<TParent> NotContains(string alias, string columnName, QueryExpression value) => Add(QueryExpression.Not(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Contains, value)));
 
         public WhereBuilder<TParent> IsNull(string columnName) => Add(QueryExpression.IsNull(columnName));
 

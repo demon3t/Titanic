@@ -75,12 +75,12 @@ namespace Titanic.Db.Abstractions
             => Add(QueryExpression.Binary(ColumnExpr(), ConditionOperator.LessThanOrEqual, QueryExpression.Column(otherAlias, otherColumn)));
 
         /// <summary> Колонка соответствует LIKE. </summary>
-        public TParent Like(QueryExpression value)
-            => Add(QueryExpression.Binary(ColumnExpr(), ConditionOperator.Like, value));
+        public TParent Contains(QueryExpression value)
+            => Add(QueryExpression.Binary(ColumnExpr(), ConditionOperator.Contains, value));
 
         /// <summary> Колонка не соответствует LIKE. </summary>
-        public TParent NotLike(QueryExpression value)
-            => Add(QueryExpression.Binary(ColumnExpr(), ConditionOperator.NotLike, value));
+        public TParent NotContains(QueryExpression value)
+            => Add(QueryExpression.Not(QueryExpression.Binary(ColumnExpr(), ConditionOperator.Contains, value)));
 
         /// <summary> Колонка IS NULL. </summary>
         public TParent IsNull()

@@ -308,8 +308,7 @@ namespace Titanic.Entity.Orm
                 ConditionOperator.GreaterThanOrEqual => BuildBinary(left, ConditionOperator.GreaterThanOrEqual, Column.Parameter(filter.Value)),
                 ConditionOperator.LessThan => BuildBinary(left, ConditionOperator.LessThan, Column.Parameter(filter.Value)),
                 ConditionOperator.LessThanOrEqual => BuildBinary(left, ConditionOperator.LessThanOrEqual, Column.Parameter(filter.Value)),
-                ConditionOperator.Like or ConditionOperator.ILike => BuildBinary(left, ConditionOperator.Like, Column.Parameter(filter.Value)),
-                ConditionOperator.NotLike => BuildBinary(left, ConditionOperator.NotLike, Column.Parameter(filter.Value)),
+                ConditionOperator.Contains => BuildBinary(left, ConditionOperator.Contains, Column.Parameter(filter.Value)),
                 ConditionOperator.IsNull => BuildUnary(left, ConditionOperator.IsNull),
                 ConditionOperator.IsNotNull => BuildUnary(left, ConditionOperator.IsNotNull),
                 ConditionOperator.In or ConditionOperator.NotIn => BuildInExpression(left, filter),
@@ -345,51 +344,6 @@ namespace Titanic.Entity.Orm
         }
 
         internal sealed record EntityQueryOrder(string Path, bool Desc);
-    }
-
-    /// <summary>
-    /// Generic convenience wrapper over EntitySchemaQuery.
-    /// </summary>
-    public class EntitySchemaQuery<TRootEntity> : EntitySchemaQuery
-    {
-        public EntitySchemaQuery(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, typeof(TRootEntity), userConnection)
-        {
-        }
-    }
-
-    /// <summary>
-    /// Backward-compatible short alias for EntitySchemaQuery.
-    /// </summary>
-    [Obsolete("Use EntitySchemaQuery instead.")]
-    public class ESQ : EntitySchemaQuery
-    {
-        public ESQ(BaseDbProvider provider, Type entityType, UserConnection userConnection)
-            : base(provider, entityType, userConnection)
-        {
-        }
-
-        public ESQ(BaseDbProvider provider, string tableName, UserConnection userConnection)
-            : base(provider, tableName, userConnection)
-        {
-        }
-
-        internal ESQ(BaseDbProvider provider, EntityStructure structure, UserConnection userConnection)
-            : base(provider, structure, userConnection)
-        {
-        }
-    }
-
-    /// <summary>
-    /// Backward-compatible generic short alias for EntitySchemaQuery.
-    /// </summary>
-    [Obsolete("Use EntitySchemaQuery<T> instead.")]
-    public sealed class ESQ<TRootEntity> : EntitySchemaQuery<TRootEntity>
-    {
-        public ESQ(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, userConnection)
-        {
-        }
     }
 }
 

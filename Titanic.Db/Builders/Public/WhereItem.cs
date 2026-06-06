@@ -147,16 +147,13 @@ namespace Titanic.Db.Builders
         /// <summary>
         /// Добавить условие LIKE (или NOT LIKE если вызван Not()).
         /// </summary>
-        public TQuery IsLike(object? value)
+        public TQuery IsContains(object? value)
         {
-            if (_negated)
-            {
-                return _addWhere(QueryExpression.Binary(
-                    LeftColumnExpr(),
-                    Enums.ConditionOperator.NotLike,
-                    QueryExpression.Param(value)));
-            }
-            return _addWhere(LikeExpr(value));
+            var expr = _negated
+                ? QueryExpression.Not(ContainsExpr(value))
+                : ContainsExpr(value);
+            _negated = false;
+            return _addWhere(expr);
         }
 
         /// <summary>
@@ -267,14 +264,14 @@ namespace Titanic.Db.Builders
                 : QueryExpression.LessOrEqual(_alias, _columnName, value);
         }
 
-        private QueryExpression LikeExpr(object? value)
+        private QueryExpression ContainsExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Like, valueExpression);
+                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Contains, valueExpression);
 
             return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.Like(_columnName, value)
-                : QueryExpression.Like(_alias, _columnName, value);
+                ? QueryExpression.Contains(_columnName, value)
+                : QueryExpression.Contains(_alias, _columnName, value);
         }
 
         private QueryExpression IsNullExpr()

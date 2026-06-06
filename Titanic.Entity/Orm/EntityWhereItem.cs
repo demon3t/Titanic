@@ -67,11 +67,16 @@ namespace Titanic.Entity.Orm
             return Add(BuildBinary(ConditionOperator.LessThanOrEqual, Column.Parameter(value)));
         }
 
-        public EntitySelectBuilder IsLike(object? value)
+        public EntitySelectBuilder IsContains(object? value)
         {
-            var op = _negated ? ConditionOperator.NotLike : ConditionOperator.Like;
+            var expression = BuildBinary(ConditionOperator.Contains, Column.Parameter(value));
+            if (!_negated)
+            {
+                return Add(expression);
+            }
+
             _negated = false;
-            return Add(BuildBinary(op, Column.Parameter(value)));
+            return Add(QueryExpression.Not(expression));
         }
 
         public EntitySelectBuilder IsNull()
@@ -130,39 +135,5 @@ namespace Titanic.Entity.Orm
         {
             return EntityQueryExpression.Unary(op, _leftExpression);
         }
-    }
-
-    internal sealed class EntityQueryExpression : QueryExpression
-    {
-        private EntityQueryExpression(
-            ExpressionType expressionType,
-            ConditionOperator? conditionOperator = null,
-            string? op = null,
-            IEnumerable<QueryExpression>? children = null)
-            : base(string.Empty, expressionType)
-        {
-            Sql = null;
-            ConditionOperatorType = conditionOperator;
-            Operator = op;
-
-            if (children != null)
-            {
-                Expressions.AddRange(children);
-            }
-        }
-
-        public static QueryExpression Unary(ConditionOperator op, QueryExpression expression)
-        {
-            return new EntityQueryExpression(
-                ExpressionType.Unary,
-                conditionOperator: op,
-                children: new[] { expression });
-        }
-    }
-
-    internal enum EntityWhereConnector
-    {
-        And,
-        Or
     }
 }

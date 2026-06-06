@@ -35,7 +35,7 @@ namespace Titanic.Test.Db
                     .As("r")
                     .On("u", "role_id").IsEqual("r", "id")
                 .Where("u", "is_active").IsEqual(true)
-                .And("u", "name").IsLike("%ivan%")
+                .And("u", "name").IsContains("ivan")
                 .OrderBy("u", "id")
                 .Limit(20)
                 .Page(2, 20);
@@ -53,7 +53,7 @@ namespace Titanic.Test.Db
                 ON
                 	("u"."role_id" = "r"."id")
                 WHERE
-                	(("u"."is_active" = @p0) AND ("u"."name" LIKE @p1))
+                	(("u"."is_active" = @p0) AND (UPPER("u"."name") LIKE UPPER(@p1)))
                 ORDER BY
                 	"u"."id" ASC
                 LIMIT
@@ -165,7 +165,7 @@ namespace Titanic.Test.Db
                     .Or()
                     .AndOpen()
                         .IsNull("u", "deleted_on")
-                        .NotLike("u", "name", Column.Parameter("test%"))
+                        .NotContains("u", "name", Column.Parameter("test"))
                     .Close()
                 .End();
 
@@ -178,10 +178,10 @@ namespace Titanic.Test.Db
                 FROM
                 	"public"."users" AS "u"
                 WHERE
-                	((("u"."age" >= @p0) AND ("u"."age" < @p1)) OR (("u"."deleted_on" IS NULL) AND ("u"."name" NOT LIKE @p2)))
+                	((("u"."age" >= @p0) AND ("u"."age" < @p1)) OR (("u"."deleted_on" IS NULL) AND NOT ((UPPER("u"."name") LIKE UPPER(@p2)))))
                 """,
                 build.Sql);
-            AssertParameters(build, 18, 65, "test%");
+            AssertParameters(build, 18, 65, "%test%");
         }
 
         #endregion WHERE

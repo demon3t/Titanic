@@ -55,8 +55,8 @@ namespace Titanic.Db.Builders
         public HavingBuilder<TParent> LessThanOrEqual(string columnName, QueryExpression value)
             => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.LessThanOrEqual, value));
 
-        public HavingBuilder<TParent> Like(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Like, value));
+        public HavingBuilder<TParent> Contains(string columnName, QueryExpression value)
+            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Contains, value));
 
         public HavingBuilder<TParent> IsNull(string columnName)
             => Add(QueryExpression.IsNull(columnName));

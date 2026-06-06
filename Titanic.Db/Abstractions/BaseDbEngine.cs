@@ -171,11 +171,16 @@ namespace Titanic.Db.Abstractions
                 : $"{QuoteIdentifier(expression.SourceAlias)}.*";
         }
 
-        private static string BuildBinaryExpression(QueryExpression expression, QueryBuildContext context)
+        private string BuildBinaryExpression(QueryExpression expression, QueryBuildContext context)
         {
             if (expression.Children.Count != 2)
             {
                 throw new InvalidOperationException($"Binary expression '{expression.Operator}' must contain exactly two operands");
+            }
+
+            if (expression.ConditionOperatorType == ConditionOperator.Contains)
+            {
+                return BuildContainsExpression(expression, context);
             }
 
             var op = expression.ConditionOperatorType.HasValue
@@ -183,6 +188,24 @@ namespace Titanic.Db.Abstractions
                 : expression.Operator;
 
             return $"({expression.Children[0].ToSql(context)} {op} {expression.Children[1].ToSql(context)})";
+        }
+
+        private string BuildContainsExpression(QueryExpression expression, QueryBuildContext context)
+        {
+            var leftSql = $"{GetSqlFunctionSql(SqlFunction.Upper)}({expression.Children[0].ToSql(context)})";
+            var rightSql = BuildContainsValueExpression(expression.Children[1], context);
+            return $"({leftSql} LIKE {rightSql})";
+        }
+
+        private string BuildContainsValueExpression(QueryExpression expression, QueryBuildContext context)
+        {
+            var upperSql = GetSqlFunctionSql(SqlFunction.Upper);
+            return expression.ExpressionType switch
+            {
+                ExpressionType.Parameter => $"{upperSql}({context.AddParameter($"%{expression.Value}%")})",
+                ExpressionType.Const => $"{upperSql}({FormatConstValue($"%{expression.Value}%")})",
+                _ => throw new NotSupportedException("Contains supports only parameter or constant right operand.")
+            };
         }
 
         /// <summary>
@@ -200,9 +223,7 @@ namespace Titanic.Db.Abstractions
                 ConditionOperator.LessThanOrEqual => "<=",
                 ConditionOperator.In => "IN",
                 ConditionOperator.NotIn => "NOT IN",
-                ConditionOperator.Like => "LIKE",
-                ConditionOperator.NotLike => "NOT LIKE",
-                ConditionOperator.ILike => "ILIKE",
+                ConditionOperator.Contains => "LIKE",
                 ConditionOperator.IsNull => "IS NULL",
                 ConditionOperator.IsNotNull => "IS NOT NULL",
                 _ => throw new NotSupportedException($"Condition operator {conditionOperator} is not supported")
