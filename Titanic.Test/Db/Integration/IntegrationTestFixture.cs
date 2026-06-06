@@ -1,14 +1,12 @@
-using Microsoft.Extensions.Configuration;
-using Npgsql;
+﻿using Npgsql;
 using Titanic.Db;
-using Titanic.Db.Configuration;
 
 namespace Titanic.Test.Db.Integration
 {
     /// <summary>
     /// xUnit-фикстура для интеграционных тестов.
-    /// Инициализирует <see cref="DbManager"/> из <c>appsettings.Test.json</c>,
-    /// регистрирует обёртку <see cref="TestDatabase"/>, создаёт БД и набор тестовых таблиц.
+    /// Инициализирует <see cref="DbManager"/>, регистрирует <see cref="TestDatabase"/>,
+    /// создаёт тестовую БД и набор таблиц.
     /// </summary>
     public sealed class IntegrationTestFixture
     {
@@ -16,20 +14,12 @@ namespace Titanic.Test.Db.Integration
 
         /// <summary>
         /// Имя провайдера тестовой БД в <see cref="DbManager"/>.
-        /// Должно совпадать с <c>Providers[].Name</c> в <c>appsettings.Test.json</c>.
         /// </summary>
         public const string ProviderName = "TestPostgres";
 
         public IntegrationTestFixture()
         {
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.Test.json", optional: false)
-                .Build();
-
-            var config = configuration.GetSection("TitanicDb").Get<DbConfig>()
-                ?? throw new InvalidOperationException("TitanicDb section not found in appsettings.Test.json");
-
+            var config = TestConfigurationLoader.LoadDbConfig();
             DbManager.Initialize(config);
 
             // Явная регистрация обёртки. Имя берётся из [DatabaseConnection] атрибута.
@@ -49,7 +39,7 @@ namespace Titanic.Test.Db.Integration
         }
 
         /// <summary>
-        /// Очистить все таблицы в правильном порядке (из-за FK).
+        /// Очистить все таблицы в правильном порядке из-за внешних ключей.
         /// Вызывается в начале каждого теста.
         /// </summary>
         public void TruncateAll()
