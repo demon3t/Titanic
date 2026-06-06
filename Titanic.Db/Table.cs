@@ -78,40 +78,40 @@ namespace Titanic.Db
         public enum ColumnType
         {
             /// <summary> Автоинкрементное целое значение. </summary>
-            Serial,
+            Serial = 0,
 
             /// <summary> Целое значение. </summary>
-            Integer,
+            Integer = 1,
 
             /// <summary> Большое целое значение. </summary>
-            BigInt,
+            BigInt = 2,
 
             /// <summary> Строка ограниченной длины. </summary>
-            VarChar,
+            VarChar = 3,
 
             /// <summary> Текст. </summary>
-            Text,
+            Text = 4,
 
             /// <summary> Логическое значение. </summary>
-            Boolean,
+            Boolean = 5,
 
             /// <summary> Число с точностью и масштабом. </summary>
-            Numeric,
+            Numeric = 6,
 
             /// <summary> Дата. </summary>
-            Date,
+            Date = 7,
 
             /// <summary> Дата и время. </summary>
-            Timestamp,
+            Timestamp = 8,
 
             /// <summary> Дата и время с часовым поясом. </summary>
-            TimestampTz,
+            TimestampTz = 9,
 
             /// <summary> UUID. </summary>
-            Uuid,
+            Uuid = 10,
 
             /// <summary> JSONB. </summary>
-            Jsonb
+            Jsonb = 11
         }
 
         /// <summary>
@@ -120,10 +120,10 @@ namespace Titanic.Db
         public enum ConstraintType
         {
             /// <summary> PRIMARY KEY. </summary>
-            PrimaryKey,
+            PrimaryKey = 0,
 
             /// <summary> UNIQUE. </summary>
-            Unique
+            Unique = 1
         }
 
         /// <summary>

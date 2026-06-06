@@ -24,6 +24,12 @@
         public string? ManagerType { get; set; }
 
         /// <summary>
+        /// Namespace-patterns CLR Entity-моделей, которые должен видеть этот менеджер.
+        /// Если коллекция пустая, менеджер использует все найденные Entity-модели.
+        /// </summary>
+        public List<string> EntityModelNamespaces { get; set; } = [];
+
+        /// <summary>
         /// Настройки публикации HTTP API для этого Entity ORM менеджера.
         /// </summary>
         public EntityManagerApiSettings Api { get; set; } = new();

@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using Titanic.Db.Enums;
 
 namespace Titanic.Entity.Orm
 {
@@ -47,12 +46,27 @@ namespace Titanic.Entity.Orm
         /// <param name="comparisonType"> Тип сравнения. </param>
         /// <param name="value"> Значение фильтра. </param>
         /// <returns> Добавленный фильтр. </returns>
-        public EntityQueryFilter Add(string path, ConditionOperator comparisonType, object? value = null)
+        public EntityQueryFilter Add(string path, EntityComparisonType comparisonType, object? value = null)
         {
             var filter = new EntityQueryFilter(path, comparisonType).WithValue(value);
             _nodes.Add(filter);
             return filter;
         }
+
+        /// <summary>
+        /// Добавить фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter AddContains(string path, object? value) => Add(path, EntityComparisonType.Contains, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter AddStartsWith(string path, object? value) => Add(path, EntityComparisonType.StartsWith, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter AddEndsWith(string path, object? value) => Add(path, EntityComparisonType.EndsWith, value);
 
         /// <summary>
         /// Добавить фильтр диапазона.
@@ -63,7 +77,7 @@ namespace Titanic.Entity.Orm
         /// <returns> Добавленный фильтр. </returns>
         public EntityQueryFilter AddBetween(string path, object? from, object? to)
         {
-            var filter = new EntityQueryFilter(path, ConditionOperator.Equal).WithRange(from, to);
+            var filter = new EntityQueryFilter(path, EntityComparisonType.Equal).WithRange(from, to);
             _nodes.Add(filter);
             return filter;
         }
@@ -114,7 +128,7 @@ namespace Titanic.Entity.Orm
         /// <returns> Добавленный фильтр. </returns>
         public EntityQueryFilter AddIsNull(string path)
         {
-            var filter = new EntityQueryFilter(path, ConditionOperator.IsNull);
+            var filter = new EntityQueryFilter(path, EntityComparisonType.IsNull);
             _nodes.Add(filter);
             return filter;
         }
@@ -126,7 +140,7 @@ namespace Titanic.Entity.Orm
         /// <returns> Добавленный фильтр. </returns>
         public EntityQueryFilter AddIsNotNull(string path)
         {
-            var filter = new EntityQueryFilter(path, ConditionOperator.IsNotNull);
+            var filter = new EntityQueryFilter(path, EntityComparisonType.IsNotNull);
             _nodes.Add(filter);
             return filter;
         }

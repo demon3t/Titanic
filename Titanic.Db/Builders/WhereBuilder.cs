@@ -4,9 +4,9 @@ using Titanic.Db.Enums;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Билдер условий WHERE/HAVING/ON.
+    /// Билдер условий WHERE, HAVING и ON.
     /// </summary>
-    /// <typeparam name="TParent"> Тип родительского билдера. </typeparam>
+    /// <typeparam name="TParent">Тип родительского билдера.</typeparam>
     public class WhereBuilder<TParent>
     {
         #region Поля
@@ -92,10 +92,6 @@ namespace Titanic.Db.Builders
 
         public WhereBuilder<TParent> IsNull(string alias, string columnName) => Add(QueryExpression.IsNull(alias, columnName));
 
-        public WhereBuilder<TParent> IsNotNull(string columnName) => Add(QueryExpression.IsNotNull(columnName));
-
-        public WhereBuilder<TParent> IsNotNull(string alias, string columnName) => Add(QueryExpression.IsNotNull(alias, columnName));
-
         public WhereBuilder<TParent> Exists(BaseQuery subQuery) => Add(QueryExpression.Exists(subQuery));
 
         public WhereBuilder<TParent> NotExists(BaseQuery subQuery) => Add(QueryExpression.Not(QueryExpression.Exists(subQuery)));
@@ -151,7 +147,7 @@ namespace Titanic.Db.Builders
         #region Методы
 
         /// <summary>
-        /// Завершить контекст WHERE и вернуть родительский билдер.
+        /// Завершить построение условий и вернуть родительский билдер.
         /// </summary>
         public TParent End()
         {
@@ -164,8 +160,7 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Применить условия и вернуть родительский билдер.
-        /// Внутренний метод — не вызывать напрямую из пользовательского кода.
+        /// Применить накопленные условия и вернуть родительский билдер.
         /// </summary>
         internal TParent Apply()
         {

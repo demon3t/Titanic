@@ -21,6 +21,7 @@ namespace Titanic.Entity.Orm
         private readonly Dictionary<string, string> _selectedPaths = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, SelectedColumnMetadata> _selectedColumns = new(StringComparer.OrdinalIgnoreCase);
         private readonly EntityStructure _rootStructure;
+        private readonly EntityStructureScope _structureScope;
         private readonly BaseDbProvider _provider;
         private QueryExpression? _whereExpression;
         private int _joinAliasIndex;
@@ -32,23 +33,55 @@ namespace Titanic.Entity.Orm
         internal Guid? LocalizationId { get; private set; }
 
         public EntitySelectBuilder(BaseDbProvider provider, Type entityType, UserConnection userConnection)
-            : this(provider, Structure.GetEntityStructure(entityType), userConnection)
+            : this(provider, Structure.DefaultScope, entityType, userConnection)
         {
         }
 
         public EntitySelectBuilder(BaseDbProvider provider, string tableName, UserConnection userConnection)
-            : this(provider, Structure.GetEntityStructure(tableName), userConnection)
+            : this(provider, Structure.DefaultScope, tableName, userConnection)
         {
         }
 
-        internal EntitySelectBuilder(BaseDbProvider provider, EntityStructure rootStructure, UserConnection userConnection)
+        internal EntitySelectBuilder(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            Type entityType,
+            UserConnection userConnection)
+            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection)
+        {
+        }
+
+        internal EntitySelectBuilder(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            string tableName,
+            UserConnection userConnection)
+            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection)
+        {
+        }
+
+        internal EntitySelectBuilder(
+            BaseDbProvider provider,
+            EntityStructure rootStructure,
+            UserConnection userConnection)
+            : this(provider, rootStructure, Structure.DefaultScope, userConnection)
+        {
+        }
+
+        internal EntitySelectBuilder(
+            BaseDbProvider provider,
+            EntityStructure rootStructure,
+            EntityStructureScope structureScope,
+            UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
             ArgumentNullException.ThrowIfNull(rootStructure);
+            ArgumentNullException.ThrowIfNull(structureScope);
             ArgumentNullException.ThrowIfNull(userConnection);
 
             _provider = provider;
             _rootStructure = rootStructure;
+            _structureScope = structureScope;
             UserConnection = userConnection;
             UseLocalization(userConnection.Culture?.Id);
             Select = provider.Select();
@@ -485,7 +518,7 @@ namespace Titanic.Entity.Orm
                     $"Column '{referenceColumn.PropertyName}' in table '{sourceEntity.TableName}' is not configured as reference.");
             }
 
-            var targetEntity = Structure.GetEntityStructure(referenceColumn.ReferenceTableName);
+            var targetEntity = _structureScope.GetEntityStructure(referenceColumn.ReferenceTableName);
             var targetPrimaryColumn = targetEntity.GetPrimaryColumnStructure();
             var alias = NextJoinAlias();
 
@@ -512,7 +545,10 @@ namespace Titanic.Entity.Orm
             }
 
             var sourceColumn = sourceEntity.GetColumnStructure(descriptor.MainColumnName);
-            var reverseRelation = Structure.FindReverseRelation(sourceEntity, descriptor.RelationColumnName, descriptor.PrimaryColumnName);
+            var reverseRelation = _structureScope.FindReverseRelation(
+                sourceEntity,
+                descriptor.RelationColumnName,
+                descriptor.PrimaryColumnName);
             var alias = NextJoinAlias();
 
             Select.RightJoin(reverseRelation.Entity.TableName)
@@ -721,16 +757,5 @@ namespace Titanic.Entity.Orm
             ColumnStructure? Column,
             string? DisplayAlias,
             bool IsHidden = false);
-    }
-
-    /// <summary>
-    /// Generic convenience wrapper over the non-generic builder.
-    /// </summary>
-    public sealed class EntitySelectBuilder<TEntity> : EntitySelectBuilder
-    {
-        public EntitySelectBuilder(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, typeof(TEntity), userConnection)
-        {
-        }
     }
 }

@@ -1,105 +1,114 @@
-﻿using Titanic.Common.Services.Authorization.Interfaces;
+﻿using System.Collections.Concurrent;
+using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Common.Session;
 
 namespace Titanic.Common.Services.Authorization.Entity
 {
-	/// <summary>
-	/// Коллекция авторизаций для запросов к сущностям.
-	/// </summary>
-	public class EntityAuthorizationCollection : IAuthorizationCollection
-	{
-		#region Свойства
+    /// <summary>
+    /// In-memory коллекция авторизаций для запросов к сущностям.
+    /// </summary>
+    public class EntityAuthorizationCollection : IAuthorizationCollection
+    {
+        #region Fields
 
-		/// <summary>
-		/// Коллекция авторизаций.
-		/// </summary>
-		protected Dictionary<string, (DateTime LastAppeal, UserConnection Connection)> AuthorizationCollection { get; set; }
+        /// <summary>
+        /// Коллекция авторизаций.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, (DateTimeOffset LastAccessUtc, UserConnection Connection)> _authorizationCollection;
 
-		/// <summary>
-		/// Время жизни авторизации в секундах.
-		/// </summary>
-		protected int MaxTimeLiveInSeconds { get; private set; } = 86400;
+        /// <summary>
+        /// Провайдер времени.
+        /// </summary>
+        private readonly TimeProvider _timeProvider;
 
-		#endregion Свойства
+        /// <summary>
+        /// Время жизни авторизации.
+        /// </summary>
+        private readonly TimeSpan _maxLifetime;
 
-		#region Конструкторы
+        #endregion Fields
 
-		/// <summary>
-		/// Конструктор без параметров.
-		/// </summary>
-		public EntityAuthorizationCollection()
-		{
-			AuthorizationCollection = new Dictionary<string, (DateTime LastAppeal, UserConnection Connection)>();
-		}
+        #region Constructors
 
-		#endregion Конструкторы
+        /// <summary>
+        /// Конструктор коллекции авторизаций.
+        /// </summary>
+        /// <param name="timeProvider">Провайдер времени.</param>
+        /// <param name="maxLifetime">Время жизни авторизации.</param>
+        public EntityAuthorizationCollection(TimeProvider? timeProvider = null, TimeSpan? maxLifetime = null)
+        {
+            _timeProvider = timeProvider ?? TimeProvider.System;
+            _maxLifetime = maxLifetime ?? TimeSpan.FromDays(1);
+            _authorizationCollection = new ConcurrentDictionary<string, (DateTimeOffset LastAccessUtc, UserConnection Connection)>(StringComparer.Ordinal);
+        }
 
-		#region Методы public
+        #endregion Constructors
 
-		/// <summary>
-		/// Добавить авторизацию.
-		/// </summary>
-		/// <param name="key"> Ключ авторизации. </param>
-		/// <param name="userConnection"> Контекст авторизации. </param>
-		public void AddAuthorization(string key, UserConnection userConnection)
-		{
-			AuthorizationCollection[key] = (DateTime.UtcNow, userConnection);
-		}
+        #region Public Methods
 
-		/// <summary>
-		/// Удалить авторизацию.
-		/// </summary>
-		/// <param name="key"> Ключ авторизации. </param>
-		public void RemoveAuthorization(string key)
-		{
-			if (AuthorizationCollection.TryGetValue(key, out var existUserConnnection))
-			{
-				AuthorizationCollection.Remove(key);
-			}
-		}
+        /// <inheritdoc />
+        public void AddAuthorization(string key, UserConnection userConnection)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(key);
+            ArgumentNullException.ThrowIfNull(userConnection);
 
-		/// <summary>
-		/// Проверить авторизацию.
-		/// </summary>
-		/// <param name="key"> Ключ авторизации. </param>
-		public bool CheckAuthorization(string key)
-		{
-			if (AuthorizationCollection.TryGetValue(key, out var value))
-			{
-				return value.LastAppeal <= DateTime.UtcNow.AddSeconds(MaxTimeLiveInSeconds);
-			}
+            _authorizationCollection[key] = (GetUtcNow(), userConnection);
+        }
 
-			if (TryGet(key, out var existUserConnnection))
-			{
-				AddAuthorization(key, existUserConnnection!);
+        /// <inheritdoc />
+        public void RemoveAuthorization(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
 
-				return existUserConnnection is not null;
-			}
+            _authorizationCollection.TryRemove(key, out _);
+        }
 
-			return false;
-		}
+        /// <inheritdoc />
+        public bool CheckAuthorization(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
 
-		public bool TryGet(string key, out UserConnection? userConnection)
-		{
-			userConnection = null;
+            if (_authorizationCollection.TryGetValue(key, out var value))
+            {
+                if (!IsExpired(value.LastAccessUtc))
+                {
+                    _authorizationCollection[key] = (GetUtcNow(), value.Connection);
+                    return true;
+                }
 
-			// TODO сделать обращение к общему сервису.
-			if (Random.Shared.NextDouble() > 0.5)
-			{
-				userConnection = new UserConnection()
-				{
-					UserId = Guid.NewGuid(),
-					Culture = new UserCulture()
-					{
-						Id = Guid.NewGuid(),
-						Name = "ru-RU"
-					}
-				};
-			}
+                _authorizationCollection.TryRemove(key, out _);
+            }
 
-			return userConnection is not null;
-		}
+            if (TryGet(key, out var userConnection) && userConnection is not null)
+            {
+                AddAuthorization(key, userConnection);
+                return true;
+            }
 
-		#endregion Методы public
-	}
+            return false;
+        }
+
+        /// <inheritdoc />
+        public bool TryGet(string key, out UserConnection? userConnection)
+        {
+            userConnection = null;
+            return false;
+        }
+
+        #endregion Public Methods
+
+        #region Private Methods
+
+        private DateTimeOffset GetUtcNow() => _timeProvider.GetUtcNow();
+
+        private bool IsExpired(DateTimeOffset lastAccessUtc) => GetUtcNow() - lastAccessUtc > _maxLifetime;
+
+        #endregion Private Methods
+    }
 }

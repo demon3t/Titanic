@@ -3,11 +3,10 @@ using Titanic.Db.Abstractions;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Билдер для построения условий WHERE.
-    /// Все методы сравнения начинаются с Is.
-    /// Для отрицания вызывайте Not() перед Is*.
+    /// Билдер одного условия WHERE.
+    /// Для отрицания следующего условия вызывайте <see cref="Not"/>.
     /// </summary>
-    /// <typeparam name="TQuery">Тип запроса (Select, Delete, Update).</typeparam>
+    /// <typeparam name="TQuery">Тип запроса.</typeparam>
     public class WhereItem<TQuery> where TQuery : BaseQuery
     {
         private readonly TQuery _query;
@@ -25,7 +24,7 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Включить отрицание для следующего условия Is*.
+        /// Включить отрицание для следующего условия.
         /// </summary>
         public WhereItem<TQuery> Not()
         {
@@ -33,9 +32,7 @@ namespace Titanic.Db.Builders
             return this;
         }
 
-        /// <summary>
-        /// Добавить условие равенства.
-        /// </summary>
+        /// <summary>Добавить условие равенства.</summary>
         public TQuery IsEqual(object? value)
         {
             var expr = _negated
@@ -44,9 +41,7 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие равенства с колонкой другого источника.
-        /// </summary>
+        /// <summary>Добавить условие равенства с другой колонкой.</summary>
         public TQuery IsEqual(string targetAlias, string targetColumnName)
         {
             var expr = QueryExpression.Binary(
@@ -54,13 +49,14 @@ namespace Titanic.Db.Builders
                 Enums.ConditionOperator.Equal,
                 QueryExpression.Column(targetAlias, targetColumnName));
             if (_negated)
+            {
                 expr = QueryExpression.Not(expr);
+            }
+
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие равенства с выражением.
-        /// </summary>
+        /// <summary>Добавить условие равенства с выражением.</summary>
         public TQuery IsEqual(QueryExpression value)
         {
             var expr = QueryExpression.Binary(
@@ -68,13 +64,14 @@ namespace Titanic.Db.Builders
                 Enums.ConditionOperator.Equal,
                 value);
             if (_negated)
+            {
                 expr = QueryExpression.Not(expr);
+            }
+
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие больше.
-        /// </summary>
+        /// <summary>Добавить условие больше.</summary>
         public TQuery IsGreaterThan(object? value)
         {
             var expr = _negated
@@ -83,9 +80,7 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие больше с выражением.
-        /// </summary>
+        /// <summary>Добавить условие больше с выражением.</summary>
         public TQuery IsGreaterThan(QueryExpression value)
         {
             var expr = QueryExpression.Binary(
@@ -93,13 +88,14 @@ namespace Titanic.Db.Builders
                 Enums.ConditionOperator.GreaterThan,
                 value);
             if (_negated)
+            {
                 expr = QueryExpression.Not(expr);
+            }
+
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие больше или равно.
-        /// </summary>
+        /// <summary>Добавить условие больше или равно.</summary>
         public TQuery IsGreaterOrEqual(object? value)
         {
             var expr = _negated
@@ -108,9 +104,7 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие меньше.
-        /// </summary>
+        /// <summary>Добавить условие меньше.</summary>
         public TQuery IsLess(object? value)
         {
             var expr = _negated
@@ -119,9 +113,7 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие меньше с выражением.
-        /// </summary>
+        /// <summary>Добавить условие меньше с выражением.</summary>
         public TQuery IsLess(QueryExpression value)
         {
             var expr = QueryExpression.Binary(
@@ -129,13 +121,14 @@ namespace Titanic.Db.Builders
                 Enums.ConditionOperator.LessThan,
                 value);
             if (_negated)
+            {
                 expr = QueryExpression.Not(expr);
+            }
+
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие меньше или равно.
-        /// </summary>
+        /// <summary>Добавить условие меньше или равно.</summary>
         public TQuery IsLessOrEqual(object? value)
         {
             var expr = _negated
@@ -145,43 +138,29 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Добавить условие LIKE (или NOT LIKE если вызван Not()).
+        /// Добавить условие LIKE. Шаблон со знаками <c>%</c> должен быть подготовлен вызывающим кодом.
         /// </summary>
         public TQuery IsLike(object? value)
         {
-            if (_negated)
-            {
-                return _addWhere(QueryExpression.Binary(
-                    LeftColumnExpr(),
-                    Enums.ConditionOperator.NotLike,
-                    QueryExpression.Param(value)));
-            }
-            return _addWhere(LikeExpr(value));
+            var expr = _negated
+                ? QueryExpression.Not(LikeExpr(value))
+                : LikeExpr(value);
+            _negated = false;
+            return _addWhere(expr);
         }
 
-        /// <summary>
-        /// Добавить условие IS NULL (или IS NOT NULL если вызван Not()).
-        /// </summary>
+        /// <summary>Добавить условие IS NULL. После <see cref="Not"/> формируется отрицание над IS NULL.</summary>
         public TQuery IsNull()
         {
             if (_negated)
-                return _addWhere(IsNotNullExpr());
+            {
+                return _addWhere(QueryExpression.Not(IsNullExpr()));
+            }
+
             return _addWhere(IsNullExpr());
         }
 
-        /// <summary>
-        /// Добавить условие IS NOT NULL.
-        /// </summary>
-        public TQuery IsNotNull()
-        {
-            if (_negated)
-                return _addWhere(IsNullExpr());
-            return _addWhere(IsNotNullExpr());
-        }
-
-        /// <summary>
-        /// Добавить условие IN (подзапрос). Если вызван Not() — NOT IN.
-        /// </summary>
+        /// <summary>Добавить условие IN по подзапросу. После <see cref="Not"/> формируется NOT IN.</summary>
         public TQuery In(BaseQuery subQuery)
         {
             var op = _negated ? Enums.ConditionOperator.NotIn : Enums.ConditionOperator.In;
@@ -191,22 +170,21 @@ namespace Titanic.Db.Builders
                 QueryExpression.SubQuery(subQuery)));
         }
 
-        /// <summary>
-        /// Добавить условие BETWEEN.
-        /// </summary>
+        /// <summary>Добавить условие BETWEEN.</summary>
         public TQuery Between(object? low, object? high)
         {
             var expr = QueryExpression.And(
                 GreaterOrEqualExpr(low),
                 LessOrEqualExpr(high));
             if (_negated)
+            {
                 expr = QueryExpression.Not(expr);
+            }
+
             return _addWhere(expr);
         }
 
-        /// <summary>
-        /// NOT: оборачивает выражение в NOT.
-        /// </summary>
+        /// <summary>Обернуть произвольное выражение в NOT.</summary>
         public TQuery Not(QueryExpression expression)
         {
             return _addWhere(QueryExpression.Not(expression));
@@ -220,7 +198,9 @@ namespace Titanic.Db.Builders
         private QueryExpression EqualExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Equal, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.Equal(_columnName, value)
@@ -230,7 +210,9 @@ namespace Titanic.Db.Builders
         private QueryExpression GreaterExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.GreaterThan, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.Greater(_columnName, value)
@@ -240,7 +222,9 @@ namespace Titanic.Db.Builders
         private QueryExpression GreaterOrEqualExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.GreaterThanOrEqual, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.GreaterOrEqual(_columnName, value)
@@ -250,7 +234,9 @@ namespace Titanic.Db.Builders
         private QueryExpression LessExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.LessThan, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.Less(_columnName, value)
@@ -260,7 +246,9 @@ namespace Titanic.Db.Builders
         private QueryExpression LessOrEqualExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.LessThanOrEqual, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.LessOrEqual(_columnName, value)
@@ -270,7 +258,9 @@ namespace Titanic.Db.Builders
         private QueryExpression LikeExpr(object? value)
         {
             if (value is QueryExpression valueExpression)
+            {
                 return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Like, valueExpression);
+            }
 
             return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.Like(_columnName, value)
@@ -282,9 +272,5 @@ namespace Titanic.Db.Builders
                 ? QueryExpression.IsNull(_columnName)
                 : QueryExpression.IsNull(_alias, _columnName);
 
-        private QueryExpression IsNotNullExpr()
-            => string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.IsNotNull(_columnName)
-                : QueryExpression.IsNotNull(_alias, _columnName);
     }
 }

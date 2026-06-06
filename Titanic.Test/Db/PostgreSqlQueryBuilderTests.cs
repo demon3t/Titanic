@@ -165,7 +165,7 @@ namespace Titanic.Test.Db
                     .Or()
                     .AndOpen()
                         .IsNull("u", "deleted_on")
-                        .NotLike("u", "name", Column.Parameter("test%"))
+                        .NotLike("u", "name", Column.Parameter("%test%"))
                     .Close()
                 .End();
 
@@ -181,7 +181,7 @@ namespace Titanic.Test.Db
                 	((("u"."age" >= @p0) AND ("u"."age" < @p1)) OR (("u"."deleted_on" IS NULL) AND ("u"."name" NOT LIKE @p2)))
                 """,
                 build.Sql);
-            AssertParameters(build, 18, 65, "test%");
+            AssertParameters(build, 18, 65, "%test%");
         }
 
         #endregion WHERE
@@ -325,7 +325,7 @@ namespace Titanic.Test.Db
                 .Column("id")
                 .Column("name")
                 .From("pending_users").As("p")
-                .Where("name").IsNotNull()
+                .Where("name").Not().IsNull()
                 .And("status").IsEqual(Column.Parameter("approved"));
 
             var query = _provider.Insert("users")

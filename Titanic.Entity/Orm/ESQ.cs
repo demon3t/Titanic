@@ -2,7 +2,6 @@
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
-using Titanic.Db.Enums;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
@@ -14,6 +13,7 @@ namespace Titanic.Entity.Orm
     {
         private readonly BaseDbProvider _provider;
         private readonly EntityStructure _structure;
+        private readonly EntityStructureScope _structureScope;
         private readonly List<EntityQueryOrder> _orders = new();
         private readonly List<string> _groupBy = new();
 
@@ -53,19 +53,47 @@ namespace Titanic.Entity.Orm
         public UserConnection UserConnection { get; }
 
         public EntitySchemaQuery(BaseDbProvider provider, Type entityType, UserConnection userConnection)
-            : this(provider, Structure.GetEntityStructure(entityType), userConnection)
+            : this(provider, Structure.DefaultScope, entityType, userConnection)
         {
         }
 
         public EntitySchemaQuery(BaseDbProvider provider, string tableName, UserConnection userConnection)
-            : this(provider, Structure.GetEntityStructure(tableName), userConnection)
+            : this(provider, Structure.DefaultScope, tableName, userConnection)
+        {
+        }
+
+        internal EntitySchemaQuery(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            Type entityType,
+            UserConnection userConnection)
+            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection)
+        {
+        }
+
+        internal EntitySchemaQuery(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            string tableName,
+            UserConnection userConnection)
+            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection)
         {
         }
 
         internal EntitySchemaQuery(BaseDbProvider provider, EntityStructure structure, UserConnection userConnection)
+            : this(provider, structure, Structure.DefaultScope, userConnection)
+        {
+        }
+
+        internal EntitySchemaQuery(
+            BaseDbProvider provider,
+            EntityStructure structure,
+            EntityStructureScope structureScope,
+            UserConnection userConnection)
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _structure = structure ?? throw new ArgumentNullException(nameof(structure));
+            _structureScope = structureScope ?? throw new ArgumentNullException(nameof(structureScope));
             UserConnection = userConnection ?? throw new ArgumentNullException(nameof(userConnection));
         }
 
@@ -100,20 +128,56 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
-        public EntityQueryFilter CreateFilter(ConditionOperator comparisonType, string columnPath, object? value)
+        public EntityQueryFilter CreateFilter(EntityComparisonType comparisonType, string columnPath, object? value)
             => new EntityQueryFilter(columnPath, comparisonType).WithValue(value);
 
+        /// <summary>
+        /// Создать фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter CreateContainsFilter(string columnPath, object? value)
+            => CreateFilter(EntityComparisonType.Contains, columnPath, value);
+
+        /// <summary>
+        /// Создать фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter CreateStartsWithFilter(string columnPath, object? value)
+            => CreateFilter(EntityComparisonType.StartsWith, columnPath, value);
+
+        /// <summary>
+        /// Создать фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter CreateEndsWithFilter(string columnPath, object? value)
+            => CreateFilter(EntityComparisonType.EndsWith, columnPath, value);
+
         public EntityQueryFilter CreateIsNullFilter(string columnPath)
-            => new EntityQueryFilter(columnPath, ConditionOperator.IsNull);
+            => new EntityQueryFilter(columnPath, EntityComparisonType.IsNull);
 
         public EntityQueryFilter CreateIsNotNullFilter(string columnPath)
-            => new EntityQueryFilter(columnPath, ConditionOperator.IsNotNull);
+            => new EntityQueryFilter(columnPath, EntityComparisonType.IsNotNull);
 
         public EntityQueryFilter CreateBetweenFilter(string columnPath, object? from, object? to)
-            => new EntityQueryFilter(columnPath, ConditionOperator.Equal).WithRange(from, to);
+            => new EntityQueryFilter(columnPath, EntityComparisonType.Equal).WithRange(from, to);
 
-        public EntityQueryFilter AddFilter(ConditionOperator comparisonType, string columnPath, object? value = null)
+        public EntityQueryFilter AddFilter(EntityComparisonType comparisonType, string columnPath, object? value = null)
             => Filters.Add(columnPath, comparisonType, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по вхождению.
+        /// </summary>
+        public EntityQueryFilter AddContainsFilter(string columnPath, object? value)
+            => Filters.AddContains(columnPath, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по началу строки.
+        /// </summary>
+        public EntityQueryFilter AddStartsWithFilter(string columnPath, object? value)
+            => Filters.AddStartsWith(columnPath, value);
+
+        /// <summary>
+        /// Добавить фильтр поиска по концу строки.
+        /// </summary>
+        public EntityQueryFilter AddEndsWithFilter(string columnPath, object? value)
+            => Filters.AddEndsWith(columnPath, value);
 
         public EntityQueryFilter AddBetweenFilter(string columnPath, object? from, object? to)
             => Filters.AddBetween(columnPath, from, to);
@@ -153,7 +217,7 @@ namespace Titanic.Entity.Orm
 
         public EntitySelectBuilder BuildSelect()
         {
-            var builder = new EntitySelectBuilder(_provider, _structure, UserConnection);
+            var builder = new EntitySelectBuilder(_provider, _structure, _structureScope, UserConnection);
 
             if (IsDistinct)
             {
@@ -288,108 +352,18 @@ namespace Titanic.Entity.Orm
         private static QueryExpression BuildFilterExpression(EntitySelectBuilder builder, EntityQueryFilter filter)
         {
             var left = builder.BuildWhereColumnExpression(filter.Path);
-            QueryExpression expression;
-
-            if (filter.SecondValue != null)
-            {
-                expression = QueryExpression.And(
-                    BuildBinary(left, ConditionOperator.GreaterThanOrEqual, Column.Parameter(filter.Value)),
-                    BuildBinary(left, ConditionOperator.LessThanOrEqual, Column.Parameter(filter.SecondValue)));
-                return filter.IsNot ? QueryExpression.Not(expression) : expression;
-            }
-
-            expression = filter.ComparisonType switch
-            {
-                ConditionOperator.Equal when filter.Value == null => BuildUnary(left, ConditionOperator.IsNull),
-                ConditionOperator.Equal => BuildBinary(left, ConditionOperator.Equal, Column.Parameter(filter.Value)),
-                ConditionOperator.NotEqual when filter.Value == null => BuildUnary(left, ConditionOperator.IsNotNull),
-                ConditionOperator.NotEqual => BuildBinary(left, ConditionOperator.NotEqual, Column.Parameter(filter.Value)),
-                ConditionOperator.GreaterThan => BuildBinary(left, ConditionOperator.GreaterThan, Column.Parameter(filter.Value)),
-                ConditionOperator.GreaterThanOrEqual => BuildBinary(left, ConditionOperator.GreaterThanOrEqual, Column.Parameter(filter.Value)),
-                ConditionOperator.LessThan => BuildBinary(left, ConditionOperator.LessThan, Column.Parameter(filter.Value)),
-                ConditionOperator.LessThanOrEqual => BuildBinary(left, ConditionOperator.LessThanOrEqual, Column.Parameter(filter.Value)),
-                ConditionOperator.Like or ConditionOperator.ILike => BuildBinary(left, ConditionOperator.Like, Column.Parameter(filter.Value)),
-                ConditionOperator.NotLike => BuildBinary(left, ConditionOperator.NotLike, Column.Parameter(filter.Value)),
-                ConditionOperator.IsNull => BuildUnary(left, ConditionOperator.IsNull),
-                ConditionOperator.IsNotNull => BuildUnary(left, ConditionOperator.IsNotNull),
-                ConditionOperator.In or ConditionOperator.NotIn => BuildInExpression(left, filter),
-                _ => throw new NotSupportedException(
-                    $"Filter operator '{filter.ComparisonType}' is not supported by EntitySchemaQuery.")
-            };
+            var expression = filter.SecondValue != null
+                ? EntityComparisonExpressionBuilder.BuildBetween(left, filter.Value, filter.SecondValue)
+                : EntityComparisonExpressionBuilder.Build(left, filter.ComparisonType, filter.Value);
 
             return filter.IsNot ? QueryExpression.Not(expression) : expression;
         }
 
-        private static QueryExpression BuildBinary(QueryExpression left, ConditionOperator op, QueryExpression value)
-        {
-            return QueryExpression.Binary(left, op, value);
-        }
-
-        private static QueryExpression BuildUnary(QueryExpression left, ConditionOperator op)
-        {
-            return EntityQueryExpression.Unary(op, left);
-        }
-
-        private static QueryExpression BuildInExpression(QueryExpression left, EntityQueryFilter filter)
-        {
-            if (filter.Value is not BaseQuery subQuery)
-            {
-                throw new NotSupportedException(
-                    "EntitySchemaQuery currently supports IN/NOT IN only with BaseQuery values.");
-            }
-
-            var op = filter.ComparisonType == ConditionOperator.NotIn
-                ? ConditionOperator.NotIn
-                : ConditionOperator.In;
-            return BuildBinary(left, op, QueryExpression.SubQuery(subQuery));
-        }
-
         internal sealed record EntityQueryOrder(string Path, bool Desc);
     }
-
-    /// <summary>
-    /// Generic convenience wrapper over EntitySchemaQuery.
-    /// </summary>
-    public class EntitySchemaQuery<TRootEntity> : EntitySchemaQuery
-    {
-        public EntitySchemaQuery(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, typeof(TRootEntity), userConnection)
-        {
-        }
-    }
-
-    /// <summary>
-    /// Backward-compatible short alias for EntitySchemaQuery.
-    /// </summary>
-    [Obsolete("Use EntitySchemaQuery instead.")]
-    public class ESQ : EntitySchemaQuery
-    {
-        public ESQ(BaseDbProvider provider, Type entityType, UserConnection userConnection)
-            : base(provider, entityType, userConnection)
-        {
-        }
-
-        public ESQ(BaseDbProvider provider, string tableName, UserConnection userConnection)
-            : base(provider, tableName, userConnection)
-        {
-        }
-
-        internal ESQ(BaseDbProvider provider, EntityStructure structure, UserConnection userConnection)
-            : base(provider, structure, userConnection)
-        {
-        }
-    }
-
-    /// <summary>
-    /// Backward-compatible generic short alias for EntitySchemaQuery.
-    /// </summary>
-    [Obsolete("Use EntitySchemaQuery<T> instead.")]
-    public sealed class ESQ<TRootEntity> : EntitySchemaQuery<TRootEntity>
-    {
-        public ESQ(BaseDbProvider provider, UserConnection userConnection)
-            : base(provider, userConnection)
-        {
-        }
-    }
 }
+
+
+
+
 

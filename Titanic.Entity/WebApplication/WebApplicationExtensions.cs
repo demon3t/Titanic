@@ -369,7 +369,7 @@ namespace Titanic.Entity.WebApplication
                     request.Name);
             }
 
-            var esq = request.Query.ToESQ(manager.Provider, userConnection);
+            var esq = request.Query.ToESQ(manager, userConnection);
             esq.MaxReadRowCount = manager.Options.MaxReadRowCount;
 
             var rows = esq
@@ -392,7 +392,7 @@ namespace Titanic.Entity.WebApplication
             UserConnection userConnection,
             EntityApiRequest request)
         {
-            var structure = ResolveEntityStructure(request);
+            var structure = ResolveEntityStructure(manager, request);
             var values = NormalizeValues(request.Values);
             var primaryColumn = structure.GetPrimaryColumnStructure();
 
@@ -426,7 +426,7 @@ namespace Titanic.Entity.WebApplication
             UserConnection userConnection,
             EntityApiRequest request)
         {
-            var structure = ResolveEntityStructure(request);
+            var structure = ResolveEntityStructure(manager, request);
             var deleteQuery = BuildDeleteFilterQuery(manager, userConnection, request, structure);
             if (!HasActiveFilters(deleteQuery.Filters))
             {
@@ -528,7 +528,7 @@ namespace Titanic.Entity.WebApplication
             UserConnection userConnection,
             EntityApiSaveRequest request)
         {
-            return manager.Create(ResolveTableName(request.TableName, request.EntityTypeName), userConnection);
+            return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
         /// <summary>
@@ -543,7 +543,7 @@ namespace Titanic.Entity.WebApplication
             UserConnection userConnection,
             EntityApiDeleteRequest request)
         {
-            return manager.Create(ResolveTableName(request.TableName, request.EntityTypeName), userConnection);
+            return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
         /// <summary>
@@ -558,7 +558,7 @@ namespace Titanic.Entity.WebApplication
             UserConnection userConnection,
             EntityApiRequest request)
         {
-            return manager.Create(ResolveTableName(request.TableName, request.EntityTypeName), userConnection);
+            return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
         /// <summary>
@@ -567,7 +567,10 @@ namespace Titanic.Entity.WebApplication
         /// <param name="tableName"> Имя таблицы. </param>
         /// <param name="entityTypeName"> Имя CLR-типа сущности. </param>
         /// <returns> Имя таблицы. </returns>
-        private static string ResolveTableName(string? tableName, string? entityTypeName)
+        private static string ResolveTableName(
+            BaseEntityManager manager,
+            string? tableName,
+            string? entityTypeName)
         {
             if (!string.IsNullOrWhiteSpace(tableName))
             {
@@ -576,7 +579,7 @@ namespace Titanic.Entity.WebApplication
 
             if (!string.IsNullOrWhiteSpace(entityTypeName))
             {
-                return Structure.GetEntityStructureByTypeName(entityTypeName).TableName;
+                return manager.StructureScope.GetEntityStructureByTypeName(entityTypeName).TableName;
             }
 
             throw new InvalidOperationException("Entity API request must contain TableName or EntityTypeName.");
@@ -587,28 +590,28 @@ namespace Titanic.Entity.WebApplication
         /// </summary>
         /// <param name="request"> HTTP-модель операции. </param>
         /// <returns> Структура сущности. </returns>
-        private static EntityStructure ResolveEntityStructure(EntityApiRequest request)
+        private static EntityStructure ResolveEntityStructure(BaseEntityManager manager, EntityApiRequest request)
         {
             if (!string.IsNullOrWhiteSpace(request.TableName))
             {
-                return Structure.GetEntityStructure(request.TableName);
+                return manager.StructureScope.GetEntityStructure(request.TableName);
             }
 
             if (!string.IsNullOrWhiteSpace(request.EntityTypeName))
             {
-                return Structure.GetEntityStructureByTypeName(request.EntityTypeName);
+                return manager.StructureScope.GetEntityStructureByTypeName(request.EntityTypeName);
             }
 
             if (request.Query != null)
             {
                 if (!string.IsNullOrWhiteSpace(request.Query.TableName))
                 {
-                    return Structure.GetEntityStructure(request.Query.TableName);
+                    return manager.StructureScope.GetEntityStructure(request.Query.TableName);
                 }
 
                 if (!string.IsNullOrWhiteSpace(request.Query.EntityTypeName))
                 {
-                    return Structure.GetEntityStructureByTypeName(request.Query.EntityTypeName);
+                    return manager.StructureScope.GetEntityStructureByTypeName(request.Query.EntityTypeName);
                 }
             }
 
@@ -629,7 +632,7 @@ namespace Titanic.Entity.WebApplication
             EntityApiRequest request,
             EntityStructure structure)
         {
-            var query = new EntitySchemaQuery(manager.Provider, structure, userConnection);
+            var query = new EntitySchemaQuery(manager.Provider, structure, manager.StructureScope, userConnection);
             query.AddPrimaryColumn();
 
             if (request.Query?.Filters != null)
@@ -639,7 +642,7 @@ namespace Titanic.Entity.WebApplication
 
             foreach (var value in NormalizeValues(request.Values).Where(x => !IsEmptyFilterValue(x.Value)))
             {
-                query.AddFilter(Titanic.Db.Enums.ConditionOperator.Equal, value.Key, value.Value);
+                query.AddFilter(EntityComparisonType.Equal, value.Key, value.Value);
             }
 
             return query;

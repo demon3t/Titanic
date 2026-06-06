@@ -325,7 +325,7 @@ namespace Titanic.Entity
 
         #region Private Methods
 
-        private static Orm.Entity Create(EntityStructure structure, BaseDbProvider provider, UserConnection userConnection)
+        internal static Orm.Entity Create(EntityStructure structure, BaseDbProvider provider, UserConnection userConnection)
         {
             var pathToAlias = structure.ColumnsStructure
                 .SelectMany(column => new[]

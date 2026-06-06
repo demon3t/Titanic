@@ -22,11 +22,11 @@ namespace Titanic.Entity.Strurture
         /// Проверить наличие таблиц и колонок, описанных Entity-моделями.
         /// </summary>
         /// <param name="provider"> Провайдер БД. </param>
-        public static void Validate(BaseDbProvider provider)
+        public static void Validate(BaseDbProvider provider, EntityStructureScope? scope = null)
         {
             ArgumentNullException.ThrowIfNull(provider);
 
-            var entities = Structure.EntitiesStructure
+            var entities = (scope ?? Structure.DefaultScope).EntitiesStructure
                 .GroupBy(entity => entity.TableName, StringComparer.OrdinalIgnoreCase)
                 .Select(group => new
                 {

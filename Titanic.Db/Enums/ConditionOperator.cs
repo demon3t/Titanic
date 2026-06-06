@@ -1,73 +1,74 @@
-namespace Titanic.Db.Enums
+﻿namespace Titanic.Db.Enums
 {
     /// <summary>
-    /// Оператор условия.
+    /// Query comparison operator.
     /// </summary>
     public enum ConditionOperator
     {
         /// <summary>
-        /// Равно.
+        /// Equal.
         /// </summary>
         Equal = 0,
 
         /// <summary>
-        /// Не равно.
+        /// Not equal.
         /// </summary>
         NotEqual = 1,
 
         /// <summary>
-        /// Больше.
+        /// Greater than.
         /// </summary>
         GreaterThan = 2,
 
         /// <summary>
-        /// Больше или равно.
+        /// Greater than or equal.
         /// </summary>
         GreaterThanOrEqual = 3,
 
         /// <summary>
-        /// Меньше.
+        /// Less than.
         /// </summary>
         LessThan = 4,
 
         /// <summary>
-        /// Меньше или равно.
+        /// Less than or equal.
         /// </summary>
         LessThanOrEqual = 5,
 
         /// <summary>
-        /// Входит в набор.
+        /// IN.
         /// </summary>
         In = 6,
 
         /// <summary>
-        /// Не входит в набор.
+        /// NOT IN.
         /// </summary>
         NotIn = 7,
 
         /// <summary>
-        /// LIKE.
+        /// SQL LIKE.
         /// </summary>
         Like = 8,
 
         /// <summary>
-        /// NOT LIKE.
+        /// SQL NOT LIKE.
         /// </summary>
         NotLike = 9,
 
         /// <summary>
-        /// PostgreSQL ILIKE.
+        /// Case-insensitive LIKE.
         /// </summary>
         ILike = 10,
 
         /// <summary>
-        /// Проверка на NULL.
+        /// IS NULL.
         /// </summary>
         IsNull = 11,
 
         /// <summary>
-        /// Проверка на NOT NULL.
+        /// IS NOT NULL.
         /// </summary>
         IsNotNull = 12,
+
     }
 }

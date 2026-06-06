@@ -30,8 +30,11 @@ namespace Titanic.Db.Abstractions
         public object? Value { get; set; }
 
         /// <summary>SQL оператор или имя функции.</summary>
-        /// <remarks>Используется для raw-выражений (когда <see cref="SqlFunctionType"/> = <see cref="Enums.SqlFunction.None"/> или <see cref="Enums.SqlFunction.Custom"/>) и для не-функциональных операторов (NOT, EXISTS, AND, OR).</remarks>
+        /// <remarks>Используется для raw-выражений, бинарных/group-операторов и custom SQL-функций.</remarks>
         public string? Operator { get; set; }
+
+        /// <summary>Тип унарного оператора.</summary>
+        public UnaryOperator UnaryOperatorType { get; set; } = UnaryOperator.None;
 
         /// <summary>Каноническая SQL-функция (рендерится движком).</summary>
         public SqlFunction SqlFunctionType { get; set; } = SqlFunction.None;
@@ -82,13 +85,15 @@ namespace Titanic.Db.Abstractions
         }
 
         private QueryExpression(ExpressionType expressionType, string? sql = null, string? op = null,
-            ConditionOperator? conditionOperator = null, object? value = null, BaseQuery? query = null,
+            ConditionOperator? conditionOperator = null, UnaryOperator unaryOperator = UnaryOperator.None,
+            object? value = null, BaseQuery? query = null,
             IEnumerable<QueryExpression>? expressions = null)
         {
             ExpressionType = expressionType;
             Sql = sql;
             Operator = op;
             ConditionOperatorType = conditionOperator;
+            UnaryOperatorType = unaryOperator;
             Value = value;
             Query = query;
             if (expressions != null)
@@ -139,10 +144,10 @@ namespace Titanic.Db.Abstractions
             => Binary(Column(columnName), ConditionOperator.Equal, value);
 
         internal static QueryExpression NotEqual(string columnName, object? value)
-            => value == null ? IsNotNull(columnName) : Compare(columnName, ConditionOperator.NotEqual, Param(value));
+            => value == null ? Not(IsNull(columnName)) : Compare(columnName, ConditionOperator.NotEqual, Param(value));
 
         internal static QueryExpression NotEqual(string alias, string columnName, object? value)
-            => value == null ? IsNotNull(alias, columnName) : Compare(alias, columnName, ConditionOperator.NotEqual, Param(value));
+            => value == null ? Not(IsNull(alias, columnName)) : Compare(alias, columnName, ConditionOperator.NotEqual, Param(value));
 
         internal static QueryExpression Greater(string columnName, object? value) => Compare(columnName, ConditionOperator.GreaterThan, Param(value));
         internal static QueryExpression Greater(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.GreaterThan, Param(value));
@@ -157,9 +162,6 @@ namespace Titanic.Db.Abstractions
         internal static QueryExpression Like(string columnName, object? value) => Compare(columnName, ConditionOperator.Like, Param(value));
         internal static QueryExpression Like(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.Like, Param(value));
         internal static QueryExpression Like(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.Like, value);
-        internal static QueryExpression NotLike(string alias, string columnName, QueryExpression value) => Compare(alias, columnName, ConditionOperator.NotLike, value);
-        internal static QueryExpression ILike(string columnName, object? value) => Compare(columnName, ConditionOperator.ILike, Param(value));
-        internal static QueryExpression ILike(string alias, string columnName, object? value) => Compare(alias, columnName, ConditionOperator.ILike, Param(value));
 
         internal static QueryExpression IsNull(string columnName)
             => new(ExpressionType.Unary, conditionOperator: ConditionOperator.IsNull, expressions: new[] { Column(columnName) });
@@ -184,7 +186,7 @@ namespace Titanic.Db.Abstractions
         internal static QueryExpression Or(params QueryExpression[] expressions)
             => new(ExpressionType.Group, op: "OR", expressions: expressions.Where(e => e != null));
         internal static QueryExpression Not(QueryExpression expression)
-            => new(ExpressionType.Unary, op: "NOT", expressions: new[] { expression });
+            => new(ExpressionType.Unary, unaryOperator: UnaryOperator.Not, expressions: new[] { expression });
 
         internal static QueryExpression List(IEnumerable<QueryExpression> expressions)
             => new(ExpressionType.List, expressions: expressions);
@@ -209,7 +211,7 @@ namespace Titanic.Db.Abstractions
         internal static QueryExpression SubQuery(Select query)
             => new(ExpressionType.SubQuery, query: query);
         internal static QueryExpression Exists(BaseQuery query)
-            => new(ExpressionType.Unary, op: "EXISTS", expressions: new[] { SubQuery(query) });
+            => new(ExpressionType.Unary, unaryOperator: UnaryOperator.Exists, expressions: new[] { SubQuery(query) });
 
         internal static QueryExpression In(string columnName, BaseQuery subQuery)
             => new(ExpressionType.Binary, conditionOperator: ConditionOperator.In, expressions: new[] { Column(columnName), SubQuery(subQuery) });

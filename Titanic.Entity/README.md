@@ -137,13 +137,16 @@ app.Run();
 {
   "TitanicEntity": {
     "Managers": [
-      {
-        "Name": "posgreTest",
-        "DbProviderName": "posgreTest",
-        "ManagerType": "MyApp.EntityManagers.PostgresEntityManager, MyApp",
-        "Api": {
-          "AutoRegisterEndpoint": true,
-          "Path": "/entity/posgreTest",
+        {
+          "Name": "posgreTest",
+          "DbProviderName": "posgreTest",
+          "ManagerType": "MyApp.EntityManagers.PostgresEntityManager, MyApp",
+          "EntityModelNamespaces": [
+            "MyApp.EntityModels.*"
+          ],
+          "Api": {
+            "AutoRegisterEndpoint": true,
+            "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
           "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
           "DefaultBatchExecutionMode": "Sequential"
@@ -202,7 +205,7 @@ var rows = EntityManager
     .AddColumn("Name")
     .AddColumn("DepartmentId", "Department")
     .AddColumn("DepartmentId.Name", "DepartmentName")
-    .AddFilter(ConditionOperator.Like, "Email", "%@company.com")
+    .AddFilter(EntityComparisonType.Contains, "Email", "@company.com")
     .OrderBy("Name")
     .GetEntityCollection();
 
@@ -264,8 +267,8 @@ var rows = EntityManager
     .Query<PostgresEntityManager, EmployeeEntity>(userConnection)
     .AddColumn("Name")
     .AddColumn("DepartmentId.Name", "DepartmentName")
-    .AddFilter(ConditionOperator.Equal, "DepartmentId.Name", "Engineering")
-    .AddFilter(ConditionOperator.Like, "Email", "%@company.com")
+    .AddFilter(EntityComparisonType.Equal, "DepartmentId.Name", "Engineering")
+    .AddFilter(EntityComparisonType.Contains, "Email", "@company.com")
     .GetEntityCollection();
 ```
 
@@ -355,11 +358,11 @@ Entity API публикует два endpoint-а на базовом пути м
       "isEnabled": true,
       "logicalOperation": "And",
       "items": [
-        { "path": "Name", "comparisonType": "Like", "value": "%John%" }
+        { "path": "Name", "comparisonType": 13, "value": "John" }
       ]
     },
     "orders": [
-      { "path": "Name", "desc": false }
+      { "path": "Name", "direction": 0 }
     ]
   }
 }
@@ -468,4 +471,6 @@ Project references:
 - Колонки связанных таблиц, считанные через join, не обновляются автоматически через `Save()` корневой Entity.
 - JSON-модель ESQ не должна передавать имя колонки локализации; локализация определяется backend-ом через metadata и `UserConnection`.
 - Если зарегистрировано несколько EntityManager, нельзя использовать неявный singleton-менеджер; нужно вызывать методы с типом менеджера.
+
+
 

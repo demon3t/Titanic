@@ -5,12 +5,13 @@ using Titanic.Common.Services.Authorization.Interfaces;
 
 namespace Titanic.Common.Services.Authorization.Base
 {
-	/// <summary>
-	/// Базовый мок обработчик автороизации по заголовку.
-	/// </summary>
-	public abstract class BaseMockHeaderAuthorizationHandler<TCollection, IRequirement> : BaseHeaderAuthorizationHandler<TCollection, IRequirement>
+    /// <summary>
+    /// Базовый мок-обработчик авторизации по заголовку.
+    /// </summary>
+    public abstract class BaseMockHeaderAuthorizationHandler<TCollection, TRequirement>
+        : BaseHeaderAuthorizationHandler<TCollection, TRequirement>
         where TCollection : IAuthorizationCollection
-        where IRequirement : IAuthorizationRequirement
+        where TRequirement : IAuthorizationRequirement
     {
         /// <summary>
         /// Префикс заголовка.
@@ -25,58 +26,47 @@ namespace Titanic.Common.Services.Authorization.Base
         /// <summary>
         /// Конструктор с параметрами.
         /// </summary>
-        /// <param name="collection"> Колекиция авторизаций. </param>
-        public BaseMockHeaderAuthorizationHandler(TCollection collection)
-			: base(collection)
-		{
-
-		}
+        /// <param name="collection">Коллекция авторизаций.</param>
+        protected BaseMockHeaderAuthorizationHandler(TCollection collection)
+            : base(collection)
+        {
+        }
 
         /// <summary>
-        /// Прослойка с авторизацией.
+        /// Обработать авторизацию mock-заголовка.
         /// </summary>
-        /// <param name="context"> Контекст запроса. </param>
-        /// <param name="requirement"> Контекст авторизации. </param>
-        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, IRequirement requirement)
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, TRequirement requirement)
         {
-            if (context.Resource is HttpContext httpContext)
+            if (context.Resource is HttpContext httpContext
+                && httpContext.Request.Headers.TryGetValue(AuthorizationHeader, out var key)
+                && IsValidMockHeader(key.ToString()))
             {
-                if (httpContext.Request.Headers.TryGetValue(AuthorizationHeader, out var key))
-                {
-                    var headerValue = key.ToString();
-
-                    if (IsValidMockHeader(headerValue))
-                    {
-                        context.Succeed(requirement);
-                        return Task.CompletedTask;
-                    }
-                }
+                context.Succeed(requirement);
+                return Task.CompletedTask;
             }
 
             context.Fail();
             return Task.CompletedTask;
         }
 
-        private bool IsValidMockHeader(string header)
+        private static bool IsValidMockHeader(string header)
         {
-            if (!header.StartsWith(Prefix))
+            if (!header.StartsWith(Prefix, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            var datePart = header.Substring(Prefix.Length);
-
-            if (!DateTime.TryParse(datePart, CultureInfo.InvariantCulture,  DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsedTime))
+            var datePart = header[Prefix.Length..];
+            if (!DateTime.TryParse(
+                datePart,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsedTime))
             {
                 return false;
             }
 
-            var now = DateTime.UtcNow;
-
-            var r1 = Math.Abs((now - parsedTime).TotalSeconds);
-            var r2 = AllowedDrift.TotalSeconds;
-
-            return r1 <= r2;
+            return Math.Abs((DateTime.UtcNow - parsedTime).TotalSeconds) <= AllowedDrift.TotalSeconds;
         }
     }
 }

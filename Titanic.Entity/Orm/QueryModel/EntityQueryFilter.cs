@@ -1,6 +1,4 @@
-﻿using Titanic.Db.Enums;
-
-namespace Titanic.Entity.Orm
+﻿namespace Titanic.Entity.Orm
 {
     /// <summary>
     /// Описание leaf-фильтра EntitySchemaQuery.
@@ -9,7 +7,7 @@ namespace Titanic.Entity.Orm
     {
         #region Constructors
 
-        internal EntityQueryFilter(string path, ConditionOperator comparisonType)
+        internal EntityQueryFilter(string path, EntityComparisonType comparisonType)
         {
             Path = path;
             ComparisonType = comparisonType;
@@ -27,7 +25,7 @@ namespace Titanic.Entity.Orm
         /// <summary>
         /// Тип сравнения.
         /// </summary>
-        public ConditionOperator ComparisonType { get; }
+        public EntityComparisonType ComparisonType { get; }
 
         /// <summary>
         /// Первое значение фильтра.

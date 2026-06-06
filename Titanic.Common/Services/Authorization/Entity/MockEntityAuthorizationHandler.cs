@@ -3,23 +3,23 @@
 namespace Titanic.Common.Services.Authorization.Entity
 {
     /// <summary>
-    /// Мок авторизация Entity.
+    /// Мок-обработчик авторизации Entity.
     /// </summary>
-    public class MockEntityAuthorizationHandler : BaseMockHeaderAuthorizationHandler<EntityAuthorizationCollection, EntityAuthorizationRequirement>
+    public sealed class MockEntityAuthorizationHandler : BaseMockHeaderAuthorizationHandler<EntityAuthorizationCollection, EntityAuthorizationRequirement>
     {
-        #region Свойства
+        #region Properties
 
         /// <summary>
         /// Заголовок авторизации.
         /// </summary>
         protected override string AuthorizationHeader => "X-Entity-Key";
 
-        #endregion Свойства
+        #endregion Properties
 
         /// <summary>
         /// Конструктор с параметрами.
         /// </summary>
-        /// <param name="collection"> Коллекция авторизаций. </param>
+        /// <param name="collection">Коллекция авторизаций.</param>
         public MockEntityAuthorizationHandler(EntityAuthorizationCollection collection)
             : base(collection)
         {

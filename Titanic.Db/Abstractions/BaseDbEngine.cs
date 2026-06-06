@@ -171,11 +171,16 @@ namespace Titanic.Db.Abstractions
                 : $"{QuoteIdentifier(expression.SourceAlias)}.*";
         }
 
-        private static string BuildBinaryExpression(QueryExpression expression, QueryBuildContext context)
+        private string BuildBinaryExpression(QueryExpression expression, QueryBuildContext context)
         {
             if (expression.Children.Count != 2)
             {
                 throw new InvalidOperationException($"Binary expression '{expression.Operator}' must contain exactly two operands");
+            }
+
+            if (expression.ConditionOperatorType is ConditionOperator.ILike)
+            {
+                return BuildCaseInsensitiveLikeExpression(expression, context);
             }
 
             var op = expression.ConditionOperatorType.HasValue
@@ -183,6 +188,24 @@ namespace Titanic.Db.Abstractions
                 : expression.Operator;
 
             return $"({expression.Children[0].ToSql(context)} {op} {expression.Children[1].ToSql(context)})";
+        }
+
+        private string BuildCaseInsensitiveLikeExpression(QueryExpression expression, QueryBuildContext context)
+        {
+            var leftSql = $"{GetSqlFunctionSql(SqlFunction.Upper)}({expression.Children[0].ToSql(context)})";
+            var rightSql = BuildCaseInsensitiveLikeValueExpression(expression.Children[1], context);
+            return $"({leftSql} LIKE {rightSql})";
+        }
+
+        private string BuildCaseInsensitiveLikeValueExpression(QueryExpression expression, QueryBuildContext context)
+        {
+            var upperSql = GetSqlFunctionSql(SqlFunction.Upper);
+            return expression.ExpressionType switch
+            {
+                ExpressionType.Parameter => $"{upperSql}({context.AddParameter(expression.Value)})",
+                ExpressionType.Const => $"{upperSql}({FormatConstValue(expression.Value)})",
+                _ => throw new NotSupportedException("Case-insensitive LIKE supports only parameter or constant right operand.")
+            };
         }
 
         /// <summary>
@@ -271,7 +294,7 @@ namespace Titanic.Db.Abstractions
         {
             if (expression.Children.Count != 1)
             {
-                throw new InvalidOperationException($"Unary expression '{expression.Operator}' must contain exactly one operand");
+                throw new InvalidOperationException($"Unary expression '{GetUnaryOperatorDebugName(expression)}' must contain exactly one operand");
             }
 
             if (expression.ConditionOperatorType.HasValue)
@@ -280,12 +303,41 @@ namespace Titanic.Db.Abstractions
                 return $"({expression.Children[0].ToSql(context)} {op})";
             }
 
-            return expression.Operator switch
+            return expression.UnaryOperatorType switch
             {
-                "NOT" => $"NOT ({expression.Children[0].ToSql(context)})",
-                "EXISTS" => $"EXISTS {expression.Children[0].ToSql(context)}",
+                UnaryOperator.Not => BuildNotUnaryExpression(expression.Children[0], context),
+                UnaryOperator.Exists => $"EXISTS {expression.Children[0].ToSql(context)}",
+                UnaryOperator.None when !string.IsNullOrWhiteSpace(expression.Operator) => $"({expression.Children[0].ToSql(context)} {expression.Operator})",
                 _ => $"({expression.Children[0].ToSql(context)} {expression.Operator})"
             };
+        }
+
+        private static string GetUnaryOperatorDebugName(QueryExpression expression)
+        {
+            return expression.UnaryOperatorType != UnaryOperator.None
+                ? expression.UnaryOperatorType.ToString()
+                : expression.Operator ?? string.Empty;
+        }
+
+        private static string BuildNotUnaryExpression(QueryExpression childExpression, QueryBuildContext context)
+        {
+            if (childExpression.ExpressionType == ExpressionType.Unary && childExpression.ConditionOperatorType.HasValue)
+            {
+                var invertedOperator = childExpression.ConditionOperatorType.Value switch
+                {
+                    ConditionOperator.IsNull => ConditionOperator.IsNotNull,
+                    ConditionOperator.IsNotNull => ConditionOperator.IsNull,
+                    _ => (ConditionOperator?)null
+                };
+
+                if (invertedOperator.HasValue)
+                {
+                    var op = context.Engine.GetConditionOperatorSql(invertedOperator.Value);
+                    return $"({childExpression.Children[0].ToSql(context)} {op})";
+                }
+            }
+
+            return $"NOT ({childExpression.ToSql(context)})";
         }
 
         private static string BuildGroupExpression(QueryExpression expression, QueryBuildContext context)

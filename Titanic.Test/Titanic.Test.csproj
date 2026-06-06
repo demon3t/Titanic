@@ -34,4 +34,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup Condition="Exists('appsettings.Test.local.json')">
+    <None Include="appsettings.Test.local.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

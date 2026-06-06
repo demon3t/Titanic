@@ -2,27 +2,27 @@
 
 namespace Titanic.Common.Services.Authorization.Entity
 {
-	/// <summary>
-	/// Обработчик авторизации запроса к сущностям.
-	/// </summary>
-	public class EntityAuthorizationHandler : BaseHeaderAuthorizationHandler<EntityAuthorizationCollection, EntityAuthorizationRequirement>
-	{
-        #region Свойства
+    /// <summary>
+    /// Обработчик авторизации запроса к сущностям.
+    /// </summary>
+    public sealed class EntityAuthorizationHandler : BaseHeaderAuthorizationHandler<EntityAuthorizationCollection, EntityAuthorizationRequirement>
+    {
+        #region Properties
 
         /// <summary>
         /// Заголовок авторизации.
         /// </summary>
-        protected override string AuthorizationHeader => "X-Entity-Key"; 
+        protected override string AuthorizationHeader => "X-Entity-Key";
 
-        #endregion Свойства
+        #endregion Properties
 
         /// <summary>
         /// Конструктор с параметрами.
         /// </summary>
-        /// <param name="collection"> Коллекция авторизаций. </param>
+        /// <param name="collection">Коллекция авторизаций.</param>
         public EntityAuthorizationHandler(EntityAuthorizationCollection collection)
-			: base(collection)
-		{
-		}
-	}
+            : base(collection)
+        {
+        }
+    }
 }

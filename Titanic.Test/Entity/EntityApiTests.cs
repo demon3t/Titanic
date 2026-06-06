@@ -295,7 +295,7 @@ namespace Titanic.Test.Entity
                             new ESQFilterJsonModel
                             {
                                 Path = "DepartmentId.Name",
-                                ComparisonType = ConditionOperator.Equal,
+                                ComparisonType = EntityComparisonType.Equal,
                                 Value = "Old Department"
                             }
                         ]

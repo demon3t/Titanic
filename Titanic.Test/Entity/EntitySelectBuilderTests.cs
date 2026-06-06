@@ -1,18 +1,20 @@
-﻿using Titanic.Db;
+using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
 using Titanic.Entity;
+using Titanic.Entity.Exceptions;
 using Titanic.Entity.Interfaces;
 using EntityManager = Titanic.Entity.EntityManager;
 using Titanic.Entity.Orm;
 using Titanic.Entity.WebApplication.Configuration;
 using Titanic.Test.Db;
 using Titanic.Test.Db.Integration;
+using Titanic.Test.Entity.Hidden;
 
 namespace Titanic.Test.Entity
 {
     /// <summary>
-    /// РўРµСЃС‚С‹ ORM-Р±РёР»РґРµСЂР° СЃСѓС‰РЅРѕСЃС‚РµР№.
+    /// Тесты ORM-билдера сущностей.
     /// </summary>
     public class EntitySelectBuilderTests : IClassFixture<DbManagerFixture>
     {
@@ -59,6 +61,7 @@ namespace Titanic.Test.Entity
                     {
                         Name = "TestPostgres",
                         DbProviderName = "TestPostgres",
+                        EntityModelNamespaces = ["Titanic.Test.Entity"],
                         Api = new EntityManagerApiSettings
                         {
                             AutoRegisterEndpoint = true,
@@ -89,6 +92,46 @@ namespace Titanic.Test.Entity
             Assert.Equal(25, manager.Options.MaxReadRowCount);
             Assert.False(manager.ValidateDatabaseSchemaOnCompile);
             Assert.Equal(25, esq.MaxReadRowCount);
+            Assert.Throws<NotExistTableException>(
+                () => manager.Query(typeof(OrmHiddenScopedEntity), OrmTestUserConnection.Create()));
+        }
+
+        [Fact]
+        public void EntityManager_Initialize_ShouldSupportWildcardNamespaceScope()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "RootScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(EntityDbManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity"]
+                    },
+                    new EntityManagerSettings
+                    {
+                        Name = "HiddenScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"]
+                    }
+                ]
+            });
+
+            var rootManager = EntityManager.GetManager<EntityDbManager>();
+            var hiddenManager = EntityManager.GetManager<HiddenScopeEntityManager>();
+            var userConnection = OrmTestUserConnection.Create();
+
+            Assert.Throws<NotExistTableException>(
+                () => rootManager.Query(typeof(OrmHiddenScopedEntity), userConnection));
+
+            var hiddenQuery = hiddenManager.Query(typeof(OrmHiddenScopedEntity), userConnection);
+            hiddenQuery.AddPrimaryColumn();
+            var build = hiddenQuery.Build();
+
+            Assert.Contains("\"hidden_scoped_entities\"", build.Sql, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -112,6 +155,22 @@ namespace Titanic.Test.Entity
                 """,
                 build.Sql);
             AssertParameters(build, 10);
+        }
+
+        [Fact]
+        public void ESQJsonModel_ToESQ_ShouldSupportLegacyDescOrdering()
+        {
+            var model = new ESQJsonModel
+            {
+                TableName = "employees",
+                Columns = [new() { Path = "Name" }],
+                Orders = [new() { Path = "Name", Desc = true }]
+            };
+
+            var build = model.ToESQ(_provider, OrmTestUserConnection.Create()).Build();
+
+            Assert.Contains("ORDER BY", build.Sql, StringComparison.Ordinal);
+            Assert.Contains("\"t0\".\"name\" DESC", build.Sql, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -147,7 +206,7 @@ namespace Titanic.Test.Entity
             var build = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
                 .AddColumn("Name")
                 .AddColumn("[EmployeeId:Id:Id].City")
-                .Where("[EmployeeId:Id:Id].City").IsLike("Moscow%")
+                .Where("[EmployeeId:Id:Id].City").IsContains("Moscow")
                 .OrderBy("[EmployeeId:Id:Id].City")
                 .Build();
 
@@ -162,13 +221,57 @@ namespace Titanic.Test.Entity
                 ON
                 	("t1"."employee_id" = "t0"."id")
                 WHERE
-                	("t1"."city" LIKE @p0)
+                	(UPPER("t1"."city") LIKE UPPER(@p0))
                 ORDER BY
                 	"t1"."city" ASC
                 """,
                 build.Sql);
 
-            AssertParameters(build, "Moscow%");
+            AssertParameters(build, "%Moscow%");
+        }
+
+        [Fact]
+        public void EntitySelectBuilder_ShouldBuildStartsWithFilter()
+        {
+            var build = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
+                .AddColumn("Name")
+                .Where("Name").IsStartsWith("Dev")
+                .Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	(UPPER("t0"."name") LIKE UPPER(@p0))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "Dev%");
+        }
+
+        [Fact]
+        public void EntitySelectBuilder_ShouldBuildEndsWithFilter()
+        {
+            var build = EntityManager.Select<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create())
+                .AddColumn("Name")
+                .Where("Name").IsEndsWith("Ops")
+                .Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	(UPPER("t0"."name") LIKE UPPER(@p0))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "%Ops");
         }
 
         [Fact]
@@ -236,8 +339,8 @@ namespace Titanic.Test.Entity
             esq.AddPrimaryColumn();
             esq.AddDisplayColumn("EmployeeName");
             esq.AddColumn("DepartmentId.Name", "DepartmentName");
-            esq.AddFilter(ConditionOperator.Equal, "DepartmentId.Name", "Engineering");
-            esq.AddFilter(ConditionOperator.Like, "Email", "%@t.com");
+            esq.AddFilter(EntityComparisonType.Equal, "DepartmentId.Name", "Engineering");
+            esq.AddFilter(EntityComparisonType.Contains, "Email", "@t.com");
             esq.RowCount = 10;
 
             var build = esq.Build();
@@ -253,13 +356,13 @@ namespace Titanic.Test.Entity
                 ON
                 	("t0"."department_id" = "t1"."id")
                 WHERE
-                	(("t1"."name" = @p0) AND ("t0"."email" LIKE @p1))
+                	(("t1"."name" = @p0) AND (UPPER("t0"."email") LIKE UPPER(@p1)))
                 LIMIT
                 	@p2
                 """,
                 build.Sql);
 
-            AssertParameters(build, "Engineering", "%@t.com", 10);
+            AssertParameters(build, "Engineering", "%@t.com%", 10);
         }
 
         [Fact]
@@ -267,10 +370,10 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
             esq.AddColumn("Name");
-            esq.Filters.Add("Name", ConditionOperator.Like, "A%");
+            esq.Filters.Add("Name", EntityComparisonType.Contains, "A");
             var group = esq.Filters.AddGroup(EntityLogicalOperation.Or);
-            group.Add("Email", ConditionOperator.Like, "%@t.com");
-            group.Add("Salary", ConditionOperator.GreaterThanOrEqual, 1000);
+            group.Add("Email", EntityComparisonType.Contains, "@t.com");
+            group.Add("Salary", EntityComparisonType.GreaterThanOrEqual, 1000);
 
             var build = esq.Build();
 
@@ -281,11 +384,11 @@ namespace Titanic.Test.Entity
                 FROM
                 	"employees" AS "t0"
                 WHERE
-                	(("t0"."name" LIKE @p0) AND (("t0"."email" LIKE @p1) OR ("t0"."salary" >= @p2)))
+                	((UPPER("t0"."name") LIKE UPPER(@p0)) AND ((UPPER("t0"."email") LIKE UPPER(@p1)) OR ("t0"."salary" >= @p2)))
                 """,
                 build.Sql);
 
-            AssertParameters(build, "A%", "%@t.com", 1000);
+            AssertParameters(build, "%A%", "%@t.com%", 1000);
         }
 
         [Fact]
@@ -438,7 +541,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query("employees", _provider, OrmTestUserConnection.Create());
             esq.AddDisplayColumn();
-            esq.AddFilter(ConditionOperator.Like, "Email", "%@t.com");
+            esq.AddFilter(EntityComparisonType.Contains, "Email", "@t.com");
 
             var build = esq.Build();
 
@@ -449,11 +552,11 @@ namespace Titanic.Test.Entity
                 FROM
                 	"employees" AS "t0"
                 WHERE
-                	("t0"."email" LIKE @p0)
+                	(UPPER("t0"."email") LIKE UPPER(@p0))
                 """,
                 build.Sql);
 
-            AssertParameters(build, "%@t.com");
+            AssertParameters(build, "%@t.com%");
         }
 
         [Fact]
@@ -474,20 +577,20 @@ namespace Titanic.Test.Entity
                         new()
                         {
                             Path = "DepartmentId.Name",
-                            ComparisonType = ConditionOperator.Equal,
+                            ComparisonType = EntityComparisonType.Equal,
                             Value = "Engineering"
                         },
                         new()
                         {
                             Path = "Email",
-                            ComparisonType = ConditionOperator.Like,
-                            Value = "%@t.com"
+                            ComparisonType = EntityComparisonType.Contains,
+                            Value = "@t.com"
                         }
                     ]
                 },
                 Orders =
                 [
-                    new() { Path = "Name", Desc = true }
+                    new() { Path = "Name", Direction = EntityOrderDirection.Descending }
                 ],
                 RowCount = 5
             };
@@ -505,7 +608,7 @@ namespace Titanic.Test.Entity
                 ON
                 	("t0"."department_id" = "t1"."id")
                 WHERE
-                	(("t1"."name" = @p0) AND ("t0"."email" LIKE @p1))
+                	(("t1"."name" = @p0) AND (UPPER("t0"."email") LIKE UPPER(@p1)))
                 ORDER BY
                 	"t0"."name" DESC
                 LIMIT
@@ -513,7 +616,7 @@ namespace Titanic.Test.Entity
                 """,
                 build.Sql);
 
-            AssertParameters(build, "Engineering", "%@t.com", 5);
+            AssertParameters(build, "Engineering", "%@t.com%", 5);
         }
 
         [Fact]
@@ -567,11 +670,11 @@ namespace Titanic.Test.Entity
               "filters": {
                 "logicalOperation": 0,
                 "items": [
-                  { "path": "Name", "comparisonType": 8, "value": "A%" },
+                  { "path": "Name", "comparisonType": 13, "value": "A" },
                   {
                     "logicalOperation": 1,
                     "items": [
-                      { "path": "Email", "comparisonType": 8, "value": "%@t.com" },
+                      { "path": "Email", "comparisonType": 13, "value": "@t.com" },
                       { "path": "Salary", "comparisonType": 3, "value": 1000 }
                     ]
                   }
@@ -589,11 +692,11 @@ namespace Titanic.Test.Entity
                 FROM
                 	"employees" AS "t0"
                 WHERE
-                	(("t0"."name" LIKE @p0) AND (("t0"."email" LIKE @p1) OR ("t0"."salary" >= @p2)))
+                	((UPPER("t0"."name") LIKE UPPER(@p0)) AND ((UPPER("t0"."email") LIKE UPPER(@p1)) OR ("t0"."salary" >= @p2)))
                 """,
                 build.Sql);
 
-            AssertParameters(build, "A%", "%@t.com", 1000);
+            AssertParameters(build, "%A%", "%@t.com%", 1000);
         }
 
         [Fact]
@@ -709,7 +812,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
             esq.AddColumn("Name", "EmployeeName");
-            esq.AddFilter(ConditionOperator.Equal, "Email", "ivan@example.com");
+            esq.AddFilter(EntityComparisonType.Equal, "Email", "ivan@example.com");
             esq.OrderBy("Name");
             esq.RowCount = 1;
 
@@ -787,7 +890,7 @@ namespace Titanic.Test.Entity
 
             var build = EntityManager.Select<OrmLocalizedDepartmentEntity>(_provider, OrmTestUserConnection.Create(cultureId))
                 .AddColumn("Name")
-                .Where("Name").IsLike("Dev%")
+                .Where("Name").IsContains("Dev")
                 .OrderBy("Name")
                 .Build();
 
@@ -802,13 +905,37 @@ namespace Titanic.Test.Entity
                 ON
                 	(("t1"."RecordId" = "t0"."id") AND ("t1"."SysCultureId" = @p0))
                 WHERE
-                	(COALESCE(NULLIF("t1"."name", ''), "t0"."name") LIKE @p1)
+                	(UPPER(COALESCE(NULLIF("t1"."name", ''), "t0"."name")) LIKE UPPER(@p1))
                 ORDER BY
                 	COALESCE(NULLIF("t1"."name", ''), "t0"."name") ASC
                 """,
                 build.Sql);
 
-            AssertParameters(build, cultureId, "Dev%");
+            AssertParameters(build, cultureId, "%Dev%");
+        }
+
+        [Fact]
+        public void ESQ_ShouldBuildStartsWithAndEndsWithFilters()
+        {
+            var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
+            esq.AddColumn("Name");
+            esq.AddStartsWithFilter("Name", "Dev");
+            esq.AddEndsWithFilter("Email", "@t.com");
+
+            var build = esq.Build();
+
+            AssertSql(
+                """
+                SELECT
+                	"t0"."name" AS "Name"
+                FROM
+                	"employees" AS "t0"
+                WHERE
+                	((UPPER("t0"."name") LIKE UPPER(@p0)) AND (UPPER("t0"."email") LIKE UPPER(@p1)))
+                """,
+                build.Sql);
+
+            AssertParameters(build, "Dev%", "%@t.com");
         }
 
         [Fact]
@@ -938,7 +1065,12 @@ namespace Titanic.Test.Entity
             return sql.Replace("\r\n", "\n").Trim();
         }
     }
+
+    public sealed class HiddenScopeEntityManager : BaseEntityManager
+    {
+    }
 }
+
 
 
 

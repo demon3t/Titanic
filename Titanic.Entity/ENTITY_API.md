@@ -26,6 +26,9 @@ Endpoint-ы поднимаются автоматически для каждо�
         "Name": "posgreTest",
         "DbProviderName": "posgreTest",
         "ManagerType": "Titanic.EntityApi.EntityManagers.PosgreSqlManager, Titanic.EntityApi",
+        "EntityModelNamespaces": [
+          "Titanic.EntityApi.Entities.*"
+        ],
         "Api": {
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
@@ -42,6 +45,8 @@ Endpoint-ы поднимаются автоматически для каждо�
   }
 }
 ```
+
+`EntityModelNamespaces` задает, по каким namespace-patterns менеджер собирает свою структуру Entity-моделей. Если коллекция пустая, менеджер видит все найденные Entity-модели. Паттерн `Some.Namespace.*` включает и сам namespace `Some.Namespace`, и его вложенные пространства имён.
 
 Регистрация в приложении:
 
@@ -126,7 +131,7 @@ X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 | `4` | `Min` | MIN. |
 | `5` | `Max` | MAX. |
 
-### ConditionOperator
+### EntityComparisonType
 
 | Число | Имя | Назначение |
 | --- | --- | --- |
@@ -143,6 +148,9 @@ X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 | `10` | `ILike` | PostgreSQL ILIKE, если поддерживается провайдером. |
 | `11` | `IsNull` | Значение отсутствует. |
 | `12` | `IsNotNull` | Значение заполнено. |
+| `13` | `Contains` | Поиск по вхождению без ручного `%...%`. |
+| `14` | `StartsWith` | Поиск по началу строки без ручного `%`. |
+| `15` | `EndsWith` | Поиск по концу строки без ручного `%`. |
 ## Единая модель операции
 
 `POST {Api.Path}` принимает объект `EntityApiRequest`.
@@ -268,7 +276,7 @@ interface ESQFilterCollectionJsonModel {
 
 interface ESQFilterJsonModel {
   path?: string;
-  comparisonType?: ConditionOperator;
+  comparisonType?: EntityComparisonType;
   value?: unknown;
   secondValue?: unknown;
   isEnabled?: boolean;
@@ -279,11 +287,33 @@ interface ESQFilterJsonModel {
 
 interface ESQOrderJsonModel {
   path: string;
+  direction?: 0 | 1;
   desc?: boolean;
 }
 
 type EntityLogicalOperation = 0 | 1;
 type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
+```
+
+`orders[].direction` задает направление сортировки:
+
+- `0` - сортировка `ASC`;
+- `1` - сортировка `DESC`.
+
+Поле `desc` сохранено только для обратной совместимости со старыми клиентами и для новых запросов использоваться не должно.
+
+Примеры:
+
+```json
+{ "path": "Name" }
+```
+
+```json
+{ "path": "Name", "direction": 0 }
+```
+
+```json
+{ "path": "CreatedOn", "direction": 1 }
 ```
 
 ## Операторы фильтров
@@ -298,9 +328,12 @@ type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
 | `3` | `GreaterThanOrEqual` | `value` | Больше или равно. |
 | `4` | `LessThan` | `value` | Меньше. |
 | `5` | `LessThanOrEqual` | `value` | Меньше или равно. |
-| `8` | `Like` | `value` | SQL LIKE. |
+| `13` | `Contains` | `value` | Case-insensitive contains, `%` добавляются backend-ом. |
+| `14` | `StartsWith` | `value` | Case-insensitive starts-with, `%` добавляется backend-ом справа. |
+| `15` | `EndsWith` | `value` | Case-insensitive ends-with, `%` добавляется backend-ом слева. |
+| `8` | `Like` | `value` | Низкоуровневый SQL LIKE. Шаблон с `%` должен быть подготовлен клиентом. |
 | `10` | `ILike` | `value` | Case-insensitive LIKE, если поддерживается провайдером. |
-| `9` | `NotLike` | `value` | NOT LIKE. |
+| `9` | `NotLike` | `value` | NOT LIKE. Шаблон с `%` должен быть подготовлен клиентом. |
 | `11` | `IsNull` | без `value` | Значение отсутствует. |
 | `12` | `IsNotNull` | без `value` | Значение заполнено. |
 | `6` | `In` | subquery | Сейчас рассчитано на backend-subquery, для UI напрямую обычно не использовать. |
@@ -324,7 +357,7 @@ type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
 Пример условия:
 
 ```text
-Name LIKE 'A%' AND (Email LIKE '%@t.com' OR Salary >= 1000)
+Name starts with 'A' AND (Email contains '@t.com' OR Salary >= 1000)
 ```
 
 JSON:
@@ -340,11 +373,11 @@ JSON:
     "filters": {
       "logicalOperation": 0,
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "A%" },
+        { "path": "Name", "comparisonType": 14, "value": "A" },
         {
           "logicalOperation": 1,
           "items": [
-            { "path": "Email", "comparisonType": 8, "value": "%@t.com" },
+            { "path": "Email", "comparisonType": 13, "value": "@t.com" },
             { "path": "Salary", "comparisonType": 3, "value": 1000 }
           ]
         }
@@ -453,11 +486,11 @@ X-Entity-Key: postman-local-user
       "isEnabled": true,
       "logicalOperation": 0,
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "%Department%" }
+        { "path": "Name", "comparisonType": 13, "value": "Department" }
       ]
     },
     "orders": [
-      { "path": "Name", "desc": false }
+      { "path": "Name", "direction": 0 }
     ]
   }
 }
@@ -480,7 +513,7 @@ X-Entity-Key: postman-local-user
       { "path": "Email" }
     ],
     "orders": [
-      { "path": "Name", "desc": false }
+      { "path": "Name", "direction": 0 }
     ]
   }
 }
@@ -551,8 +584,8 @@ Backend дополнительно ограничивает чтение чер�
       ]
     },
     "orders": [
-      { "path": "DepartmentId.Name" },
-      { "path": "Name" }
+      { "path": "DepartmentId.Name", "direction": 0 },
+      { "path": "Name", "direction": 1 }
     ]
   }
 }
@@ -575,7 +608,7 @@ Backend дополнительно ограничивает чтение чер�
       "DepartmentId.Name"
     ],
     "orders": [
-      { "path": "DepartmentId.Name" }
+      { "path": "DepartmentId.Name", "direction": 1 }
     ]
   }
 }
@@ -607,7 +640,7 @@ Backend дополнительно ограничивает чтение чер�
       { "path": "DepartmentId.Name", "alias": "DepartmentName" }
     ],
     "orders": [
-      { "path": "DepartmentId.Name" }
+      { "path": "DepartmentId.Name", "direction": 0 }
     ]
   }
 }
@@ -901,7 +934,7 @@ function buildSaveRequest(tableName: string, values: Record<string, unknown>): E
     ],
     "filters": {
       "items": [
-        { "path": "Name", "comparisonType": 8, "value": "%eng%" }
+        { "path": "Name", "comparisonType": 13, "value": "eng" }
       ]
     },
     "orders": [
@@ -998,6 +1031,8 @@ export class EntityOrmClient {
 - `In` и `NotIn` рассчитаны на backend subquery и не являются удобным UI-оператором в текущей JSON-модели.
 - `Save` и `Delete` работают с корневой таблицей; связанные таблицы, прочитанные через JOIN, не сохраняются автоматически.
 - Локализация настраивается в backend metadata и `UserConnection`, а не в JSON-запросе.
+
+
 
 
 
