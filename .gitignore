@@ -1,4 +1,4 @@
-*
+﻿*
 !/.gitignore
 !/README.md
 !/Titanic.sln
@@ -21,3 +21,5 @@
 *.cache
 *.tsbuildinfo
 **/appsettings*.local.json
+!/ARCHITECTURE.md
+
