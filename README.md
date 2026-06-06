@@ -155,16 +155,3 @@ var rows = EntityManager
 - [Titanic.Entity/README.md](C:/Titanic/Titanic.Entity/README.md)
 - [Titanic.Entity/ENTITY_API.md](C:/Titanic/Titanic.Entity/ENTITY_API.md)
 
-## Текущее состояние
-
-На момент последней локальной проверки:
-
-- `dotnet build C:\Titanic\Titanic.sln --nologo` проходит успешно
-- `dotnet test C:\Titanic\Titanic.Test\Titanic.Test.csproj --nologo` проходит успешно
-- результат тестов: `185 passed`, `0 skipped`, `0 failed`
-
-## Ограничения и замечания
-
-- В репозитории есть локальные ignored-каталоги и helper-файлы, которые не попадают в git.
-- Часть demo/debug проектов живёт рядом с основным solution и используется для проверки, а не как базовые пакеты.
-- Основная архитектурная ценность находится в `Titanic.Common`, `Titanic.Db`, `Titanic.Entity`.
