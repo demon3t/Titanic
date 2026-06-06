@@ -3,8 +3,8 @@ using Titanic.Db.Abstractions;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Р¤Р»СЋРµРЅС‚-Р±РёР»РґРµСЂ РґР»СЏ CASE РІС‹СЂР°Р¶РµРЅРёР№.
-    /// РџСЂРёРјРµСЂ:
+    /// Флюент-билдер для CASE выражений.
+    /// Пример:
     /// Func.Case()
     ///     .When(Column.Name("status")).IsEqual(Column.Parameter(1)).Then(Column.Const("one"))
     ///     .Else(Column.Const("other"));
@@ -14,7 +14,7 @@ namespace Titanic.Db.Builders
         private readonly List<(QueryExpression When, QueryExpression Then)> _branches = new();
 
         /// <summary>
-        /// РќР°С‡Р°С‚СЊ WHEN-РІРµС‚РєСѓ СЃ Р»РµРІРѕРіРѕ РІС‹СЂР°Р¶РµРЅРёСЏ СЃСЂР°РІРЅРµРЅРёСЏ.
+        /// Начать WHEN-ветку с левого выражения сравнения.
         /// </summary>
         public CaseWhenItem When(QueryExpression left)
         {
@@ -28,7 +28,7 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Р—Р°РІРµСЂС€РёС‚СЊ CASE РІС‹СЂР°Р¶РµРЅРёРµ РІРµС‚РєРѕР№ ELSE.
+        /// Завершить CASE выражение веткой ELSE.
         /// </summary>
         public QueryExpression Else(QueryExpression elseExpression)
         {

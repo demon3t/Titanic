@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// ORDER BY С‡Р°СЃС‚СЊ Р·Р°РїСЂРѕСЃР°.
+    /// ORDER BY часть запроса.
     /// </summary>
     public sealed record SqlOrderBy(QueryExpression Expression, bool Desc);
 }

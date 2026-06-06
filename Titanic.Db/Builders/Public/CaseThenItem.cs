@@ -3,7 +3,7 @@ using Titanic.Db.Abstractions;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Р­С‚Р°Рї СѓРєР°Р·Р°РЅРёСЏ THEN РІС‹СЂР°Р¶РµРЅРёСЏ.
+    /// Этап указания THEN выражения.
     /// </summary>
     public class CaseThenItem
     {

@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// РљРѕР»РѕРЅРєР° SELECT.
+    /// Колонка SELECT.
     /// </summary>
     public sealed record SqlSelectColumn(QueryExpression Expression);
 }

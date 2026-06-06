@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// Р”Р°РЅРЅС‹Рµ SELECT Р·Р°РїСЂРѕСЃР° РґР»СЏ SQL-РґРІРёР¶РєР°.
+    /// Данные SELECT запроса для SQL-движка.
     /// </summary>
     public sealed record SqlSelectParts(
         IReadOnlyList<SqlSelectColumn> Columns,

@@ -3,7 +3,7 @@ using Titanic.Db.Abstractions;
 namespace Titanic.Db.Builders
 {
     /// <summary>
-    /// Р­С‚Р°Рї РІС‹Р±РѕСЂР° РѕРїРµСЂР°С‚РѕСЂР° СЃСЂР°РІРЅРµРЅРёСЏ РґР»СЏ WHEN.
+    /// Этап выбора оператора сравнения для WHEN.
     /// </summary>
     public class CaseWhenItem
     {

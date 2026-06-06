@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// РўР°Р±Р»РёС†Р° СЃ Р°Р»РёР°СЃРѕРј.
+    /// Таблица с алиасом.
     /// </summary>
     public sealed record SqlTable(string TableName, string? Alias);
 }

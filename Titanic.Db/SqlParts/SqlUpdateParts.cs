@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// Р”Р°РЅРЅС‹Рµ UPDATE Р·Р°РїСЂРѕСЃР° РґР»СЏ SQL-РґРІРёР¶РєР°.
+    /// Данные UPDATE запроса для SQL-движка.
     /// </summary>
     public sealed record SqlUpdateParts(
         string TableName,

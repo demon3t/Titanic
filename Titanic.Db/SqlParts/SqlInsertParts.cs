@@ -1,7 +1,7 @@
 namespace Titanic.Db.Abstractions
 {
     /// <summary>
-    /// Р”Р°РЅРЅС‹Рµ INSERT Р·Р°РїСЂРѕСЃР° РґР»СЏ SQL-РґРІРёР¶РєР°.
+    /// Данные INSERT запроса для SQL-движка.
     /// </summary>
     public sealed record SqlInsertParts(
         string TableName,

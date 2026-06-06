@@ -1,4 +1,4 @@
-﻿using Titanic.Db;
+using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
 using Titanic.Entity;
@@ -12,7 +12,7 @@ using Titanic.Test.Db.Integration;
 namespace Titanic.Test.Entity
 {
     /// <summary>
-    /// РўРµСЃС‚С‹ ORM-Р±РёР»РґРµСЂР° СЃСѓС‰РЅРѕСЃС‚РµР№.
+    /// Тесты ORM-билдера сущностей.
     /// </summary>
     public class EntitySelectBuilderTests : IClassFixture<DbManagerFixture>
     {
