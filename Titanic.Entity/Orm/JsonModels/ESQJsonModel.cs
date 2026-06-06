@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Titanic.Common.Session;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
@@ -55,38 +56,14 @@ namespace Titanic.Entity.Orm
         {
             ArgumentNullException.ThrowIfNull(provider);
             ArgumentNullException.ThrowIfNull(userConnection);
+            return ApplyModel(CreateESQ(provider, userConnection));
+        }
 
-            var esq = CreateESQ(provider, userConnection);
-            esq.IsDistinct = IsDistinct;
-            esq.AllColumns = AllColumns || Columns.Count == 0 || Columns.Any(IsAllColumnsMarker);
-            esq.SkipRow = SkipRow ?? SkipRowCount;
-            esq.RowCount = RowCount;
-
-            foreach (var column in Columns.Where(column => !IsAllColumnsMarker(column)))
-            {
-                if (column.AggregationType == EntityAggregationType.None)
-                {
-                    esq.AddColumn(column.Path, column.Alias);
-                }
-                else
-                {
-                    esq.AddAggregationColumn(column.Path, column.AggregationType, column.Alias);
-                }
-            }
-
-            CopyFilterCollection(Filters.ToEntityFilterCollection(), esq.Filters);
-
-            foreach (var groupBy in GroupBy)
-            {
-                esq.GroupBy(groupBy);
-            }
-
-            foreach (var order in Orders)
-            {
-                esq.OrderBy(order.Path, order.Desc);
-            }
-
-            return esq;
+        public EntitySchemaQuery ToESQ(BaseEntityManager manager, UserConnection userConnection)
+        {
+            ArgumentNullException.ThrowIfNull(manager);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return ApplyModel(CreateESQ(manager, userConnection));
         }
 
         public EntitySchemaQuery ToESQ(BaseDatabase database, UserConnection userConnection)
@@ -121,9 +98,45 @@ namespace Titanic.Entity.Orm
                 Orders = esq.Orders.Select(x => new ESQOrderJsonModel
                 {
                     Path = x.Path,
-                    Desc = x.Desc
+                    Direction = x.Desc
+                        ? EntityOrderDirection.Descending
+                        : EntityOrderDirection.Ascending
                 }).ToList()
             };
+        }
+
+        private EntitySchemaQuery ApplyModel(EntitySchemaQuery esq)
+        {
+            esq.IsDistinct = IsDistinct;
+            esq.AllColumns = AllColumns || Columns.Count == 0 || Columns.Any(IsAllColumnsMarker);
+            esq.SkipRow = SkipRow ?? SkipRowCount;
+            esq.RowCount = RowCount;
+
+            foreach (var column in Columns.Where(column => !IsAllColumnsMarker(column)))
+            {
+                if (column.AggregationType == EntityAggregationType.None)
+                {
+                    esq.AddColumn(column.Path, column.Alias);
+                }
+                else
+                {
+                    esq.AddAggregationColumn(column.Path, column.AggregationType, column.Alias);
+                }
+            }
+
+            CopyFilterCollection(Filters.ToEntityFilterCollection(), esq.Filters);
+
+            foreach (var groupBy in GroupBy)
+            {
+                esq.GroupBy(groupBy);
+            }
+
+            foreach (var order in Orders)
+            {
+                esq.OrderBy(order.Path, order.IsDescending());
+            }
+
+            return esq;
         }
 
         private EntitySchemaQuery CreateESQ(BaseDbProvider provider, UserConnection userConnection)
@@ -136,6 +149,25 @@ namespace Titanic.Entity.Orm
             if (!string.IsNullOrWhiteSpace(EntityTypeName))
             {
                 return new EntitySchemaQuery(provider, Structure.GetEntityStructureByTypeName(EntityTypeName), userConnection);
+            }
+
+            throw new InvalidOperationException("ESQ JSON model must contain TableName or EntityTypeName.");
+        }
+
+        private EntitySchemaQuery CreateESQ(BaseEntityManager manager, UserConnection userConnection)
+        {
+            if (!string.IsNullOrWhiteSpace(TableName))
+            {
+                return manager.Query(TableName, userConnection);
+            }
+
+            if (!string.IsNullOrWhiteSpace(EntityTypeName))
+            {
+                return new EntitySchemaQuery(
+                    manager.Provider,
+                    manager.StructureScope.GetEntityStructureByTypeName(EntityTypeName),
+                    manager.StructureScope,
+                    userConnection);
             }
 
             throw new InvalidOperationException("ESQ JSON model must contain TableName or EntityTypeName.");
@@ -178,4 +210,3 @@ namespace Titanic.Entity.Orm
         }
     }
 }
-

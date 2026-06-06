@@ -1,22 +1,42 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using Titanic.Db.Enums;
 
 namespace Titanic.Entity.Orm
 {
+    /// <summary>
+    /// JSON-модель фильтра ESQ.
+    /// </summary>
     public sealed class ESQFilterJsonModel
     {
+        /// <summary>
+        /// ORM-путь колонки фильтра.
+        /// </summary>
         public string Path { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Тип сравнения фильтра.
+        /// </summary>
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public ConditionOperator ComparisonType { get; set; }
+        public EntityComparisonType ComparisonType { get; set; }
 
+        /// <summary>
+        /// Первое значение фильтра.
+        /// </summary>
         public object? Value { get; set; }
 
+        /// <summary>
+        /// Второе значение фильтра для диапазона.
+        /// </summary>
         public object? SecondValue { get; set; }
 
+        /// <summary>
+        /// Признак активности фильтра или группы.
+        /// </summary>
         public bool IsEnabled { get; set; } = true;
 
+        /// <summary>
+        /// Признак отрицания фильтра.
+        /// </summary>
         public bool IsNot { get; set; }
 
         /// <summary>

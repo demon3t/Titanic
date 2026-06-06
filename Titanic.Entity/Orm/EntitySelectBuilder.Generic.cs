@@ -1,5 +1,6 @@
 using Titanic.Common.Session;
 using Titanic.Db.Abstractions;
+using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
 {
@@ -10,6 +11,14 @@ namespace Titanic.Entity.Orm
     {
         public EntitySelectBuilder(BaseDbProvider provider, UserConnection userConnection)
             : base(provider, typeof(TEntity), userConnection)
+        {
+        }
+
+        internal EntitySelectBuilder(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            UserConnection userConnection)
+            : base(provider, structureScope, typeof(TEntity), userConnection)
         {
         }
     }

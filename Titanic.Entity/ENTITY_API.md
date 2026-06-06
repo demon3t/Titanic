@@ -26,6 +26,9 @@ Endpoint-ы поднимаются автоматически для каждо�
         "Name": "posgreTest",
         "DbProviderName": "posgreTest",
         "ManagerType": "Titanic.EntityApi.EntityManagers.PosgreSqlManager, Titanic.EntityApi",
+        "EntityModelNamespaces": [
+          "Titanic.EntityApi.Entities.*"
+        ],
         "Api": {
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
@@ -42,6 +45,8 @@ Endpoint-ы поднимаются автоматически для каждо�
   }
 }
 ```
+
+`EntityModelNamespaces` задает, по каким namespace-patterns менеджер собирает свою структуру Entity-моделей. Если коллекция пустая, менеджер видит все найденные Entity-модели. Паттерн `Some.Namespace.*` включает и сам namespace `Some.Namespace`, и его вложенные пространства имён.
 
 Регистрация в приложении:
 
@@ -126,7 +131,7 @@ X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 | `4` | `Min` | MIN. |
 | `5` | `Max` | MAX. |
 
-### ConditionOperator
+### EntityComparisonType
 
 | Число | Имя | Назначение |
 | --- | --- | --- |
@@ -271,7 +276,7 @@ interface ESQFilterCollectionJsonModel {
 
 interface ESQFilterJsonModel {
   path?: string;
-  comparisonType?: ConditionOperator;
+  comparisonType?: EntityComparisonType;
   value?: unknown;
   secondValue?: unknown;
   isEnabled?: boolean;
@@ -282,11 +287,33 @@ interface ESQFilterJsonModel {
 
 interface ESQOrderJsonModel {
   path: string;
+  direction?: 0 | 1;
   desc?: boolean;
 }
 
 type EntityLogicalOperation = 0 | 1;
 type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
+```
+
+`orders[].direction` задает направление сортировки:
+
+- `0` - сортировка `ASC`;
+- `1` - сортировка `DESC`.
+
+Поле `desc` сохранено только для обратной совместимости со старыми клиентами и для новых запросов использоваться не должно.
+
+Примеры:
+
+```json
+{ "path": "Name" }
+```
+
+```json
+{ "path": "Name", "direction": 0 }
+```
+
+```json
+{ "path": "CreatedOn", "direction": 1 }
 ```
 
 ## Операторы фильтров
@@ -463,7 +490,7 @@ X-Entity-Key: postman-local-user
       ]
     },
     "orders": [
-      { "path": "Name", "desc": false }
+      { "path": "Name", "direction": 0 }
     ]
   }
 }
@@ -486,7 +513,7 @@ X-Entity-Key: postman-local-user
       { "path": "Email" }
     ],
     "orders": [
-      { "path": "Name", "desc": false }
+      { "path": "Name", "direction": 0 }
     ]
   }
 }
@@ -557,8 +584,8 @@ Backend дополнительно ограничивает чтение чер�
       ]
     },
     "orders": [
-      { "path": "DepartmentId.Name" },
-      { "path": "Name" }
+      { "path": "DepartmentId.Name", "direction": 0 },
+      { "path": "Name", "direction": 1 }
     ]
   }
 }
@@ -581,7 +608,7 @@ Backend дополнительно ограничивает чтение чер�
       "DepartmentId.Name"
     ],
     "orders": [
-      { "path": "DepartmentId.Name" }
+      { "path": "DepartmentId.Name", "direction": 1 }
     ]
   }
 }
@@ -613,7 +640,7 @@ Backend дополнительно ограничивает чтение чер�
       { "path": "DepartmentId.Name", "alias": "DepartmentName" }
     ],
     "orders": [
-      { "path": "DepartmentId.Name" }
+      { "path": "DepartmentId.Name", "direction": 0 }
     ]
   }
 }
@@ -1004,6 +1031,8 @@ export class EntityOrmClient {
 - `In` и `NotIn` рассчитаны на backend subquery и не являются удобным UI-оператором в текущей JSON-модели.
 - `Save` и `Delete` работают с корневой таблицей; связанные таблицы, прочитанные через JOIN, не сохраняются автоматически.
 - Локализация настраивается в backend metadata и `UserConnection`, а не в JSON-запросе.
+
+
 
 
 

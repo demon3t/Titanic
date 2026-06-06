@@ -2,12 +2,14 @@ using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
 using Titanic.Entity;
+using Titanic.Entity.Exceptions;
 using Titanic.Entity.Interfaces;
 using EntityManager = Titanic.Entity.EntityManager;
 using Titanic.Entity.Orm;
 using Titanic.Entity.WebApplication.Configuration;
 using Titanic.Test.Db;
 using Titanic.Test.Db.Integration;
+using Titanic.Test.Entity.Hidden;
 
 namespace Titanic.Test.Entity
 {
@@ -59,6 +61,7 @@ namespace Titanic.Test.Entity
                     {
                         Name = "TestPostgres",
                         DbProviderName = "TestPostgres",
+                        EntityModelNamespaces = ["Titanic.Test.Entity"],
                         Api = new EntityManagerApiSettings
                         {
                             AutoRegisterEndpoint = true,
@@ -89,6 +92,46 @@ namespace Titanic.Test.Entity
             Assert.Equal(25, manager.Options.MaxReadRowCount);
             Assert.False(manager.ValidateDatabaseSchemaOnCompile);
             Assert.Equal(25, esq.MaxReadRowCount);
+            Assert.Throws<NotExistTableException>(
+                () => manager.Query(typeof(OrmHiddenScopedEntity), OrmTestUserConnection.Create()));
+        }
+
+        [Fact]
+        public void EntityManager_Initialize_ShouldSupportWildcardNamespaceScope()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "RootScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(EntityDbManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity"]
+                    },
+                    new EntityManagerSettings
+                    {
+                        Name = "HiddenScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"]
+                    }
+                ]
+            });
+
+            var rootManager = EntityManager.GetManager<EntityDbManager>();
+            var hiddenManager = EntityManager.GetManager<HiddenScopeEntityManager>();
+            var userConnection = OrmTestUserConnection.Create();
+
+            Assert.Throws<NotExistTableException>(
+                () => rootManager.Query(typeof(OrmHiddenScopedEntity), userConnection));
+
+            var hiddenQuery = hiddenManager.Query(typeof(OrmHiddenScopedEntity), userConnection);
+            hiddenQuery.AddPrimaryColumn();
+            var build = hiddenQuery.Build();
+
+            Assert.Contains("\"hidden_scoped_entities\"", build.Sql, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -112,6 +155,22 @@ namespace Titanic.Test.Entity
                 """,
                 build.Sql);
             AssertParameters(build, 10);
+        }
+
+        [Fact]
+        public void ESQJsonModel_ToESQ_ShouldSupportLegacyDescOrdering()
+        {
+            var model = new ESQJsonModel
+            {
+                TableName = "employees",
+                Columns = [new() { Path = "Name" }],
+                Orders = [new() { Path = "Name", Desc = true }]
+            };
+
+            var build = model.ToESQ(_provider, OrmTestUserConnection.Create()).Build();
+
+            Assert.Contains("ORDER BY", build.Sql, StringComparison.Ordinal);
+            Assert.Contains("\"t0\".\"name\" DESC", build.Sql, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -280,8 +339,8 @@ namespace Titanic.Test.Entity
             esq.AddPrimaryColumn();
             esq.AddDisplayColumn("EmployeeName");
             esq.AddColumn("DepartmentId.Name", "DepartmentName");
-            esq.AddFilter(ConditionOperator.Equal, "DepartmentId.Name", "Engineering");
-            esq.AddFilter(ConditionOperator.Contains, "Email", "@t.com");
+            esq.AddFilter(EntityComparisonType.Equal, "DepartmentId.Name", "Engineering");
+            esq.AddFilter(EntityComparisonType.Contains, "Email", "@t.com");
             esq.RowCount = 10;
 
             var build = esq.Build();
@@ -311,10 +370,10 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
             esq.AddColumn("Name");
-            esq.Filters.Add("Name", ConditionOperator.Contains, "A");
+            esq.Filters.Add("Name", EntityComparisonType.Contains, "A");
             var group = esq.Filters.AddGroup(EntityLogicalOperation.Or);
-            group.Add("Email", ConditionOperator.Contains, "@t.com");
-            group.Add("Salary", ConditionOperator.GreaterThanOrEqual, 1000);
+            group.Add("Email", EntityComparisonType.Contains, "@t.com");
+            group.Add("Salary", EntityComparisonType.GreaterThanOrEqual, 1000);
 
             var build = esq.Build();
 
@@ -482,7 +541,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query("employees", _provider, OrmTestUserConnection.Create());
             esq.AddDisplayColumn();
-            esq.AddFilter(ConditionOperator.Contains, "Email", "@t.com");
+            esq.AddFilter(EntityComparisonType.Contains, "Email", "@t.com");
 
             var build = esq.Build();
 
@@ -518,20 +577,20 @@ namespace Titanic.Test.Entity
                         new()
                         {
                             Path = "DepartmentId.Name",
-                            ComparisonType = ConditionOperator.Equal,
+                            ComparisonType = EntityComparisonType.Equal,
                             Value = "Engineering"
                         },
                         new()
                         {
                             Path = "Email",
-                            ComparisonType = ConditionOperator.Contains,
+                            ComparisonType = EntityComparisonType.Contains,
                             Value = "@t.com"
                         }
                     ]
                 },
                 Orders =
                 [
-                    new() { Path = "Name", Desc = true }
+                    new() { Path = "Name", Direction = EntityOrderDirection.Descending }
                 ],
                 RowCount = 5
             };
@@ -753,7 +812,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());
             esq.AddColumn("Name", "EmployeeName");
-            esq.AddFilter(ConditionOperator.Equal, "Email", "ivan@example.com");
+            esq.AddFilter(EntityComparisonType.Equal, "Email", "ivan@example.com");
             esq.OrderBy("Name");
             esq.RowCount = 1;
 
@@ -1005,6 +1064,10 @@ namespace Titanic.Test.Entity
         {
             return sql.Replace("\r\n", "\n").Trim();
         }
+    }
+
+    public sealed class HiddenScopeEntityManager : BaseEntityManager
+    {
     }
 }
 

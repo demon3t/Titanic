@@ -1,47 +1,47 @@
-﻿namespace Titanic.Db.Enums
+﻿namespace Titanic.Entity.Orm
 {
     /// <summary>
-    /// Query comparison operator.
+    /// Тип сравнения фильтра Entity ORM.
     /// </summary>
-    public enum ConditionOperator
+    public enum EntityComparisonType
     {
         /// <summary>
-        /// Equal.
+        /// Равно.
         /// </summary>
         Equal = 0,
 
         /// <summary>
-        /// Not equal.
+        /// Не равно.
         /// </summary>
         NotEqual = 1,
 
         /// <summary>
-        /// Greater than.
+        /// Больше.
         /// </summary>
         GreaterThan = 2,
 
         /// <summary>
-        /// Greater than or equal.
+        /// Больше или равно.
         /// </summary>
         GreaterThanOrEqual = 3,
 
         /// <summary>
-        /// Less than.
+        /// Меньше.
         /// </summary>
         LessThan = 4,
 
         /// <summary>
-        /// Less than or equal.
+        /// Меньше или равно.
         /// </summary>
         LessThanOrEqual = 5,
 
         /// <summary>
-        /// IN.
+        /// Входит в набор.
         /// </summary>
         In = 6,
 
         /// <summary>
-        /// NOT IN.
+        /// Не входит в набор.
         /// </summary>
         NotIn = 7,
 
@@ -70,5 +70,19 @@
         /// </summary>
         IsNotNull = 12,
 
+        /// <summary>
+        /// Поиск по вхождению без ручного указания %...%.
+        /// </summary>
+        Contains = 13,
+
+        /// <summary>
+        /// Поиск по началу строки без ручного указания %.
+        /// </summary>
+        StartsWith = 14,
+
+        /// <summary>
+        /// Поиск по концу строки без ручного указания %.
+        /// </summary>
+        EndsWith = 15,
     }
 }

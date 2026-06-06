@@ -178,12 +178,9 @@ namespace Titanic.Db.Abstractions
                 throw new InvalidOperationException($"Binary expression '{expression.Operator}' must contain exactly two operands");
             }
 
-            if (expression.ConditionOperatorType is ConditionOperator.Contains
-                or ConditionOperator.StartsWith
-                or ConditionOperator.EndsWith
-                or ConditionOperator.ILike)
+            if (expression.ConditionOperatorType is ConditionOperator.ILike)
             {
-                return BuildPatternMatchExpression(expression, context);
+                return BuildCaseInsensitiveLikeExpression(expression, context);
             }
 
             var op = expression.ConditionOperatorType.HasValue
@@ -193,34 +190,21 @@ namespace Titanic.Db.Abstractions
             return $"({expression.Children[0].ToSql(context)} {op} {expression.Children[1].ToSql(context)})";
         }
 
-        private string BuildPatternMatchExpression(QueryExpression expression, QueryBuildContext context)
+        private string BuildCaseInsensitiveLikeExpression(QueryExpression expression, QueryBuildContext context)
         {
             var leftSql = $"{GetSqlFunctionSql(SqlFunction.Upper)}({expression.Children[0].ToSql(context)})";
-            var rightSql = BuildPatternValueExpression(expression, expression.Children[1], context);
+            var rightSql = BuildCaseInsensitiveLikeValueExpression(expression.Children[1], context);
             return $"({leftSql} LIKE {rightSql})";
         }
 
-        private string BuildPatternValueExpression(QueryExpression owner, QueryExpression expression, QueryBuildContext context)
+        private string BuildCaseInsensitiveLikeValueExpression(QueryExpression expression, QueryBuildContext context)
         {
             var upperSql = GetSqlFunctionSql(SqlFunction.Upper);
-            var value = ApplyPattern(owner.ConditionOperatorType, expression.Value);
             return expression.ExpressionType switch
             {
-                ExpressionType.Parameter => $"{upperSql}({context.AddParameter(value)})",
-                ExpressionType.Const => $"{upperSql}({FormatConstValue(value)})",
-                _ => throw new NotSupportedException("Pattern match supports only parameter or constant right operand.")
-            };
-        }
-
-        private static object? ApplyPattern(ConditionOperator? conditionOperator, object? value)
-        {
-            return conditionOperator switch
-            {
-                ConditionOperator.Contains => $"%{value}%",
-                ConditionOperator.StartsWith => $"{value}%",
-                ConditionOperator.EndsWith => $"%{value}",
-                ConditionOperator.ILike => value,
-                _ => value
+                ExpressionType.Parameter => $"{upperSql}({context.AddParameter(expression.Value)})",
+                ExpressionType.Const => $"{upperSql}({FormatConstValue(expression.Value)})",
+                _ => throw new NotSupportedException("Case-insensitive LIKE supports only parameter or constant right operand.")
             };
         }
 

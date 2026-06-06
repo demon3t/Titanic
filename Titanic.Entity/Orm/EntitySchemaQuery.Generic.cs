@@ -1,5 +1,6 @@
 using Titanic.Common.Session;
 using Titanic.Db.Abstractions;
+using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
 {
@@ -10,6 +11,14 @@ namespace Titanic.Entity.Orm
     {
         public EntitySchemaQuery(BaseDbProvider provider, UserConnection userConnection)
             : base(provider, typeof(TRootEntity), userConnection)
+        {
+        }
+
+        internal EntitySchemaQuery(
+            BaseDbProvider provider,
+            EntityStructureScope structureScope,
+            UserConnection userConnection)
+            : base(provider, structureScope, typeof(TRootEntity), userConnection)
         {
         }
     }

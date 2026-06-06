@@ -1,6 +1,5 @@
-using Titanic.Db;
+﻿using Titanic.Db;
 using Titanic.Db.Abstractions;
-using Titanic.Db.Enums;
 
 namespace Titanic.Entity.Orm
 {
@@ -38,9 +37,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsEqual(object? value)
         {
-            return Add(value == null
-                ? BuildUnary(ConditionOperator.IsNull)
-                : BuildBinary(ConditionOperator.Equal, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.Equal, value));
         }
 
         /// <summary>
@@ -48,7 +45,10 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsEqual(string targetAlias, string targetColumnName)
         {
-            return Add(BuildBinary(ConditionOperator.Equal, Column.Name(targetAlias, targetColumnName)));
+            return Add(EntityComparisonExpressionBuilder.Build(
+                _leftExpression,
+                EntityComparisonType.Equal,
+                Column.Name(targetAlias, targetColumnName)));
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsEqual(QueryExpression value)
         {
-            return Add(BuildBinary(ConditionOperator.Equal, value));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.Equal, value));
         }
 
         /// <summary>
@@ -64,7 +64,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsGreaterThan(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.GreaterThan, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.GreaterThan, value));
         }
 
         /// <summary>
@@ -72,7 +72,10 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsGreaterOrEqual(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.GreaterThanOrEqual, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(
+                _leftExpression,
+                EntityComparisonType.GreaterThanOrEqual,
+                value));
         }
 
         /// <summary>
@@ -80,7 +83,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsLess(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.LessThan, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.LessThan, value));
         }
 
         /// <summary>
@@ -88,7 +91,10 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsLessOrEqual(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.LessThanOrEqual, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(
+                _leftExpression,
+                EntityComparisonType.LessThanOrEqual,
+                value));
         }
 
         /// <summary>
@@ -96,7 +102,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsContains(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.Contains, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.Contains, value));
         }
 
         /// <summary>
@@ -104,7 +110,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsStartsWith(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.StartsWith, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.StartsWith, value));
         }
 
         /// <summary>
@@ -112,7 +118,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsEndsWith(object? value)
         {
-            return Add(BuildBinary(ConditionOperator.EndsWith, Column.Parameter(value)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, EntityComparisonType.EndsWith, value));
         }
 
         /// <summary>
@@ -120,9 +126,11 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsNull()
         {
-            var op = _negated ? ConditionOperator.IsNotNull : ConditionOperator.IsNull;
+            var comparisonType = _negated
+                ? EntityComparisonType.IsNotNull
+                : EntityComparisonType.IsNull;
             _negated = false;
-            return Add(BuildUnary(op));
+            return Add(EntityComparisonExpressionBuilder.BuildNull(_leftExpression, comparisonType));
         }
 
         /// <summary>
@@ -130,9 +138,11 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder IsNotNull()
         {
-            var op = _negated ? ConditionOperator.IsNull : ConditionOperator.IsNotNull;
+            var comparisonType = _negated
+                ? EntityComparisonType.IsNull
+                : EntityComparisonType.IsNotNull;
             _negated = false;
-            return Add(BuildUnary(op));
+            return Add(EntityComparisonExpressionBuilder.BuildNull(_leftExpression, comparisonType));
         }
 
         /// <summary>
@@ -140,9 +150,11 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder In(BaseQuery subQuery)
         {
-            var op = _negated ? ConditionOperator.NotIn : ConditionOperator.In;
+            var comparisonType = _negated
+                ? EntityComparisonType.NotIn
+                : EntityComparisonType.In;
             _negated = false;
-            return Add(BuildBinary(op, QueryExpression.SubQuery(subQuery)));
+            return Add(EntityComparisonExpressionBuilder.Build(_leftExpression, comparisonType, subQuery));
         }
 
         /// <summary>
@@ -150,9 +162,7 @@ namespace Titanic.Entity.Orm
         /// </summary>
         public EntitySelectBuilder Between(object? low, object? high)
         {
-            var expression = QueryExpression.And(
-                BuildBinary(ConditionOperator.GreaterThanOrEqual, Column.Parameter(low)),
-                BuildBinary(ConditionOperator.LessThanOrEqual, Column.Parameter(high)));
+            var expression = EntityComparisonExpressionBuilder.BuildBetween(_leftExpression, low, high);
 
             if (!_negated)
             {
@@ -172,16 +182,6 @@ namespace Titanic.Entity.Orm
             }
 
             return _builder.AddWhereExpression(expression, _connector);
-        }
-
-        private QueryExpression BuildBinary(ConditionOperator op, QueryExpression value)
-        {
-            return QueryExpression.Binary(_leftExpression, op, value);
-        }
-
-        private QueryExpression BuildUnary(ConditionOperator op)
-        {
-            return EntityQueryExpression.Unary(op, _leftExpression);
         }
     }
 }

@@ -225,7 +225,7 @@ namespace Titanic.Test.Entity
 
             var esq = EntityManager.Query<OrmDepartmentEntity>(Db, UserConnection);
             esq.AddAllSchemaColumns();
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO20");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO20");
 
             Assert.Equal("all", esq.GetEntityCollection().Single().Get<string>("Description"));
         }
@@ -245,7 +245,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO22_B");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Contains, "Name", "EO22_");
+            esq.AddFilter(EntityComparisonType.Contains, "Name", "EO22_");
 
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
@@ -257,7 +257,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO23_Good");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Contains, "Name", "Bad").Not();
+            esq.AddFilter(EntityComparisonType.Contains, "Name", "Bad").Not();
 
             Assert.Equal("EO23_Good", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -293,7 +293,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO24_B");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.NotEqual, "Name", "EO24_A");
+            esq.AddFilter(EntityComparisonType.NotEqual, "Name", "EO24_A");
 
             Assert.Equal("EO24_B", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -303,7 +303,7 @@ namespace Titanic.Test.Entity
         {
             var employee = CreateEmployee("EO25", "eo25@t.com", CreateDepartment("D25").Get<int>("Id"), salary: 250);
 
-            var rows = EmployeeSalaryQuery(ConditionOperator.GreaterThan, 200m);
+            var rows = EmployeeSalaryQuery(EntityComparisonType.GreaterThan, 200m);
 
             Assert.Contains(rows, x => x.Get<int>("Id") == employee.Get<int>("Id"));
         }
@@ -313,7 +313,7 @@ namespace Titanic.Test.Entity
         {
             CreateEmployee("EO26", "eo26@t.com", CreateDepartment("D26").Get<int>("Id"), salary: 260);
 
-            Assert.Single(EmployeeSalaryQuery(ConditionOperator.GreaterThanOrEqual, 260m));
+            Assert.Single(EmployeeSalaryQuery(EntityComparisonType.GreaterThanOrEqual, 260m));
         }
 
         [SkippableFact]
@@ -321,7 +321,7 @@ namespace Titanic.Test.Entity
         {
             CreateEmployee("EO27", "eo27@t.com", CreateDepartment("D27").Get<int>("Id"), salary: 270);
 
-            Assert.Single(EmployeeSalaryQuery(ConditionOperator.LessThan, 300m));
+            Assert.Single(EmployeeSalaryQuery(EntityComparisonType.LessThan, 300m));
         }
 
         [SkippableFact]
@@ -329,7 +329,7 @@ namespace Titanic.Test.Entity
         {
             CreateEmployee("EO28", "eo28@t.com", CreateDepartment("D28").Get<int>("Id"), salary: 280);
 
-            Assert.Single(EmployeeSalaryQuery(ConditionOperator.LessThanOrEqual, 280m));
+            Assert.Single(EmployeeSalaryQuery(EntityComparisonType.LessThanOrEqual, 280m));
         }
 
         [SkippableFact]
@@ -351,7 +351,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO30_NotNull", "value");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Contains, "Name", "EO30_");
+            esq.AddFilter(EntityComparisonType.Contains, "Name", "EO30_");
             esq.AddIsNullFilter("Description");
 
             Assert.Equal("EO30_Null", esq.GetEntityCollection().Single().Get<string>("Name"));
@@ -364,7 +364,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO31_NotNull", "value");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Contains, "Name", "EO31_");
+            esq.AddFilter(EntityComparisonType.Contains, "Name", "EO31_");
             esq.AddIsNotNullFilter("Description");
 
             Assert.Equal("EO31_NotNull", esq.GetEntityCollection().Single().Get<string>("Name"));
@@ -379,8 +379,8 @@ namespace Titanic.Test.Entity
 
             var esq = DepartmentQuery();
             esq.Filters.LogicalOperation = EntityLogicalOperation.Or;
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO32_A");
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO32_B");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO32_A");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO32_B");
 
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
@@ -393,7 +393,7 @@ namespace Titanic.Test.Entity
 
             var esq = DepartmentQuery();
             esq.Filters.IsEnabled = false;
-            esq.AddFilter(ConditionOperator.Equal, "Name", "NoMatch");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "NoMatch");
 
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
@@ -495,7 +495,7 @@ namespace Titanic.Test.Entity
 
             var esq = EntityManager.Query(typeof(OrmDepartmentEntity), Db, UserConnection);
             esq.AddDisplayColumn();
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO41");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO41");
 
             Assert.Single(esq.GetEntityCollection());
         }
@@ -507,7 +507,7 @@ namespace Titanic.Test.Entity
 
             var esq = EntityManager.Query("departments", Db, UserConnection);
             esq.AddDisplayColumn();
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO42");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO42");
 
             Assert.Equal("EO42", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -519,7 +519,7 @@ namespace Titanic.Test.Entity
 
             var esq = EntityManager.Query(typeof(OrmAbstractEmployeeEntity), Db, UserConnection);
             esq.AddDisplayColumn();
-            esq.AddFilter(ConditionOperator.Equal, "Email", "eo43@t.com");
+            esq.AddFilter(EntityComparisonType.Equal, "Email", "eo43@t.com");
 
             Assert.Equal("EO43", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -543,7 +543,7 @@ namespace Titanic.Test.Entity
 
             var esq = EmployeeQuery();
             esq.AddColumn("DepartmentId.Name", "DepartmentName");
-            esq.AddFilter(ConditionOperator.Equal, "DepartmentId.Name", "EO45_Department");
+            esq.AddFilter(EntityComparisonType.Equal, "DepartmentId.Name", "EO45_Department");
 
             Assert.Equal("EO45", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
@@ -604,7 +604,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO50");
 
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO50");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO50");
 
             var rows = esq.ExecuteReader(r => r.Get<string>("Name"));
 
@@ -629,7 +629,7 @@ namespace Titanic.Test.Entity
 
             var esq = EntityManager.Query<OrmAddressEntity>(Db, UserConnection);
             esq.AddColumn("IsPrimary");
-            esq.AddFilter(ConditionOperator.Equal, "City", "City52");
+            esq.AddFilter(EntityComparisonType.Equal, "City", "City52");
 
             Assert.False(esq.GetEntityCollection().Single().Get<bool>("IsPrimary"));
         }
@@ -670,7 +670,7 @@ namespace Titanic.Test.Entity
 
             var esq = EmployeeQuery();
             esq.AddColumn("DepartmentId");
-            esq.AddFilter(ConditionOperator.Equal, "Email", "eo54@t.com");
+            esq.AddFilter(EntityComparisonType.Equal, "Email", "eo54@t.com");
 
             var row = esq.GetEntityCollection().Single();
             var value = Assert.IsType<ReferenceColumnValue>(row.Values["DepartmentId"]);
@@ -695,7 +695,7 @@ namespace Titanic.Test.Entity
             var esq = EntityManager.Query<OrmLocalizedDepartmentEntity>(Db, OrmTestUserConnection.Create(cultureId));
             esq.AddDisplayColumn();
             esq.AddColumn("Description");
-            esq.AddFilter(ConditionOperator.Equal, "Id", department.Get<int>("Id"));
+            esq.AddFilter(EntityComparisonType.Equal, "Id", department.Get<int>("Id"));
 
             var row = esq.GetEntityCollection().Single();
 
@@ -712,7 +712,7 @@ namespace Titanic.Test.Entity
             var esq = EntityManager.Query<OrmLocalizedDepartmentEntity>(Db, OrmTestUserConnection.Create(cultureId));
             esq.AddDisplayColumn();
             esq.AddColumn("Description");
-            esq.AddFilter(ConditionOperator.Equal, "Id", department.Get<int>("Id"));
+            esq.AddFilter(EntityComparisonType.Equal, "Id", department.Get<int>("Id"));
 
             var row = esq.GetEntityCollection().Single();
 
@@ -726,7 +726,7 @@ namespace Titanic.Test.Entity
             CreateDepartment("EO57", "all columns");
 
             var esq = EntityManager.Query<OrmDepartmentEntity>(Db, UserConnection);
-            esq.AddFilter(ConditionOperator.Equal, "Name", "EO57");
+            esq.AddFilter(EntityComparisonType.Equal, "Name", "EO57");
 
             var row = esq.GetEntityCollection().Single();
 
@@ -758,18 +758,18 @@ namespace Titanic.Test.Entity
         private static List<Orm.Entity> QueryDepartments(string name)
         {
             var esq = DepartmentQuery();
-            esq.AddFilter(ConditionOperator.Equal, "Name", name);
+            esq.AddFilter(EntityComparisonType.Equal, "Name", name);
             return esq.GetEntityCollection();
         }
 
         private static List<Orm.Entity> QueryEmployeesByEmail(string email)
         {
             var esq = EmployeeQuery();
-            esq.AddFilter(ConditionOperator.Equal, "Email", email);
+            esq.AddFilter(EntityComparisonType.Equal, "Email", email);
             return esq.GetEntityCollection();
         }
 
-        private static List<Orm.Entity> EmployeeSalaryQuery(ConditionOperator op, decimal value)
+        private static List<Orm.Entity> EmployeeSalaryQuery(EntityComparisonType op, decimal value)
         {
             var esq = EmployeeQuery();
             esq.AddFilter(op, "Salary", value);
@@ -780,7 +780,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EmployeeQuery();
             esq.AddColumn("DepartmentId.Name", "DepartmentName");
-            esq.AddFilter(ConditionOperator.Equal, "Email", email);
+            esq.AddFilter(EntityComparisonType.Equal, "Email", email);
             return esq.GetEntityCollection();
         }
 
@@ -788,7 +788,7 @@ namespace Titanic.Test.Entity
         {
             var esq = EmployeeQuery();
             esq.AddColumn("[EmployeeId:Id:Id].City", "City");
-            esq.AddFilter(ConditionOperator.Equal, "[EmployeeId:Id:Id].City", city);
+            esq.AddFilter(EntityComparisonType.Equal, "[EmployeeId:Id:Id].City", city);
             return esq.GetEntityCollection();
         }
 

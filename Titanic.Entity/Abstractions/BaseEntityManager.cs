@@ -39,6 +39,11 @@ namespace Titanic.Entity.Interfaces
         /// </summary>
         public bool ValidateDatabaseSchemaOnCompile { get; private set; }
 
+        /// <summary>
+        /// Структура Entity-моделей, доступная этому менеджеру.
+        /// </summary>
+        internal EntityStructureScope StructureScope { get; private set; } = Structure.DefaultScope;
+
         #endregion Properties
 
         #region Initialization
@@ -63,10 +68,11 @@ namespace Titanic.Entity.Interfaces
             Api = NormalizeApiSettings(settings?.Api);
             Options = settings?.Options ?? new EntityManagerOptions();
             ValidateDatabaseSchemaOnCompile = settings?.ValidateDatabaseSchemaOnCompile ?? false;
+            StructureScope = Structure.GetScope(settings?.EntityModelNamespaces);
 
             if (ValidateDatabaseSchemaOnCompile)
             {
-                EntitySchemaValidator.Validate(provider);
+                EntitySchemaValidator.Validate(provider, StructureScope);
             }
         }
 
@@ -98,7 +104,8 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery<TEntity> Query<TEntity>(UserConnection userConnection)
         {
-            return ApplyQuerySettings(EntityManager.Query<TEntity>(Provider, userConnection));
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return ApplyQuerySettings(new EntitySchemaQuery<TEntity>(Provider, StructureScope, userConnection));
         }
 
         /// <summary>
@@ -109,7 +116,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery Query(Type entityType, UserConnection userConnection)
         {
-            return ApplyQuerySettings(EntityManager.Query(entityType, Provider, userConnection));
+            ArgumentNullException.ThrowIfNull(entityType);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return ApplyQuerySettings(new EntitySchemaQuery(Provider, StructureScope, entityType, userConnection));
         }
 
         /// <summary>
@@ -120,7 +129,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery Query(string tableName, UserConnection userConnection)
         {
-            return ApplyQuerySettings(EntityManager.Query(tableName, Provider, userConnection));
+            ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return ApplyQuerySettings(new EntitySchemaQuery(Provider, StructureScope, tableName, userConnection));
         }
 
         #endregion Entity Queries
@@ -135,7 +146,8 @@ namespace Titanic.Entity.Interfaces
         /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder<TEntity> Select<TEntity>(UserConnection userConnection)
         {
-            return EntityManager.Select<TEntity>(Provider, userConnection);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return new EntitySelectBuilder<TEntity>(Provider, StructureScope, userConnection);
         }
 
         /// <summary>
@@ -146,7 +158,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder Select(Type entityType, UserConnection userConnection)
         {
-            return EntityManager.Select(entityType, Provider, userConnection);
+            ArgumentNullException.ThrowIfNull(entityType);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return new EntitySelectBuilder(Provider, StructureScope, entityType, userConnection);
         }
 
         /// <summary>
@@ -157,7 +171,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder Select(string tableName, UserConnection userConnection)
         {
-            return EntityManager.Select(tableName, Provider, userConnection);
+            ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return new EntitySelectBuilder(Provider, StructureScope, tableName, userConnection);
         }
 
         #endregion Entity Select Builders
@@ -172,7 +188,8 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create<TEntity>(UserConnection userConnection)
         {
-            return EntityManager.Create<TEntity>(Provider, userConnection);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(typeof(TEntity)), Provider, userConnection);
         }
 
         /// <summary>
@@ -183,7 +200,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create(Type entityType, UserConnection userConnection)
         {
-            return EntityManager.Create(entityType, Provider, userConnection);
+            ArgumentNullException.ThrowIfNull(entityType);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(entityType), Provider, userConnection);
         }
 
         /// <summary>
@@ -194,7 +213,9 @@ namespace Titanic.Entity.Interfaces
         /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create(string tableName, UserConnection userConnection)
         {
-            return EntityManager.Create(tableName, Provider, userConnection);
+            ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(tableName), Provider, userConnection);
         }
 
         #endregion Entity CRUD

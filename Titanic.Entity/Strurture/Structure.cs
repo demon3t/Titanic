@@ -1,56 +1,37 @@
-using System.Reflection;
+﻿using System.Reflection;
+using System.Text.RegularExpressions;
 using Titanic.Entity.Attributes;
-using Titanic.Entity.Exceptions;
 
 namespace Titanic.Entity.Strurture
 {
     /// <summary>
-    /// Кэш структуры ORM-сущностей.
+    /// Кэш структур ORM-сущностей и фабрика manager-specific scope.
     /// </summary>
     public static class Structure
     {
-        /// <summary>
-        /// Структура сущностей.
-        /// </summary>
-        internal static List<EntityStructure> EntitiesStructure { get; private set; }
+        private static readonly object SyncRoot = new();
+        private static readonly Dictionary<string, EntityStructureScope> ScopedStructures = new(StringComparer.Ordinal);
+        private static EntityStructureScope _defaultScope = BuildScope([]);
 
         /// <summary>
-        /// Статический конструктор.
+        /// Глобальная структура без фильтрации по namespace.
         /// </summary>
-        static Structure()
-        {
-            EntitiesStructure = InitializeEntitiesStructure();
-        }
+        internal static EntityStructureScope DefaultScope => _defaultScope;
 
         /// <summary>
         /// Получить структуру сущности по названию таблицы.
         /// </summary>
         internal static EntityStructure GetEntityStructure(string tableName)
         {
-            var entityStructure = EntitiesStructure.FirstOrDefault(x =>
-                string.Equals(x.TableName, tableName, StringComparison.OrdinalIgnoreCase));
-
-            return entityStructure ?? throw new NotExistTableException(tableName);
+            return DefaultScope.GetEntityStructure(tableName);
         }
 
         /// <summary>
-        /// Получить структуру сущности по CLR-типу, включая абстрактные модели.
+        /// Получить структуру сущности по CLR-типу.
         /// </summary>
         internal static EntityStructure GetEntityStructure(Type entityType)
         {
-            ArgumentNullException.ThrowIfNull(entityType);
-
-            var entityStructure = EntitiesStructure.FirstOrDefault(x => x.EntityType == entityType);
-            if (entityStructure != null)
-            {
-                return entityStructure;
-            }
-
-            var entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
-
-            return entityAttr is null
-                ? throw new NotExistTableException(entityType.Name)
-                : GetEntityStructure(entityAttr.Table);
+            return DefaultScope.GetEntityStructure(entityType);
         }
 
         /// <summary>
@@ -58,24 +39,7 @@ namespace Titanic.Entity.Strurture
         /// </summary>
         internal static EntityStructure GetEntityStructureByTypeName(string entityTypeName)
         {
-            var candidates = EntitiesStructure
-                .Where(x =>
-                    string.Equals(x.EntityType.FullName, entityTypeName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(x.EntityType.Name, entityTypeName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (candidates.Count == 0)
-            {
-                throw new NotExistTableException(entityTypeName);
-            }
-
-            if (candidates.Count > 1)
-            {
-                var names = string.Join(", ", candidates.Select(x => x.EntityType.FullName));
-                throw new InvalidOperationException($"Entity type name '{entityTypeName}' is ambiguous: {names}");
-            }
-
-            return candidates[0];
+            return DefaultScope.GetEntityStructureByTypeName(entityTypeName);
         }
 
         /// <summary>
@@ -83,7 +47,7 @@ namespace Titanic.Entity.Strurture
         /// </summary>
         internal static EntityStructure GetEntityStructure<TEntity>()
         {
-            return GetEntityStructure(typeof(TEntity));
+            return DefaultScope.GetEntityStructure(typeof(TEntity));
         }
 
         /// <summary>
@@ -94,34 +58,31 @@ namespace Titanic.Entity.Strurture
             string relationColumnName,
             string relatedPrimaryColumnName)
         {
-            var candidates = EntitiesStructure
-                .Select(entity => (
-                    Entity: entity,
-                    RelationColumn: entity.ColumnsStructure.FirstOrDefault(column =>
-                        column.IsReference
-                        && column.Matches(relationColumnName)
-                        && string.Equals(column.ReferenceTableName, sourceEntity.TableName, StringComparison.OrdinalIgnoreCase)),
-                    PrimaryColumn: entity.ColumnsStructure.FirstOrDefault(column =>
-                        column.IsPrimary
-                        && column.Matches(relatedPrimaryColumnName))))
-                .Where(candidate => candidate.RelationColumn != null && candidate.PrimaryColumn != null)
-                .ToList();
+            return DefaultScope.FindReverseRelation(sourceEntity, relationColumnName, relatedPrimaryColumnName);
+        }
 
-            if (candidates.Count == 0)
+        /// <summary>
+        /// Получить manager-specific scope структуры по namespace-patterns.
+        /// </summary>
+        internal static EntityStructureScope GetScope(IEnumerable<string>? namespacePatterns)
+        {
+            var normalizedPatterns = NormalizeNamespacePatterns(namespacePatterns);
+            if (normalizedPatterns.Count == 0)
             {
-                throw new NotExistTableException(
-                    $"Reverse relation '{relationColumnName}:{relatedPrimaryColumnName}' for table '{sourceEntity.TableName}' not found");
+                return DefaultScope;
             }
 
-            if (candidates.Count > 1)
+            var key = string.Join('|', normalizedPatterns);
+            lock (SyncRoot)
             {
-                var names = string.Join(", ", candidates.Select(x => x.Entity.TableName));
-                throw new InvalidOperationException(
-                    $"Reverse relation '{relationColumnName}:{relatedPrimaryColumnName}' for table '{sourceEntity.TableName}' is ambiguous: {names}");
-            }
+                if (!ScopedStructures.TryGetValue(key, out var scope))
+                {
+                    scope = BuildScope(normalizedPatterns);
+                    ScopedStructures[key] = scope;
+                }
 
-            var candidate = candidates[0];
-            return (candidate.Entity, candidate.RelationColumn!, candidate.PrimaryColumn!);
+                return scope;
+            }
         }
 
         /// <summary>
@@ -129,16 +90,21 @@ namespace Titanic.Entity.Strurture
         /// </summary>
         internal static void Reload()
         {
-            EntitiesStructure = InitializeEntitiesStructure();
+            lock (SyncRoot)
+            {
+                _defaultScope = BuildScope([]);
+                ScopedStructures.Clear();
+            }
         }
 
-        private static List<EntityStructure> InitializeEntitiesStructure()
+        private static EntityStructureScope BuildScope(IReadOnlyList<string> namespacePatterns)
         {
             var result = new List<EntityStructure>();
 
             var types = AppDomain.CurrentDomain
                 .GetAssemblies()
-                .SelectMany(GetLoadableTypes);
+                .SelectMany(GetLoadableTypes)
+                .Where(type => MatchesNamespacePatterns(type, namespacePatterns));
 
             foreach (var type in types)
             {
@@ -187,7 +153,56 @@ namespace Titanic.Entity.Strurture
                 result.Add(entityStructure);
             }
 
-            return result;
+            return new EntityStructureScope
+            {
+                NamespacePatterns = namespacePatterns,
+                EntitiesStructure = result
+            };
+        }
+
+        private static IReadOnlyList<string> NormalizeNamespacePatterns(IEnumerable<string>? namespacePatterns)
+        {
+            return namespacePatterns?
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
+                .Select(pattern => pattern.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(pattern => pattern, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+                ?? [];
+        }
+
+        private static bool MatchesNamespacePatterns(Type type, IReadOnlyList<string> namespacePatterns)
+        {
+            if (type.GetCustomAttribute<EntityAttribute>() == null)
+            {
+                return false;
+            }
+
+            if (namespacePatterns.Count == 0)
+            {
+                return true;
+            }
+
+            var typeNamespace = type.Namespace ?? string.Empty;
+            return namespacePatterns.Any(pattern => MatchesNamespacePattern(typeNamespace, pattern));
+        }
+
+        private static bool MatchesNamespacePattern(string typeNamespace, string pattern)
+        {
+            if (pattern.EndsWith(".*", StringComparison.Ordinal))
+            {
+                var prefix = pattern[..^2];
+                return string.Equals(typeNamespace, prefix, StringComparison.OrdinalIgnoreCase)
+                    || typeNamespace.StartsWith(prefix + ".", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (!pattern.Contains('*'))
+            {
+                return string.Equals(typeNamespace, pattern, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+            return Regex.IsMatch(typeNamespace, regexPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
