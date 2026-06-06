@@ -1,114 +1,99 @@
-# Titanic
+﻿# Titanic
 
-`Titanic` - набор базовых .NET-библиотек для построения backend-приложений поверх собственной SQL ORM и Entity ORM модели.
+`Titanic` — платформа для построения backend-решений на .NET поверх собственного SQL builder и Entity ORM.
 
-Репозиторий решает три основные задачи:
+Репозиторий объединяет три базовых слоя:
+
+- `Titanic.Common` — общий пользовательский контекст и web-инфраструктура;
+- `Titanic.Db` — низкоуровневое построение и выполнение SQL-запросов;
+- `Titanic.Entity` — Entity ORM, metadata-модель сущностей и HTTP API для клиентских приложений.
+
+Проект не использует Entity Framework Core как основной механизм доступа к данным. Вместо этого он предоставляет собственную модель построения SQL, Entity-запросов и API-контрактов для UI.
+
+## Назначение
+
+`Titanic` решает следующие задачи:
 
 - типобезопасное построение SQL без ручной сборки строк;
-- работа с Entity-моделями, путями колонок, фильтрами, локализацией и HTTP API;
-- общий пользовательский контекст и инфраструктура авторизации для Entity API.
+- работа с Entity-моделями, колонками, связями, фильтрами и локализацией;
+- сохранение и удаление сущностей через единый ORM-слой;
+- автоматическая публикация HTTP API для работы с Entity ORM;
+- единый контракт взаимодействия между backend и frontend.
 
-Проект не является Entity Framework Core. Здесь свой SQL builder, свой Entity ORM и свой HTTP-контракт для UI-клиентов.
+## Состав решения
 
-## Что находится в решении
+Файл `Titanic.sln` включает следующие проекты:
 
-Текущее solution `Titanic.sln` содержит 4 основных проекта:
+### Titanic.Common
 
-- `Titanic.Common`  
-  Общая инфраструктура: `UserConnection`, `UserCulture`, header/mock авторизация, ASP.NET Core extension-методы.
+Базовый инфраструктурный пакет.
 
-- `Titanic.Db`  
-  Низкоуровневый SQL builder и слой выполнения запросов.  
-  Содержит `Select`, `Insert`, `Update`, `Delete`, `Table`, `Column`, `Func`, SQL engine/provider abstractions.
+Содержит:
 
-- `Titanic.Entity`  
-  Entity ORM поверх `Titanic.Db`.  
-  Содержит `Entity`, `EntityManager`, `EntitySchemaQuery`, JSON-модели запросов, автоматическую публикацию HTTP API, локализацию и metadata-модель сущностей.
+- `UserConnection` и `UserCulture`;
+- header/mock авторизацию;
+- общие ASP.NET Core extension-методы;
+- вспомогательные типы для работы `Titanic.Entity` API.
 
-- `Titanic.Test`  
-  Unit и integration tests для `Titanic.Db`, `Titanic.Entity` и `Titanic.Common`.
+### Titanic.Db
 
-## Что ещё есть в репозитории
+Низкоуровневый слой доступа к данным.
 
-Кроме solution, в рабочем каталоге есть вспомогательные проекты и локальные инструменты:
+Содержит:
 
-- `Titanic.EntityApi`  
-  Отладочное/демо ASP.NET Core приложение для проверки Entity API.
+- SQL AST и expression model;
+- fluent builders для `SELECT`, `INSERT`, `UPDATE`, `DELETE`;
+- DDL helper `Table`;
+- `Column`, `Func`, `QueryExpression`;
+- абстракции провайдера и SQL-движка;
+- реализацию PostgreSQL provider/engine.
 
-- `titanic-entity-react`  
-  React/TypeScript клиентская библиотека для работы с Entity API.
+### Titanic.Entity
 
-- `titanic-entity-react-demo`  
-  Демонстрационное приложение для клиентской библиотеки.
+Entity ORM поверх `Titanic.Db`.
 
-- `ui-example`  
-  Локальная ссылка на внешний UI-пример.
+Содержит:
 
-- `tools\ps`  
-  Локальные PowerShell-скрипты для быстрых проверок репозитория перед commit/push.
+- `Entity`, `ColumnValue`, `ReferenceColumnValue`;
+- `EntityManager` и `BaseEntityManager`;
+- `EntitySchemaQuery` и query model;
+- metadata-структуру сущностей и колонок;
+- локализацию по metadata;
+- HTTP API и batch API для UI-клиентов.
 
-Часть этих каталогов используется как локальная среда разработки и не входит в `Titanic.sln`.
+### Titanic.Test
 
-## Архитектура
+Набор unit- и integration-тестов для основных библиотек.
 
-Слои идут снизу вверх:
+## Архитектурная модель
 
-1. `Titanic.Common`  
-   Общие типы и web-инфраструктура.
+Слои выстроены последовательно:
 
-2. `Titanic.Db`  
-   SQL AST, builders, providers, engines, выполнение команд.
+1. `Titanic.Common` — общие типы и инфраструктура.
+2. `Titanic.Db` — SQL builder и исполнение запросов.
+3. `Titanic.Entity` — Entity ORM и HTTP API.
+4. Клиентские и демонстрационные приложения используют эти слои как базу.
 
-3. `Titanic.Entity`  
-   Entity metadata, ESQ-запросы, materialization, `Save/Delete`, HTTP API.
+Такое разделение позволяет:
 
-4. Клиенты и демо  
-   `Titanic.EntityApi`, `titanic-entity-react`, `titanic-entity-react-demo`.
+- использовать только `Titanic.Db`, если нужен прямой контроль над SQL;
+- использовать `Titanic.Entity`, если нужна Entity-модель и API поверх неё;
+- не смешивать прикладную бизнес-логику с механизмом построения SQL.
 
-## Для чего это нужно
+## Ключевые возможности
 
-Если коротко, стек нужен для такого сценария:
+### SQL builder
 
-- описать таблицы через CLR-модели и атрибуты;
-- строить запросы по ORM-путям вроде `DepartmentId.Name` или `[EmployeeId:Id:Id].City`;
-- получать сущности и их `DisplayValue`;
-- сохранять и удалять сущности;
-- автоматически поднимать HTTP API для UI;
-- использовать один и тот же контракт на backend и frontend.
+`Titanic.Db` предоставляет fluent API для построения SQL:
 
-## Быстрый старт
+- параметризованные условия;
+- `JOIN`, `GROUP BY`, `HAVING`, `ORDER BY`, paging;
+- `CASE`, агрегатные функции, подзапросы;
+- DDL-операции над таблицами.
 
-### 1. Собрать решение
-
-```powershell
-dotnet build C:\Titanic\Titanic.sln --nologo
-```
-
-### 2. Прогнать тесты
-
-```powershell
-dotnet test C:\Titanic\Titanic.Test\Titanic.Test.csproj --nologo
-```
-
-Если локальная тестовая БД настроена через `Titanic.Test\appsettings.Test.local.json`, тесты можно запускать прямо из IDE или одной командой без ручной передачи строки подключения.
-
-### 3. Быстрые локальные проверки
-
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Titanic\tools\ps\Before-Commit.ps1
-```
-
-Перед push:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Titanic\tools\ps\Before-Push.ps1
-```
-
-## Пример использования слоя `Titanic.Db`
+Пример:
 
 ```csharp
-var provider = DbManager.GetProvider("main");
-
 var rows = provider.Select()
     .Column("e", "id")
     .Column("e", "name")
@@ -122,7 +107,20 @@ var rows = provider.Select()
     });
 ```
 
-## Пример использования слоя `Titanic.Entity`
+### Entity ORM
+
+`Titanic.Entity` строит запросы по ORM-путям и metadata-модели сущностей.
+
+Поддерживаются:
+
+- выборка колонок по путям вида `DepartmentId.Name`;
+- выборка по обратным связям;
+- фильтрация, сортировка, агрегации и paging;
+- `Save()` и `Delete()` для сущностей;
+- `DisplayValue` для ссылочных колонок;
+- локализуемые колонки.
+
+Пример:
 
 ```csharp
 var rows = EntityManager
@@ -135,23 +133,48 @@ var rows = EntityManager
     .GetEntityCollection();
 ```
 
-## HTTP API
+### HTTP API
 
-`Titanic.Entity` умеет автоматически публиковать API для UI.
+`Titanic.Entity` умеет автоматически публиковать endpoint-ы для UI.
 
-Основной контракт описан в:
+Базовая модель API:
 
-- [Titanic.Entity/ENTITY_API.md](C:/Titanic/Titanic.Entity/ENTITY_API.md)
+- `POST {ApiPath}` — одна операция;
+- `POST {ApiPath}/batch` — пакет операций.
 
-Базовые endpoint-ы:
+Поддерживаемые операции:
 
-- `POST {ApiPath}` - одна операция (`Select`, `Save`, `Delete`)
-- `POST {ApiPath}/batch` - пакет операций
+- `Select`
+- `Save`
+- `Delete`
 
-## Где читать дальше
+Подробный контракт описан в [Titanic.Entity/ENTITY_API.md](C:/Titanic/Titanic.Entity/ENTITY_API.md).
+
+## Дополнительные каталоги репозитория
+
+Помимо solution, в репозитории есть вспомогательные и демонстрационные каталоги:
+
+- `Titanic.EntityApi` — отладочное web-приложение для проверки Entity API;
+- `titanic-entity-react` — React/TypeScript клиентская библиотека;
+- `titanic-entity-react-demo` — демонстрационное приложение для клиентской библиотеки;
+- `ui-example` — локальный UI-пример.
+
+Они используются как прикладной или демонстрационный слой поверх основных библиотек.
+
+## Для кого этот репозиторий
+
+Репозиторий полезен, если требуется:
+
+- построить backend без EF Core, но с типизированным SQL builder;
+- описывать БД через Entity metadata-модели;
+- быстро поднимать HTTP API для клиентских приложений;
+- использовать единый backend/frontend контракт для запросов к данным.
+
+## Документация по проектам
+
+Подробные описания находятся в отдельных README:
 
 - [Titanic.Common/README.md](C:/Titanic/Titanic.Common/README.md)
 - [Titanic.Db/README.md](C:/Titanic/Titanic.Db/README.md)
 - [Titanic.Entity/README.md](C:/Titanic/Titanic.Entity/README.md)
 - [Titanic.Entity/ENTITY_API.md](C:/Titanic/Titanic.Entity/ENTITY_API.md)
-
