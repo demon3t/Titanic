@@ -4,7 +4,7 @@
 
 ## Слои решения
 
-Репозиторий разделён на три базовых пакета и набор прикладных проектов вокруг них.
+Репозиторий разделён на три базовых пакета и набор служебных проектов вокруг них.
 
 ### 1. Titanic.Common
 
@@ -63,59 +63,51 @@ Titanic.Entity
 
 - `Titanic.Db` использует `Titanic.Common`.
 - `Titanic.Entity` использует `Titanic.Common` и `Titanic.Db`.
-- Вспомогательные проекты используют базовые пакеты, но не являются частью их архитектурного ядра.
+- Служебные проекты используют базовые пакеты, но не являются частью их архитектурного ядра.
 
-## Прикладные и отладочные проекты
+## Служебные проекты
 
-Эти проекты нужны для проверки и использования базовых пакетов, но не формируют базовую архитектуру:
+Эти проекты нужны для проверки базовых пакетов:
 
 - `Titanic.Test` — проверка базовых библиотек.
-- `Titanic.EntityApi` — отладочное API-приложение поверх `Titanic.Entity`.
-- `titanic-entity-react` — клиентская библиотека для frontend.
-- `titanic-entity-react-demo` — демонстрация клиентской библиотеки.
-- `ui-example` — локальный UI-пример.
 
-При чтении решения важно сначала понимать `Common -> Db -> Entity`, и только потом переходить к demo/debug проектам.
-
-## Поток данных
-
-### Сценарий 1. Прямой SQL
+## Пример прохождения данных
 
 ```text
-Application service
-    -> Titanic.Db
-    -> Db provider / engine
-    -> Database
+┌─────────────────────────────────────────────────────┐
+│ UI / внешний клиент                                 │
+└──────────────────────────┬──────────────────────────┘
+                           │ HTTP
+                           v
+┌─────────────────────────────────────────────────────┐
+│ Пользовательское backend-приложение                 │
+│ - поднятый Entity ORM API                           │
+│ - авторизация и получение UserConnection            │
+│ - прикладная логика                                 │
+└──────────────────────────┬──────────────────────────┘
+                           │
+                           v
+┌─────────────────────────────────────────────────────┐
+│ Titanic.Entity                                      │
+└──────────────────────────┬──────────────────────────┘
+                           │
+                           v
+┌─────────────────────────────────────────────────────┐
+│ Titanic.Db                                          │
+└──────────────────────────┬──────────────────────────┘
+                           │
+                           v
+┌─────────────────────────────────────────────────────┐
+│ Database                                            │
+└─────────────────────────────────────────────────────┘
 ```
 
-### Сценарий 2. Entity ORM внутри backend
+`Titanic.Common` в этом сценарии работает внутри backend-приложения: через `UserConnection`, авторизацию и общую ASP.NET Core инфраструктуру. Для клиента это не отдельная внешняя точка входа, а внутренний инфраструктурный слой приложения.
 
-```text
-Application service
-    -> Titanic.Entity
-    -> Titanic.Db
-    -> Database
-```
+Этот путь может укорачиваться:
 
-### Сценарий 3. UI через HTTP API
-
-```text
-Frontend / SDK
-    -> Titanic.Entity HTTP API
-    -> Entity ORM
-    -> Titanic.Db
-    -> Database
-```
-
-### Сценарий 4. Авторизация и культура пользователя
-
-```text
-HTTP request
-    -> Titanic.Common authorization provider
-    -> UserConnection / UserCulture
-    -> Titanic.Entity
-    -> Titanic.Db
-```
+- если нужен только SQL builder, работа заканчивается на `Titanic.Db`;
+- если нужен HTTP-контракт для UI, используется полный путь через `Titanic.Entity`.
 
 ## Как выбрать точку входа
 
@@ -132,7 +124,6 @@ HTTP request
 
 1. [Titanic.Entity/ENTITY_API.md](Titanic.Entity/ENTITY_API.md)
 2. [Titanic.Entity/README.md](Titanic.Entity/README.md)
-3. `titanic-entity-react` и `titanic-entity-react-demo`
 
 ### Если вы разбираете решение целиком
 
@@ -152,8 +143,6 @@ HTTP request
 - fluent SQL API и провайдеры из `Titanic.Db`;
 - Entity-модели, `EntityManager`, `EntitySchemaQuery` и HTTP API из `Titanic.Entity`.
 
-Demo- и debug-проекты не должны становиться источником архитектурных правил для базовых пакетов.
-
 ## Связанные документы
 
 - [README.md](README.md)
@@ -161,3 +150,6 @@ Demo- и debug-проекты не должны становиться исто�
 - [Titanic.Db/README.md](Titanic.Db/README.md)
 - [Titanic.Entity/README.md](Titanic.Entity/README.md)
 - [Titanic.Entity/ENTITY_API.md](Titanic.Entity/ENTITY_API.md)
+
+
+
