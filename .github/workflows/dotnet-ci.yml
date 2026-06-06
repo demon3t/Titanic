@@ -1,0 +1,50 @@
+name: .NET CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      TITANIC_TEST_CONNECTION_STRING: Host=localhost;Port=5432;Database=titanic_test_db;Username=postgres;Password=postgres
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Titanic.sln
+
+      - name: Build solution
+        run: dotnet build Titanic.sln --configuration Release --no-restore --nologo
+
+      - name: Run tests
+        run: dotnet test Titanic.Test/Titanic.Test.csproj --configuration Release --no-build --nologo
