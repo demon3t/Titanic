@@ -59,8 +59,15 @@ jobs:
 
           [xml]$trx = Get-Content "Titanic.Test/TestResults/test-results.trx"
           $counters = $trx.TestRun.ResultSummary.Counters
+          $total = [int]$counters.total
+          $passed = [int]$counters.passed
+          $failed = [int]$counters.failed
           $skipped = [int]$counters.notExecuted
+
+          Write-Host "Parsed test summary: Total=$total; Passed=$passed; Failed=$failed; Skipped=$skipped"
 
           if ($skipped -gt 0) {
             Write-Host "::warning::Test run contains skipped tests: $skipped"
+          } else {
+            Write-Host "No skipped tests detected."
           }
