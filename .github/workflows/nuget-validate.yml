@@ -1,0 +1,30 @@
+name: NuGet validate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-release-packages:
+    name: Validate package versions
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Validate affected package versions
+        shell: pwsh
+        run: |
+          ./.github/scripts/get-package-release-plan.ps1 `
+            -BaseSha "${{ github.event.pull_request.base.sha }}" `
+            -HeadSha "${{ github.event.pull_request.head.sha }}"
