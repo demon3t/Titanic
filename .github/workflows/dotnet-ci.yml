@@ -48,4 +48,19 @@ jobs:
         run: dotnet build Titanic.sln --configuration Release --no-restore --nologo
 
       - name: Run tests
-        run: dotnet test Titanic.Test/Titanic.Test.csproj --configuration Release --no-build --nologo
+        shell: pwsh
+        run: |
+          dotnet test Titanic.Test/Titanic.Test.csproj `
+            --configuration Release `
+            --no-build `
+            --nologo `
+            --results-directory "Titanic.Test/TestResults" `
+            --logger "trx;LogFileName=test-results.trx"
+
+          [xml]$trx = Get-Content "Titanic.Test/TestResults/test-results.trx"
+          $counters = $trx.TestRun.ResultSummary.Counters
+          $skipped = [int]$counters.notExecuted
+
+          if ($skipped -gt 0) {
+            Write-Host "::warning::Test run contains skipped tests: $skipped"
+          }
