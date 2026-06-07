@@ -11,7 +11,20 @@ on:
       - 'release/*'
 
 jobs:
+  repository-smell-check:
+    name: Repository smell check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run repository smell check
+        shell: pwsh
+        run: ./.github/scripts/check-mojibake.ps1 -RepoRoot $PWD -FirstMatchPerFile
+
   build-and-test:
+    needs: repository-smell-check
     runs-on: ubuntu-latest
 
     services:
