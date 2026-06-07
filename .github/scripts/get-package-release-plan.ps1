@@ -17,9 +17,9 @@ function Get-ProjectVersion {
     )
 
     if ([string]::IsNullOrWhiteSpace($GitRef)) {
-        [xml]$projectXml = Get-Content -LiteralPath $ProjectPath
+        [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
     } else {
-        $projectText = git show "${GitRef}:$ProjectPath" 2>$null
+        $projectText = @(git show "${GitRef}:$ProjectPath" 2>$null) -join "`n"
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($projectText)) {
             return $null
         }
