@@ -5,7 +5,7 @@ namespace Titanic.Entity.WebApplication.Api
 {
     /// <summary>
     /// Проверяет доступ к структуре менеджера через обычную авторизацию Entity API
-    /// и дополнительно требует признак администратора в <see cref="Common.Session.UserConnection" />.
+    /// и дополнительно требует роль администратора в <see cref="Common.Session.UserConnection" />.
     /// </summary>
     internal sealed class AdminEntityStructureAuthorizationProvider : IEntityApiAuthorizationProvider
     {

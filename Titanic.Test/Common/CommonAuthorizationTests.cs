@@ -15,7 +15,21 @@ namespace Titanic.Test.Common
 
             Assert.NotNull(connection.Culture);
             Assert.False(connection.IsAdmin);
+            Assert.Empty(connection.Roles);
             Assert.Equal(string.Empty, connection.Culture.Name);
+        }
+
+        [Fact]
+        public void UserConnection_IsAdmin_ShouldDependOnRoles()
+        {
+            var connection = new UserConnection();
+
+            Assert.False(connection.IsAdmin);
+
+            connection.Roles.Add(UserConnection.AdministratorRole);
+
+            Assert.True(connection.IsAdmin);
+            Assert.True(connection.HasRole(UserConnection.AdministratorRole));
         }
 
         [Fact]
@@ -61,6 +75,8 @@ namespace Titanic.Test.Common
             return new UserConnection
             {
                 UserId = Guid.NewGuid(),
+                Contact = "test@example.com",
+                TimeZoneId = "Europe/Moscow",
                 Culture = new UserCulture
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),

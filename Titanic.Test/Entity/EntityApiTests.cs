@@ -33,7 +33,7 @@ namespace Titanic.Test.Entity
         private const string ApiPath = "/entity-api/test";
         private const string HiddenApiPath = "/entity-api/hidden";
         private const string AuthHeader = "X-Test-Entity-Auth";
-        private const string AdminHeader = "X-Test-Entity-Admin";
+        private const string RolesHeader = "X-Test-Entity-Roles";
 
         [Fact]
         public async Task EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically()
@@ -647,7 +647,7 @@ namespace Titanic.Test.Entity
             client.DefaultRequestHeaders.Add(AuthHeader, "allow");
             if (isAdmin)
             {
-                client.DefaultRequestHeaders.Add(AdminHeader, "true");
+                client.DefaultRequestHeaders.Add(RolesHeader, UserConnection.AdministratorRole);
             }
 
             return client;
@@ -762,15 +762,27 @@ namespace Titanic.Test.Entity
             return ValueTask.FromResult(EntityApiAuthorizationResult.Success(new UserConnection
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                IsAdmin = context.Request.Headers.TryGetValue("X-Test-Entity-Admin", out var adminValue)
-                    && bool.TryParse(adminValue.ToString(), out var isAdmin)
-                    && isAdmin,
+                Roles = ResolveRoles(context),
                 Culture = new UserCulture
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                     Name = "Test"
                 }
             }));
+        }
+
+        private static HashSet<string> ResolveRoles(HttpContext context)
+        {
+            if (!context.Request.Headers.TryGetValue("X-Test-Entity-Roles", out var headerValue))
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return headerValue
+                .ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
     }
 

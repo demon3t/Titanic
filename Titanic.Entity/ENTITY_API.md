@@ -671,6 +671,7 @@ departments -> sys_departments_lcz
 
 ```http
 X-Entity-Culture: 22222222-2222-2222-2222-222222222222
+X-Entity-Roles: Admin,Support
 ```
 
 Если локализованное значение не найдено или пустое, backend возвращает значение основной таблицы.

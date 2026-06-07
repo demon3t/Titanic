@@ -13,7 +13,7 @@ namespace Titanic.Entity.WebApplication.Api
         #region Constants
 
         private const string CultureHeaderName = "X-Entity-Culture";
-        private const string AdminHeaderName = "X-Entity-IsAdmin";
+        private const string RolesHeaderName = "X-Entity-Roles";
 
         #endregion Constants
 
@@ -33,7 +33,7 @@ namespace Titanic.Entity.WebApplication.Api
             var userConnection = new UserConnection
             {
                 UserId = Guid.TryParse(headerValue, out var userId) ? userId : CreateDeterministicGuid(headerValue),
-                IsAdmin = ResolveIsAdmin(context),
+                Roles = ResolveRoles(context),
                 Culture = ResolveCulture(context)
             };
 
@@ -75,15 +75,22 @@ namespace Titanic.Entity.WebApplication.Api
         }
 
         /// <summary>
-        /// Получить признак администратора из заголовков запроса.
+        /// Получить роли пользователя из заголовков запроса.
         /// </summary>
         /// <param name="context"> HTTP-контекст. </param>
-        /// <returns> <c>true</c>, если запрос пришёл от администратора. </returns>
-        private static bool ResolveIsAdmin(HttpContext context)
+        /// <returns> Коллекция ролей пользователя. </returns>
+        private static HashSet<string> ResolveRoles(HttpContext context)
         {
-            return context.Request.Headers.TryGetValue(AdminHeaderName, out var headerValue)
-                && bool.TryParse(headerValue.ToString(), out var isAdmin)
-                && isAdmin;
+            if (!context.Request.Headers.TryGetValue(RolesHeaderName, out var headerValue))
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return headerValue
+                .ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         #endregion Private Methods

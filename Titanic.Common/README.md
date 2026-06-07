@@ -62,6 +62,12 @@ builder
 var userConnection = new UserConnection
 {
     UserId = Guid.NewGuid(),
+    Contact = "user@example.com",
+    TimeZoneId = "Europe/Moscow",
+    Roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        UserConnection.AdministratorRole
+    },
     Culture = new UserCulture
     {
         Id = Guid.NewGuid(),
