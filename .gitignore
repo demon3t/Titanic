@@ -10,6 +10,8 @@
 !/Titanic.Entity/**
 !/Titanic.Test/
 !/Titanic.Test/**
+!/.github/
+!/.github/**
 
 **/bin/
 **/obj/
