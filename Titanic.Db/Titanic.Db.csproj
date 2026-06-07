@@ -11,8 +11,8 @@
     <Description>Low-level SQL builder and database abstractions for Titanic.</Description>
     <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageTags>sql;database;orm;query-builder;postgresql</PackageTags>
-    <NoWarn>$(NoWarn);NU5125</NoWarn>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeCommonOutputInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE.txt" Pack="true" PackagePath="\" Link="LICENSE.txt" />
   </ItemGroup>
 
   <ItemGroup>
