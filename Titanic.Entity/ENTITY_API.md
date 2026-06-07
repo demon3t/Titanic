@@ -71,10 +71,56 @@ app.MapTitanicEntityApi();
 
 | Метод | URL | Назначение |
 | --- | --- | --- |
+| `GET` | `{Api.Path}/structure` | Получить структуру Entity API менеджера: сущности, колонки и reference-связи. |
 | `POST` | `{Api.Path}` | Выполнить одну операцию `Select`, `Save` или `Delete`. |
 | `POST` | `{Api.Path}/batch` | Выполнить несколько операций одним HTTP-запросом. |
 
 Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/update`, `{Api.Path}/delete` не используются.
+
+## Endpoint структуры
+
+`GET {Api.Path}/structure` возвращает структуру конкретного `EntityManager`, уже ограниченную его `EntityModelNamespaces`.
+
+Пример ответа:
+
+```json
+{
+  "entities": [
+    {
+      "tableName": "employees",
+      "entityTypeName": "MyApp.EntityModels.OrmEmployeeEntity",
+      "columns": [
+        {
+          "propertyName": "Id",
+          "columnName": "id",
+          "dataValueType": 2,
+          "isNullable": false,
+          "isPrimary": true,
+          "isDisplay": false,
+          "isReference": false,
+          "referenceTableName": null
+        },
+        {
+          "propertyName": "DepartmentId",
+          "columnName": "department_id",
+          "dataValueType": 2,
+          "isNullable": true,
+          "isPrimary": false,
+          "isDisplay": false,
+          "isReference": true,
+          "referenceTableName": "departments"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Это endpoint для frontend-метаданных и диагностики manager scope. Он полезен, если UI должен:
+
+- строить список доступных сущностей;
+- понимать, какие ORM-пути и reference-колонки реально доступны;
+- валидировать конфигурацию формы против структуры backend-менеджера.
 
 ## Авторизация и UserConnection
 
@@ -1025,7 +1071,6 @@ export class EntityOrmClient {
 
 ## Ограничения текущего API
 
-- API не возвращает metadata схемы отдельным endpoint-ом. UI должен иметь metadata из своей конфигурации или другого backend endpoint-а.
 - Нет отдельной операции `Update`; используется только `Save`.
 - Batch `Parallel` не гарантирует порядок выполнения и не должен использоваться для зависимых операций.
 - `In` и `NotIn` рассчитаны на backend subquery и не являются удобным UI-оператором в текущей JSON-модели.

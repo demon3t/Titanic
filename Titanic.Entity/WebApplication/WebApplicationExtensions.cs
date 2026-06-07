@@ -197,6 +197,17 @@ namespace Titanic.Entity.WebApplication
         {
             var basePath = NormalizeApiPath(manager.Api.Path);
 
+            app.MapGet($"{basePath}/structure", async Task<IResult> (HttpContext context) =>
+            {
+                var authorization = await AuthorizeAsync(context, manager);
+                if (!authorization.IsAuthorized || authorization.UserConnection == null)
+                {
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+                }
+
+                return Results.Ok(BuildStructureResponse(manager));
+            });
+
             app.MapPost(basePath, async Task<IResult> (HttpContext context, EntityApiRequest request) =>
             {
                 var authorization = await AuthorizeAsync(context, manager);
@@ -467,6 +478,38 @@ namespace Titanic.Entity.WebApplication
                         operation = result.Operation
                     },
                     statusCode: result.StatusCode);
+        }
+
+        /// <summary>
+        /// Построить HTTP-модель структуры Entity API менеджера.
+        /// </summary>
+        /// <param name="manager"> Entity ORM менеджер. </param>
+        /// <returns> Структура менеджера. </returns>
+        private static EntityApiManagerStructureResponse BuildStructureResponse(BaseEntityManager manager)
+        {
+            return new EntityApiManagerStructureResponse
+            {
+                Entities = manager.StructureScope.EntitiesStructure
+                    .Select(entity => new EntityApiStructureEntityResponse
+                    {
+                        TableName = entity.TableName,
+                        EntityTypeName = entity.EntityType.FullName ?? entity.EntityType.Name,
+                        Columns = entity.ColumnsStructure
+                            .Select(column => new EntityApiStructureColumnResponse
+                            {
+                                PropertyName = column.PropertyName,
+                                ColumnName = column.ColumnName,
+                                DataValueType = column.DataValueType,
+                                IsNullable = column.IsNullable,
+                                IsPrimary = column.IsPrimary,
+                                IsDisplay = column.IsDisplay,
+                                IsReference = column.IsReference,
+                                ReferenceTableName = column.ReferenceTableName
+                            })
+                            .ToList()
+                    })
+                    .ToList()
+            };
         }
 
         #endregion Operation Execution
