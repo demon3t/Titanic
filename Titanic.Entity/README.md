@@ -1,73 +1,73 @@
-п»ї# Titanic.Entity
+# Titanic.Entity
 
-## Р РѕР»СЊ РІ Р°СЂС…РёС‚РµРєС‚СѓСЂРµ
+## Роль в архитектуре
 
-`Titanic.Entity` вЂ” ORM-СЃР»РѕР№ РїРѕРІРµСЂС… `Titanic.Db`. РћРЅ СЃРІСЏР·С‹РІР°РµС‚ SQL builder, metadata-РјРѕРґРµР»СЊ СЃСѓС‰РЅРѕСЃС‚РµР№ Рё HTTP API РґР»СЏ UI.
+`Titanic.Entity` — ORM-слой поверх `Titanic.Db`. Он связывает SQL builder, metadata-модель сущностей и HTTP API для UI.
 
-РЎР»РѕР№ Р·Р°РЅРёРјР°РµС‚ РІРµСЂС…РЅСЋСЋ РїРѕР·РёС†РёСЋ СЃСЂРµРґРё Р±Р°Р·РѕРІС‹С… РїР°РєРµС‚РѕРІ СЂРµС€РµРЅРёСЏ:
+Слой занимает верхнюю позицию среди базовых пакетов решения:
 
 ```text
 Titanic.Common -> Titanic.Db -> Titanic.Entity
 ```
 
-РРјРµРЅРЅРѕ Р·РґРµСЃСЊ РЅР°С…РѕРґСЏС‚СЃСЏ Entity-РјРѕРґРµР»Рё, СЃС‚СЂСѓРєС‚СѓСЂР° РєРѕР»РѕРЅРѕРє, ORM-РїСѓС‚Рё, Р»РѕРєР°Р»РёР·Р°С†РёСЏ, `EntityManager`, `EntitySchemaQuery` Рё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєР°СЏ РїСѓР±Р»РёРєР°С†РёСЏ HTTP endpoint-РѕРІ.
+Именно здесь находятся Entity-модели, структура колонок, ORM-пути, локализация, `EntityManager`, `EntitySchemaQuery` и автоматическая публикация HTTP endpoint-ов.
 
-## РљРѕРіРґР° РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ
+## Когда использовать
 
-РСЃРїРѕР»СЊР·СѓР№С‚Рµ `Titanic.Entity`, РµСЃР»Рё РЅСѓР¶РЅРѕ:
+Используйте `Titanic.Entity`, если нужно:
 
-- РѕРїРёСЃС‹РІР°С‚СЊ С‚Р°Р±Р»РёС†С‹ С‡РµСЂРµР· Entity-РјРѕРґРµР»Рё Рё Р°С‚СЂРёР±СѓС‚С‹;
-- СЃС‚СЂРѕРёС‚СЊ Р·Р°РїСЂРѕСЃС‹ РїРѕ ORM-РїСѓС‚СЏРј РІРјРµСЃС‚Рѕ СЂСѓС‡РЅРѕРіРѕ SQL;
-- СЂР°Р±РѕС‚Р°С‚СЊ СЃ `DisplayValue` Рё Р»РѕРєР°Р»РёР·СѓРµРјС‹РјРё РєРѕР»РѕРЅРєР°РјРё;
-- СЃРѕС…СЂР°РЅСЏС‚СЊ Рё СѓРґР°Р»СЏС‚СЊ СЃСѓС‰РЅРѕСЃС‚Рё С‡РµСЂРµР· РµРґРёРЅС‹Р№ ORM-СЃР»РѕР№;
-- РїРѕРґРЅРёРјР°С‚СЊ HTTP API РґР»СЏ frontend РёР»Рё РІРЅРµС€РЅРёС… РєР»РёРµРЅС‚РѕРІ.
+- описывать таблицы через Entity-модели и атрибуты;
+- строить запросы по ORM-путям вместо ручного SQL;
+- работать с `DisplayValue` и локализуемыми колонками;
+- сохранять и удалять сущности через единый ORM-слой;
+- поднимать HTTP API для frontend или внешних клиентов.
 
-Р•СЃР»Рё РЅСѓР¶РµРЅ С‚РѕР»СЊРєРѕ SQL builder, Р±РµР· metadata Рё API, РґРѕСЃС‚Р°С‚РѕС‡РЅРѕ [Titanic.Db](../Titanic.Db/README.md).
+Если нужен только SQL builder, без metadata и API, достаточно [Titanic.Db](../Titanic.Db/README.md).
 
-## РћСЃРЅРѕРІРЅС‹Рµ С‡Р°СЃС‚Рё РїР°РєРµС‚Р°
+## Основные части пакета
 
-### РњРµРЅРµРґР¶РµСЂС‹
+### Менеджеры
 
-- `EntityManager` вЂ” СЃС‚Р°С‚РёС‡РµСЃРєР°СЏ С‚РѕС‡РєР° РІС…РѕРґР° РґР»СЏ СЂРµРіРёСЃС‚СЂР°С†РёРё РјРµРЅРµРґР¶РµСЂРѕРІ, РїРѕР»СѓС‡РµРЅРёСЏ РјРµРЅРµРґР¶РµСЂР° РїРѕ С‚РёРїСѓ, СЃРѕР·РґР°РЅРёСЏ `EntitySchemaQuery`, `EntitySelectBuilder` Рё `Entity`.
-- `BaseEntityManager` вЂ” Р±Р°Р·РѕРІР°СЏ РѕР±С‘СЂС‚РєР° РЅР°Рґ `BaseDbProvider`; С…СЂР°РЅРёС‚ РїСЂРѕРІР°Р№РґРµСЂ, РЅР°СЃС‚СЂРѕР№РєРё API, runtime-РѕРїС†РёРё Рё РїСЂРѕРІРµСЂРєСѓ СЃС…РµРјС‹ Р‘Р”.
-- `EntityDbManager` вЂ” СЃС‚Р°РЅРґР°СЂС‚РЅР°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ `BaseEntityManager`.
+- `EntityManager` — статическая точка входа для регистрации менеджеров, получения менеджера по типу, создания `EntitySchemaQuery`, `EntitySelectBuilder` и `Entity`.
+- `BaseEntityManager` — базовая обёртка над `BaseDbProvider`; хранит провайдер, настройки API, runtime-опции и проверку схемы БД.
+- `EntityDbManager` — стандартная реализация `BaseEntityManager`.
 
-### ORM-Р·Р°РїСЂРѕСЃС‹
+### ORM-запросы
 
-- `EntitySchemaQuery` вЂ” РѕСЃРЅРѕРІРЅР°СЏ РјРѕРґРµР»СЊ С‡С‚РµРЅРёСЏ СЃСѓС‰РЅРѕСЃС‚РµР№.
-- `EntitySchemaQuery<TEntity>` вЂ” generic-РѕР±С‘СЂС‚РєР°.
-- `ESQ` Рё `ESQ<TEntity>` вЂ” alias-С‚РёРї РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё.
-- `EntitySelectBuilder` вЂ” ORM SELECT builder РїРѕ РїСѓС‚СЏРј РєРѕР»РѕРЅРѕРє.
-- `EntityQueryColumnCollection`, `EntityQueryColumn` вЂ” РѕРїРёСЃР°РЅРёРµ РІС‹Р±РёСЂР°РµРјС‹С… РєРѕР»РѕРЅРѕРє.
-- `EntityQueryFilterCollection`, `EntityQueryFilter` вЂ” РѕРїРёСЃР°РЅРёРµ С„РёР»СЊС‚СЂРѕРІ.
-- `EntityWhereItem` вЂ” fluent-СѓСЃР»РѕРІРёСЏ РґР»СЏ `EntitySelectBuilder`.
+- `EntitySchemaQuery` — основная модель чтения сущностей.
+- `EntitySchemaQuery<TEntity>` — generic-обёртка.
+- `ESQ` и `ESQ<TEntity>` — alias-тип для совместимости.
+- `EntitySelectBuilder` — ORM SELECT builder по путям колонок.
+- `EntityQueryColumnCollection`, `EntityQueryColumn` — описание выбираемых колонок.
+- `EntityQueryFilterCollection`, `EntityQueryFilter` — описание фильтров.
+- `EntityWhereItem` — fluent-условия для `EntitySelectBuilder`.
 
-### РЎСѓС‰РЅРѕСЃС‚Рё Рё Р·РЅР°С‡РµРЅРёСЏ РєРѕР»РѕРЅРѕРє
+### Сущности и значения колонок
 
-- `Entity` вЂ” ORM-СЃСѓС‰РЅРѕСЃС‚СЊ, РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰Р°СЏ Р·Р°РїРёСЃСЊ Р‘Р”.
-- `ColumnValue` вЂ” Р±Р°Р·РѕРІС‹Р№ РєР»Р°СЃСЃ Р·РЅР°С‡РµРЅРёСЏ РєРѕР»РѕРЅРєРё СЃ `Value` Рё `DisplayValue`.
-- `ScalarColumnValue` вЂ” Р·РЅР°С‡РµРЅРёРµ РѕР±С‹С‡РЅРѕР№ СЃРєР°Р»СЏСЂРЅРѕР№ РєРѕР»РѕРЅРєРё.
-- `StringColumnValue` вЂ” Р·РЅР°С‡РµРЅРёРµ СЃС‚СЂРѕРєРѕРІРѕР№ РєРѕР»РѕРЅРєРё.
-- `ReferenceColumnValue` вЂ” Р·РЅР°С‡РµРЅРёРµ СЃСЃС‹Р»РѕС‡РЅРѕР№ РєРѕР»РѕРЅРєРё СЃ `DisplayValue` СЃРІСЏР·Р°РЅРЅРѕР№ Р·Р°РїРёСЃРё.
+- `Entity` — ORM-сущность, представляющая запись БД.
+- `ColumnValue` — базовый класс значения колонки с `Value` и `DisplayValue`.
+- `ScalarColumnValue` — значение обычной скалярной колонки.
+- `StringColumnValue` — значение строковой колонки.
+- `ReferenceColumnValue` — значение ссылочной колонки с `DisplayValue` связанной записи.
 
-### Metadata Рё Р°С‚СЂРёР±СѓС‚С‹
+### Metadata и атрибуты
 
-- `Structure` вЂ” СЃРєР°РЅРёСЂСѓРµС‚ СЃР±РѕСЂРєРё Рё С…СЂР°РЅРёС‚ metadata Entity-РјРѕРґРµР»РµР№.
-- `EntityStructure` вЂ” РѕРїРёСЃР°РЅРёРµ С‚Р°Р±Р»РёС†С‹.
-- `ColumnStructure` вЂ” РѕРїРёСЃР°РЅРёРµ РєРѕР»РѕРЅРєРё.
-- `EntitySchemaValidator` вЂ” РїСЂРѕРІРµСЂРєР° СЃС…РµРјС‹ Р‘Р” РїСЂРё РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РјРµРЅРµРґР¶РµСЂР°.
-- `EntityAttribute`, `PrimaryColumnAttribute`, `DisplayColumnAttribute`, `ColumnAttribute`, `StringColumnAttribute`, `ReferenceColumnAttribute`, `DisableLocalizationAttribute` вЂ” Р°С‚СЂРёР±СѓС‚С‹ РѕРїРёСЃР°РЅРёСЏ СЃСѓС‰РЅРѕСЃС‚РµР№.
+- `Structure` — сканирует сборки и хранит metadata Entity-моделей.
+- `EntityStructure` — описание таблицы.
+- `ColumnStructure` — описание колонки.
+- `EntitySchemaValidator` — проверка схемы БД при инициализации менеджера.
+- `EntityAttribute`, `PrimaryColumnAttribute`, `DisplayColumnAttribute`, `ColumnAttribute`, `StringColumnAttribute`, `ReferenceColumnAttribute`, `DisableLocalizationAttribute` — атрибуты описания сущностей.
 
 ### HTTP API
 
-- `ServiceCollectionExtensions` вЂ” СЂРµРіРёСЃС‚СЂР°С†РёСЏ Entity ORM СЃРµСЂРІРёСЃРѕРІ РІ DI.
-- `WebApplicationExtensions` вЂ” СЂРµРіРёСЃС‚СЂР°С†РёСЏ Рё РїСѓР±Р»РёРєР°С†РёСЏ endpoint-РѕРІ.
-- `EntityManagerConfig`, `EntityManagerSettings`, `EntityManagerApiSettings`, `EntityManagerOptions` вЂ” РєРѕРЅС„РёРіСѓСЂР°С†РёСЏ РјРµРЅРµРґР¶РµСЂРѕРІ Рё API.
-- `EntityApiRequest`, `EntityApiBatchRequest` вЂ” РјРѕРґРµР»Рё HTTP-Р·Р°РїСЂРѕСЃРѕРІ.
-- `EntityApiOperationType` вЂ” РѕРїРµСЂР°С†РёРё `Select`, `Save`, `Delete`.
-- `EntityApiBatchExecutionMode` вЂ” СЂРµР¶РёРјС‹ `Sequential` Рё `Parallel`.
+- `ServiceCollectionExtensions` — регистрация Entity ORM сервисов в DI.
+- `WebApplicationExtensions` — регистрация и публикация endpoint-ов.
+- `EntityManagerConfig`, `EntityManagerSettings`, `EntityManagerApiSettings`, `EntityManagerOptions` — конфигурация менеджеров и API.
+- `EntityApiRequest`, `EntityApiBatchRequest` — модели HTTP-запросов.
+- `EntityApiOperationType` — операции `Select`, `Save`, `Delete`.
+- `EntityApiBatchExecutionMode` — режимы `Sequential` и `Parallel`.
 
-## РџСЂРёРјРµСЂ Entity-РјРѕРґРµР»Рё
+## Пример Entity-модели
 
 ```csharp
 using Titanic.Db.Enums;
@@ -87,7 +87,7 @@ public sealed class DepartmentEntity
 }
 ```
 
-## РџСЂРёРјРµСЂ С‡С‚РµРЅРёСЏ С‡РµСЂРµР· EntitySchemaQuery
+## Пример чтения через EntitySchemaQuery
 
 ```csharp
 var rows = EntityManager
@@ -100,7 +100,7 @@ var rows = EntityManager
     .GetEntityCollection();
 ```
 
-## РџСЂРёРјРµСЂ СЂРµРіРёСЃС‚СЂР°С†РёРё API
+## Пример регистрации API
 
 ```csharp
 using Titanic.Db.WebApplication;
@@ -116,7 +116,7 @@ app.MapTitanicEntityApi();
 app.Run();
 ```
 
-## РџСЂРёРјРµСЂ РєРѕРЅС„РёРіСѓСЂР°С†РёРё
+## Пример конфигурации
 
 ```json
 {
@@ -133,7 +133,7 @@ app.Run();
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
-          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+          "AuthorizationProviderType": "MyApp.Security.EntityApiUserConnectionProvider, MyApp",
           "DefaultBatchExecutionMode": "Sequential"
         },
         "ValidateDatabaseSchemaOnCompile": true,
@@ -146,32 +146,34 @@ app.Run();
 }
 ```
 
-РљР»СЋС‡РµРІС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё:
+Ключевые настройки:
 
-- `DbProviderName` вЂ” РёРјСЏ РїСЂРѕРІР°Р№РґРµСЂР°, Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅРЅРѕРіРѕ РІ `Titanic.Db`.
-- `ManagerType` вЂ” С‚РёРї РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕРіРѕ РјРµРЅРµРґР¶РµСЂР° РїРѕРІРµСЂС… `BaseEntityManager`.
-- `EntityModelNamespaces` вЂ” СЃРїРёСЃРѕРє namespace-patterns, РїРѕ РєРѕС‚РѕСЂС‹Рј РјРµРЅРµРґР¶РµСЂ СЃРѕР±РёСЂР°РµС‚ СЃРІРѕСЋ СЃС‚СЂСѓРєС‚СѓСЂСѓ СЃСѓС‰РЅРѕСЃС‚РµР№.
-- `Api.Path` вЂ” Р±Р°Р·РѕРІС‹Р№ route РґР»СЏ HTTP API РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РјРµРЅРµРґР¶РµСЂР°.
-- `Api.AuthorizationProviderType` вЂ” С‚РёРї РїСЂРѕРІР°Р№РґРµСЂР°, РєРѕС‚РѕСЂС‹Р№ Р°РІС‚РѕСЂРёР·СѓРµС‚ Р·Р°РїСЂРѕСЃ Рё РІРѕР·РІСЂР°С‰Р°РµС‚ `UserConnection`.
-- `Options.MaxReadRowCount` вЂ” РјР°РєСЃРёРјР°Р»СЊРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє РґР»СЏ РѕРґРЅРѕРіРѕ Р·Р°РїСЂРѕСЃР° С‡С‚РµРЅРёСЏ.
+- `DbProviderName` — имя провайдера, зарегистрированного в `Titanic.Db`.
+- `ManagerType` — тип пользовательского менеджера поверх `BaseEntityManager`.
+- `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
+- `Api.Path` — базовый route для HTTP API конкретного менеджера.
+- `Api.AuthorizationProviderType` — тип пользовательского провайдера из `Titanic.Common`, который по токену возвращает `UserConnection`.
+- `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
 
-## Р§С‚Рѕ РІР°Р¶РЅРѕ Р·РЅР°С‚СЊ РїСЂРѕ СЃР»РѕР№
+## Что важно знать про слой
 
-- РёРјСЏ С‚Р°Р±Р»РёС†С‹ РІ `[Entity("...")]` Р·Р°РґР°С‘С‚СЃСЏ Р±РµР· СЃС…РµРјС‹;
-- Р»РѕРєР°Р»РёР·СѓРµРјС‹Рµ РєРѕР»РѕРЅРєРё С‡РёС‚Р°СЋС‚СЃСЏ С‡РµСЂРµР· С‚Р°Р±Р»РёС†Сѓ `sys_[table_name]_lcz`;
-- РјРµРЅРµРґР¶РµСЂ РїРѕР»СѓС‡Р°РµС‚ СЃРІРѕСЋ СЃС‚СЂСѓРєС‚СѓСЂСѓ СЃСѓС‰РЅРѕСЃС‚РµР№ С‡РµСЂРµР· `EntityModelNamespaces`;
-- `UserConnection` РѕР±СЏР·Р°С‚РµР»РµРЅ РґР»СЏ С‡С‚РµРЅРёСЏ, СЃРѕС…СЂР°РЅРµРЅРёСЏ, СѓРґР°Р»РµРЅРёСЏ Рё РїРѕСЃС‚СЂРѕРµРЅРёСЏ Р»РѕРєР°Р»РёР·Р°С†РёРё;
-- HTTP API вЂ” СЌС‚Рѕ РѕР±РѕР»РѕС‡РєР° РЅР°Рґ Entity ORM, Р° РЅРµ РѕС‚РґРµР»СЊРЅР°СЏ РїСЂРёРєР»Р°РґРЅР°СЏ Р±РёР·РЅРµСЃ-Р»РѕРіРёРєР°.
+- имя таблицы в `[Entity("...")]` задаётся без схемы;
+- локализуемые колонки читаются через таблицу `sys_[table_name]_lcz`;
+- менеджер получает свою структуру сущностей через `EntityModelNamespaces`;
+- `UserConnection` обязателен для чтения, сохранения, удаления и построения локализации;
+- HTTP API — это оболочка над Entity ORM, а не отдельная прикладная бизнес-логика.
 
-## РљСѓРґР° РёРґС‚Рё РґР°Р»СЊС€Рµ
+## Куда идти дальше
 
-- Р•СЃР»Рё РЅСѓР¶РЅРѕ РїРѕРЅСЏС‚СЊ РѕР±С‰РёР№ РїРѕС‚РѕРє РґР°РЅРЅС‹С… Рё РјРµСЃС‚Рѕ СЃР»РѕСЏ РІ СЂРµС€РµРЅРёРё, РѕС‚РєСЂРѕР№С‚Рµ [../ARCHITECTURE.md](../ARCHITECTURE.md).
-- Р•СЃР»Рё РЅСѓР¶РµРЅ JSON-РєРѕРЅС‚СЂР°РєС‚ API РґР»СЏ frontend, РѕС‚РєСЂРѕР№С‚Рµ [ENTITY_API.md](ENTITY_API.md).
-- Р•СЃР»Рё РЅСѓР¶РЅРѕ СЂР°Р·РѕР±СЂР°С‚СЊСЃСЏ РІ SQL builder, РІРµСЂРЅРёС‚РµСЃСЊ Рє [../Titanic.Db/README.md](../Titanic.Db/README.md).
+- Если нужно понять общий поток данных и место слоя в решении, откройте [../ARCHITECTURE.md](../ARCHITECTURE.md).
+- Если нужен JSON-контракт API для frontend, откройте [ENTITY_API.md](ENTITY_API.md).
+- Если нужно разобраться в SQL builder, вернитесь к [../Titanic.Db/README.md](../Titanic.Db/README.md).
 
-## РЎРІСЏР·Р°РЅРЅС‹Рµ РґРѕРєСѓРјРµРЅС‚С‹
+## Связанные документы
 
 - [../ARCHITECTURE.md](../ARCHITECTURE.md)
 - [../Titanic.Common/README.md](../Titanic.Common/README.md)
 - [../Titanic.Db/README.md](../Titanic.Db/README.md)
 - [ENTITY_API.md](ENTITY_API.md)
+
+

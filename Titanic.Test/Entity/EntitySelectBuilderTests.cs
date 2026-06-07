@@ -67,7 +67,7 @@ namespace Titanic.Test.Entity
                             AutoRegisterEndpoint = true,
                             Path = "/api/entity/test",
                             AuthorizationHeaderName = "X-Test-Entity-Key",
-                            AuthorizationProviderType = "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity"
+                            AuthorizationProviderType = "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test"
                         },
                         Options = new EntityManagerOptions
                         {
@@ -87,7 +87,7 @@ namespace Titanic.Test.Entity
             Assert.Equal("/api/entity/test", manager.Api.Path);
             Assert.Equal("X-Test-Entity-Key", manager.Api.AuthorizationHeaderName);
             Assert.Equal(
-                "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+                "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test",
                 manager.Api.AuthorizationProviderType);
             Assert.Equal(25, manager.Options.MaxReadRowCount);
             Assert.False(manager.ValidateDatabaseSchemaOnCompile);
@@ -1122,6 +1122,7 @@ namespace Titanic.Test.Entity
     {
     }
 }
+
 
 
 

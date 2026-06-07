@@ -1,71 +1,55 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Entity.Interfaces;
 
 namespace Titanic.Entity.WebApplication.Api
 {
     /// <summary>
-    /// Фабрика провайдеров авторизации Entity API.
+    /// Фабрика провайдеров поиска пользовательского контекста для Entity API.
     /// </summary>
     internal sealed class EntityApiAuthorizationProviderFactory
     {
         /// <summary>
-        /// Создать провайдер авторизации Entity API.
+        /// Создать провайдер поиска пользовательского контекста.
         /// </summary>
         /// <param name="services"> Провайдер сервисов. </param>
         /// <param name="manager"> Entity ORM менеджер. </param>
         /// <param name="kind"> Тип провайдера. </param>
-        /// <returns> Провайдер авторизации. </returns>
-        public IEntityApiAuthorizationProvider CreateProvider(
+        /// <returns> Провайдер поиска пользовательского контекста. </returns>
+        public IUserConnectionTokenProvider CreateProvider(
             IServiceProvider services,
             BaseEntityManager manager,
             EntityApiAuthorizationProviderKind kind)
         {
+            ArgumentNullException.ThrowIfNull(services);
             ArgumentNullException.ThrowIfNull(manager);
 
-            return kind switch
+            var providerTypeName = kind switch
             {
-                EntityApiAuthorizationProviderKind.Default => CreateProvider(
-                    services,
-                    manager.Api.AuthorizationProviderType,
-                    typeof(HeaderEntityApiAuthorizationProvider),
-                    "Entity API authorization provider"),
-                EntityApiAuthorizationProviderKind.Structure => CreateProvider(
-                    services,
-                    manager.Api.StructureAuthorizationProviderType,
-                    typeof(AdminEntityStructureAuthorizationProvider),
-                    "Entity structure authorization provider"),
+                EntityApiAuthorizationProviderKind.Default => manager.Api.AuthorizationProviderType,
+                EntityApiAuthorizationProviderKind.Structure =>
+                    string.IsNullOrWhiteSpace(manager.Api.StructureAuthorizationProviderType)
+                        ? manager.Api.AuthorizationProviderType
+                        : manager.Api.StructureAuthorizationProviderType,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported authorization provider kind.")
             };
-        }
-
-        /// <summary>
-        /// Создать провайдер авторизации по имени типа или типу по умолчанию.
-        /// </summary>
-        private static IEntityApiAuthorizationProvider CreateProvider(
-            IServiceProvider services,
-            string? providerTypeName,
-            Type defaultProviderType,
-            string providerDescription)
-        {
-            ArgumentNullException.ThrowIfNull(services);
-            ArgumentNullException.ThrowIfNull(defaultProviderType);
-            ArgumentException.ThrowIfNullOrWhiteSpace(providerDescription);
 
             if (string.IsNullOrWhiteSpace(providerTypeName))
             {
-                return (IEntityApiAuthorizationProvider)ActivatorUtilities.GetServiceOrCreateInstance(services, defaultProviderType);
+                throw new InvalidOperationException(
+                    $"Entity API authorization provider is not configured for manager '{manager.Name}'.");
             }
 
             var providerType = Type.GetType(providerTypeName)
                 ?? throw new InvalidOperationException(
-                    $"{providerDescription} '{providerTypeName}' not found.");
-            if (!typeof(IEntityApiAuthorizationProvider).IsAssignableFrom(providerType))
+                    $"Entity API authorization provider '{providerTypeName}' not found.");
+            if (!typeof(IUserConnectionTokenProvider).IsAssignableFrom(providerType))
             {
                 throw new InvalidOperationException(
-                    $"{providerDescription} '{providerTypeName}' must implement {nameof(IEntityApiAuthorizationProvider)}.");
+                    $"Entity API authorization provider '{providerTypeName}' must implement {nameof(IUserConnectionTokenProvider)}.");
             }
 
-            return (IEntityApiAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
+            return (IUserConnectionTokenProvider)ActivatorUtilities.CreateInstance(services, providerType);
         }
     }
 }

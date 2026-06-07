@@ -1,4 +1,4 @@
-п»їusing System.Data;
+using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
@@ -26,7 +27,7 @@ using EntityManager = Titanic.Entity.EntityManager;
 namespace Titanic.Test.Entity
 {
     /// <summary>
-    /// РўРµСЃС‚С‹ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРіРѕ HTTP API РґР»СЏ Entity ORM.
+    /// Тесты автоматического HTTP API для Entity ORM.
     /// </summary>
     public sealed class EntityApiTests
     {
@@ -746,20 +747,19 @@ namespace Titanic.Test.Entity
     }
 
     /// <summary>
-    /// Mock-РїСЂРѕРІР°Р№РґРµСЂ Р°РІС‚РѕСЂРёР·Р°С†РёРё Entity API РґР»СЏ HTTP-С‚РµСЃС‚РѕРІ.
+    /// Mock-провайдер авторизации Entity API для HTTP-тестов.
     /// </summary>
-    public sealed class MockEntityApiAuthorizationProvider : IEntityApiAuthorizationProvider
+    public sealed class MockEntityApiAuthorizationProvider : IUserConnectionTokenProvider
     {
         /// <inheritdoc />
-        public ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
+        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
         {
-            if (!context.Request.Headers.TryGetValue(manager.Api.AuthorizationHeaderName, out var value)
-                || value.ToString() != "allow")
+            if (token != "allow")
             {
-                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail("Mock authorization rejected request."));
+                return ValueTask.FromResult<UserConnection?>(null);
             }
 
-            return ValueTask.FromResult(EntityApiAuthorizationResult.Success(new UserConnection
+            return ValueTask.FromResult<UserConnection?>(new UserConnection
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 Roles = ResolveRoles(context),
@@ -768,7 +768,7 @@ namespace Titanic.Test.Entity
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                     Name = "Test"
                 }
-            }));
+            });
         }
 
         private static HashSet<string> ResolveRoles(HttpContext context)
@@ -787,22 +787,22 @@ namespace Titanic.Test.Entity
     }
 
     /// <summary>
-    /// Mock DB provider РґР»СЏ РїСЂРѕРІРµСЂРєРё Entity API Р±РµР· СЂРµР°Р»СЊРЅРѕРіРѕ PostgreSQL.
+    /// Mock DB provider для проверки Entity API без реального PostgreSQL.
     /// </summary>
     public sealed class EntityApiMockDbProvider : BaseDbProvider
     {
         /// <summary>
-        /// РџРѕСЃР»РµРґРЅРёР№ SQL, РїРѕСЃС‚СЂРѕРµРЅРЅС‹Р№ ORM API.
+        /// Последний SQL, построенный ORM API.
         /// </summary>
         public static string LastSql { get; private set; } = string.Empty;
 
         /// <summary>
-        /// РџРѕСЃР»РµРґРЅРёРµ РїР°СЂР°РјРµС‚СЂС‹, РїРѕСЃС‚СЂРѕРµРЅРЅС‹Рµ ORM API.
+        /// Последние параметры, построенные ORM API.
         /// </summary>
         public static IReadOnlyList<QueryParameter> LastParameters { get; private set; } = [];
 
         /// <summary>
-        /// РСЃС‚РѕСЂРёСЏ SQL-Р·Р°РїСЂРѕСЃРѕРІ, РїРѕСЃС‚СЂРѕРµРЅРЅС‹С… ORM API.
+        /// История SQL-запросов, построенных ORM API.
         /// </summary>
         public static IReadOnlyList<string> SqlHistory
         {
@@ -820,9 +820,9 @@ namespace Titanic.Test.Entity
         private static readonly List<string> _sqlHistory = [];
 
         /// <summary>
-        /// РЎРѕР·РґР°С‚СЊ mock provider С‡РµСЂРµР· reflection-С„Р°Р±СЂРёРєСѓ DbManager.
+        /// Создать mock provider через reflection-фабрику DbManager.
         /// </summary>
-        /// <param name="connectionString"> РЎС‚СЂРѕРєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ. </param>
+        /// <param name="connectionString"> Строка подключения. </param>
         /// <param name="engine"> SQL engine. </param>
         public EntityApiMockDbProvider(string connectionString, BaseDbEngine engine)
             : base(connectionString, engine)
@@ -830,7 +830,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// РЎР±СЂРѕСЃРёС‚СЊ СЃРѕСЃС‚РѕСЏРЅРёРµ mock provider РїРµСЂРµРґ С‚РµСЃС‚РѕРј.
+        /// Сбросить состояние mock provider перед тестом.
         /// </summary>
         public static void ResetState()
         {
@@ -920,4 +920,7 @@ namespace Titanic.Test.Entity
         }
     }
 }
+
+
+
 
