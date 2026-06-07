@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <PackageId>Titanic.Entity</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.1.2</Version>
     <Authors>demon3t</Authors>
     <Description>Entity ORM and HTTP API layer for Titanic.</Description>
     <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
