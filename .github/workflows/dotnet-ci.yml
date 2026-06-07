@@ -11,7 +11,20 @@ on:
       - 'release/*'
 
 jobs:
+  repository-validation:
+    name: Repository validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run encoding validation
+        shell: pwsh
+        run: ./.github/scripts/check-mojibake.ps1 -RepoRoot $PWD -FirstMatchPerFile
+
   build-and-test:
+    needs: repository-validation
     runs-on: ubuntu-latest
 
     services:
