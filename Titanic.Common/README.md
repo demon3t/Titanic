@@ -10,7 +10,7 @@
 
 Используйте `Titanic.Common`, если нужно:
 
-- описать пользователя и его культуру через `UserConnection`;
+- описать пользовательский контекст через `UserConnection`;
 - организовать авторизацию по заголовку для Entity API;
 - подключить Swagger, API explorer и базовую web-инфраструктуру;
 - получить общий слой, который не зависит от `Titanic.Db` и `Titanic.Entity`.
@@ -19,7 +19,7 @@
 
 ### Пользовательский контекст
 
-- `UserConnection` — контекст пользователя, содержащий `UserId` и `UserCulture`.
+- `UserConnection` — контракт пользовательского контекста, содержащий идентификаторы, роли, культуру и сопутствующие системные данные.
 - `UserCulture` — культура пользователя, содержащая `Id` и `Name`.
 
 ### Авторизация
@@ -66,7 +66,7 @@ var userConnection = new UserConnection
     TimeZoneId = "Europe/Moscow",
     Roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        UserRoles.Administrator
+        "Admin"
     },
     Culture = new UserCulture
     {

@@ -14,22 +14,18 @@ namespace Titanic.Test.Common
             var connection = new UserConnection();
 
             Assert.NotNull(connection.Culture);
-            Assert.False(connection.IsAdmin);
             Assert.Empty(connection.Roles);
             Assert.Equal(string.Empty, connection.Culture.Name);
         }
 
         [Fact]
-        public void UserConnection_IsAdmin_ShouldDependOnRoles()
+        public void UserConnection_Roles_ShouldStoreRoleNames()
         {
             var connection = new UserConnection();
 
-            Assert.False(connection.IsAdmin);
+            connection.Roles.Add("Admin");
 
-            connection.Roles.Add(UserRoles.Administrator);
-
-            Assert.True(connection.IsAdmin);
-            Assert.True(connection.HasRole(UserRoles.Administrator));
+            Assert.Contains("Admin", connection.Roles);
         }
 
         [Fact]

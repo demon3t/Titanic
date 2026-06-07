@@ -647,7 +647,7 @@ namespace Titanic.Test.Entity
             client.DefaultRequestHeaders.Add(AuthHeader, "allow");
             if (isAdmin)
             {
-                client.DefaultRequestHeaders.Add(RolesHeader, UserRoles.Administrator);
+                client.DefaultRequestHeaders.Add(RolesHeader, "Admin");
             }
 
             return client;

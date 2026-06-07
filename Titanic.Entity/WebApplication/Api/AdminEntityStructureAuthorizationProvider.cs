@@ -9,6 +9,8 @@ namespace Titanic.Entity.WebApplication.Api
     /// </summary>
     internal sealed class AdminEntityStructureAuthorizationProvider : IEntityApiAuthorizationProvider
     {
+        private const string AdministratorRole = "Admin";
+
         private readonly EntityApiAuthorizationProviderFactory _factory;
 
         /// <summary>
@@ -29,7 +31,7 @@ namespace Titanic.Entity.WebApplication.Api
                 return authorization;
             }
 
-            return authorization.UserConnection.IsAdmin
+            return authorization.UserConnection.Roles.Contains(AdministratorRole)
                 ? authorization
                 : EntityApiAuthorizationResult.Fail("Administrator permissions are required.");
         }
