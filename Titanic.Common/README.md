@@ -59,7 +59,13 @@ builder
 Создание `UserConnection`:
 
 ```csharp
-var userConnection = new UserConnection
+public sealed class MyUserConnection : UserConnection
+{
+    public Guid ContactId { get; init; }
+    public string? TimeZoneId { get; init; }
+}
+
+var userConnection = new MyUserConnection
 {
     UserId = Guid.NewGuid(),
     ContactId = Guid.NewGuid(),

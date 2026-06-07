@@ -6,17 +6,18 @@ internal static class OrmTestUserConnection
 {
     public static UserConnection Create(Guid? cultureId = null, bool isAdmin = false)
     {
+        var userId = Guid.NewGuid();
         var roles = isAdmin
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Admin" }
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         return new UserConnection
         {
-            UserId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            UserId = userId,
             Roles = roles,
             Culture = new UserCulture
             {
-                Id = cultureId ?? Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                Id = cultureId ?? Guid.NewGuid(),
                 Name = "Test"
             }
         };

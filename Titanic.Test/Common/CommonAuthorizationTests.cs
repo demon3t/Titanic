@@ -71,8 +71,6 @@ namespace Titanic.Test.Common
             return new UserConnection
             {
                 UserId = Guid.NewGuid(),
-                ContactId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                TimeZoneId = "Europe/Moscow",
                 Culture = new UserCulture
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),

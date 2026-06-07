@@ -26,9 +26,6 @@ using EntityManager = Titanic.Entity.EntityManager;
 
 namespace Titanic.Test.Entity
 {
-    /// <summary>
-    /// Тесты автоматического HTTP API для Entity ORM.
-    /// </summary>
     public sealed class EntityApiTests
     {
         private const string ApiPath = "/entity-api/test";
@@ -746,12 +743,8 @@ namespace Titanic.Test.Entity
         }
     }
 
-    /// <summary>
-    /// Mock-провайдер авторизации Entity API для HTTP-тестов.
-    /// </summary>
     public sealed class MockEntityApiAuthorizationProvider : IUserConnectionTokenProvider
     {
-        /// <inheritdoc />
         public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
         {
             if (token != "allow")
@@ -786,24 +779,12 @@ namespace Titanic.Test.Entity
         }
     }
 
-    /// <summary>
-    /// Mock DB provider для проверки Entity API без реального PostgreSQL.
-    /// </summary>
     public sealed class EntityApiMockDbProvider : BaseDbProvider
     {
-        /// <summary>
-        /// Последний SQL, построенный ORM API.
-        /// </summary>
         public static string LastSql { get; private set; } = string.Empty;
 
-        /// <summary>
-        /// Последние параметры, построенные ORM API.
-        /// </summary>
         public static IReadOnlyList<QueryParameter> LastParameters { get; private set; } = [];
 
-        /// <summary>
-        /// История SQL-запросов, построенных ORM API.
-        /// </summary>
         public static IReadOnlyList<string> SqlHistory
         {
             get
@@ -819,19 +800,11 @@ namespace Titanic.Test.Entity
 
         private static readonly List<string> _sqlHistory = [];
 
-        /// <summary>
-        /// Создать mock provider через reflection-фабрику DbManager.
-        /// </summary>
-        /// <param name="connectionString"> Строка подключения. </param>
-        /// <param name="engine"> SQL engine. </param>
         public EntityApiMockDbProvider(string connectionString, BaseDbEngine engine)
             : base(connectionString, engine)
         {
         }
 
-        /// <summary>
-        /// Сбросить состояние mock provider перед тестом.
-        /// </summary>
         public static void ResetState()
         {
             lock (_syncRoot)
@@ -842,14 +815,12 @@ namespace Titanic.Test.Entity
             }
         }
 
-        /// <inheritdoc />
         public override int Execute(IQuery query)
         {
             Capture(query);
             return 1;
         }
 
-        /// <inheritdoc />
         public override T ExecuteScalar<T>(IQuery query)
         {
             Capture(query);
@@ -857,7 +828,6 @@ namespace Titanic.Test.Entity
             return (T)value;
         }
 
-        /// <inheritdoc />
         public override List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
         {
             ArgumentNullException.ThrowIfNull(mapRow);
@@ -873,13 +843,11 @@ namespace Titanic.Test.Entity
             return rows;
         }
 
-        /// <inheritdoc />
         protected override DbConnection CreateConnection()
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database connections.");
         }
 
-        /// <inheritdoc />
         protected override DbParameter CreateParameter(QueryParameter parameter)
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database parameters.");
