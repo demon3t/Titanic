@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
@@ -20,17 +21,17 @@ using Titanic.Entity.Orm;
 using Titanic.Entity.WebApplication;
 using Titanic.Entity.WebApplication.Api;
 using Titanic.Entity.WebApplication.Configuration;
+using Titanic.Test.Entity.Hidden;
 using EntityManager = Titanic.Entity.EntityManager;
 
 namespace Titanic.Test.Entity
 {
-    /// <summary>
-    /// Тесты автоматического HTTP API для Entity ORM.
-    /// </summary>
     public sealed class EntityApiTests
     {
         private const string ApiPath = "/entity-api/test";
+        private const string HiddenApiPath = "/entity-api/hidden";
         private const string AuthHeader = "X-Test-Entity-Auth";
+        private const string StructureAuthToken = "allow-structure";
 
         [Fact]
         public async Task EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically()
@@ -126,10 +127,80 @@ namespace Titanic.Test.Entity
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-            var json = await response.Content.ReadAsStringAsync();
-            Assert.Contains("Column", json);
-            Assert.Contains("Email", json);
-            Assert.Contains("departments", json);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+            Assert.Contains("Column", document.RootElement.GetProperty("error").GetString());
+            Assert.Contains("Email", document.RootElement.GetProperty("error").GetString());
+            Assert.Contains("departments", document.RootElement.GetProperty("error").GetString());
+        }
+
+        [Fact]
+        public async Task EntityApi_Select_PathToEntityOutsideManagerScope_ShouldReturnStructuredError()
+        {
+            await using var app = await CreateAppAsync(
+                autoRegisterApiEndpoint: true,
+                managers:
+                [
+                    CreateRootManagerSettings()
+                ]);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
+            {
+                Operation = EntityApiOperationType.Select,
+                Query = new ESQJsonModel
+                {
+                    TableName = "employees_hidden_link",
+                    Columns =
+                    [
+                        new ESQColumnJsonModel
+                        {
+                            Path = "HiddenId.Name"
+                        }
+                    ]
+                }
+            });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+            Assert.Equal("Select", document.RootElement.GetProperty("operation").GetString());
+            Assert.Contains("hidden_scoped_entities", document.RootElement.GetProperty("error").GetString());
+        }
+
+        [Fact]
+        public async Task EntityApi_Select_HiddenEntityTypeOnRootManager_ShouldReturnStructuredError()
+        {
+            await using var app = await CreateAppAsync(
+                autoRegisterApiEndpoint: true,
+                managers:
+                [
+                    CreateRootManagerSettings()
+                ]);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
+            {
+                Operation = EntityApiOperationType.Select,
+                Query = new ESQJsonModel
+                {
+                    EntityTypeName = nameof(OrmHiddenScopedEntity),
+                    Columns =
+                    [
+                        new ESQColumnJsonModel
+                        {
+                            Path = "Name"
+                        }
+                    ]
+                }
+            });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+            Assert.Contains(nameof(OrmHiddenScopedEntity), document.RootElement.GetProperty("error").GetString());
         }
 
         [Fact]
@@ -271,8 +342,9 @@ namespace Titanic.Test.Entity
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-            var json = await response.Content.ReadAsStringAsync();
-            Assert.Contains("at least one", json, StringComparison.OrdinalIgnoreCase);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+            Assert.Contains("at least one", document.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("DELETE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -397,6 +469,62 @@ namespace Titanic.Test.Entity
             Assert.All(result.Results, item => Assert.True(item.Success));
         }
 
+        [Fact]
+        public async Task EntityApi_StructureEndpoint_ShouldReturnForbiddenForNonAdmin()
+        {
+            await using var app = await CreateAppAsync(
+                autoRegisterApiEndpoint: true,
+                managers:
+                [
+                    CreateRootManagerSettings()
+                ]);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.GetAsync($"{ApiPath}/structure");
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task EntityApi_StructureEndpoint_ShouldReturnScopedStructureForAdmin()
+        {
+            await using var app = await CreateAppAsync(
+                autoRegisterApiEndpoint: true,
+                managers:
+                [
+                    CreateRootManagerSettings(),
+                    CreateHiddenManagerSettings()
+                ]);
+
+            var rootClient = CreateStructureAuthorizedClient(app);
+            var hiddenClient = CreateStructureAuthorizedClient(app);
+
+            var rootResponse = await rootClient.GetAsync($"{ApiPath}/structure");
+            var hiddenResponse = await hiddenClient.GetAsync($"{HiddenApiPath}/structure");
+
+            rootResponse.EnsureSuccessStatusCode();
+            hiddenResponse.EnsureSuccessStatusCode();
+
+            using var rootDocument = JsonDocument.Parse(await rootResponse.Content.ReadAsStringAsync());
+            using var hiddenDocument = JsonDocument.Parse(await hiddenResponse.Content.ReadAsStringAsync());
+
+            Assert.Equal("EntityApiMock", rootDocument.RootElement.GetProperty("managerName").GetString());
+            Assert.Contains(
+                rootDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
+                x => x == nameof(OrmEmployeeEntity));
+            Assert.DoesNotContain(
+                rootDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
+                x => x == nameof(OrmHiddenScopedEntity));
+
+            Assert.Equal("HiddenEntityApiMock", hiddenDocument.RootElement.GetProperty("managerName").GetString());
+            Assert.Contains(
+                hiddenDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
+                x => x == nameof(OrmHiddenScopedEntity));
+            Assert.DoesNotContain(
+                hiddenDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
+                x => x == nameof(OrmEmployeeEntity));
+        }
+
         private static ESQJsonModel CreateSelectRequest()
         {
             return new ESQJsonModel
@@ -518,9 +646,17 @@ namespace Titanic.Test.Entity
             return client;
         }
 
+        private static HttpClient CreateStructureAuthorizedClient(WebApplication app)
+        {
+            var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add(AuthHeader, StructureAuthToken);
+            return client;
+        }
+
         private static async Task<WebApplication> CreateAppAsync(
             bool autoRegisterApiEndpoint,
-            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential)
+            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential,
+            List<EntityManagerSettings>? managers = null)
         {
             EntityApiMockDbProvider.ResetState();
             DbManager.Reset();
@@ -552,26 +688,7 @@ namespace Titanic.Test.Entity
 
             builder.AddTitanicEntityApi(config =>
             {
-                config.Managers =
-                [
-                    new EntityManagerSettings
-                    {
-                        Name = "EntityApiMock",
-                        DbProviderName = "EntityApiMock",
-                        Api = new EntityManagerApiSettings
-                        {
-                            AutoRegisterEndpoint = autoRegisterApiEndpoint,
-                            Path = ApiPath,
-                            AuthorizationHeaderName = AuthHeader,
-                            AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
-                            DefaultBatchExecutionMode = defaultBatchExecutionMode
-                        },
-                        Options = new EntityManagerOptions
-                        {
-                            MaxReadRowCount = 3
-                        }
-                    }
-                ];
+                config.Managers = managers ?? [CreateRootManagerSettings(autoRegisterApiEndpoint, defaultBatchExecutionMode)];
             });
 
             var app = builder.Build();
@@ -579,23 +696,67 @@ namespace Titanic.Test.Entity
             await app.StartAsync();
             return app;
         }
+
+        private static EntityManagerSettings CreateRootManagerSettings(
+            bool autoRegisterApiEndpoint = true,
+            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential)
+        {
+            return new EntityManagerSettings
+            {
+                Name = "EntityApiMock",
+                DbProviderName = "EntityApiMock",
+                EntityModelNamespaces = ["Titanic.Test.Entity"],
+                Api = new EntityManagerApiSettings
+                {
+                    AutoRegisterEndpoint = autoRegisterApiEndpoint,
+                    Path = ApiPath,
+                    AuthorizationHeaderName = AuthHeader,
+                    AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
+                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
+                    DefaultBatchExecutionMode = defaultBatchExecutionMode
+                },
+                Options = new EntityManagerOptions
+                {
+                    MaxReadRowCount = 3
+                }
+            };
+        }
+
+        private static EntityManagerSettings CreateHiddenManagerSettings()
+        {
+            return new EntityManagerSettings
+            {
+                Name = "HiddenEntityApiMock",
+                DbProviderName = "EntityApiMock",
+                ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
+                EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"],
+                Api = new EntityManagerApiSettings
+                {
+                    AutoRegisterEndpoint = true,
+                    Path = HiddenApiPath,
+                    AuthorizationHeaderName = AuthHeader,
+                    AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
+                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
+                    DefaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential
+                },
+                Options = new EntityManagerOptions
+                {
+                    MaxReadRowCount = 3
+                }
+            };
+        }
     }
 
-    /// <summary>
-    /// Mock-провайдер авторизации Entity API для HTTP-тестов.
-    /// </summary>
-    public sealed class MockEntityApiAuthorizationProvider : IEntityApiAuthorizationProvider
+    public sealed class MockEntityApiAuthorizationProvider : IUserConnectionTokenProvider
     {
-        /// <inheritdoc />
-        public ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
+        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
         {
-            if (!context.Request.Headers.TryGetValue(manager.Api.AuthorizationHeaderName, out var value)
-                || value.ToString() != "allow")
+            if (token != "allow")
             {
-                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail("Mock authorization rejected request."));
+                return ValueTask.FromResult<UserConnection?>(null);
             }
 
-            return ValueTask.FromResult(EntityApiAuthorizationResult.Success(new UserConnection
+            return ValueTask.FromResult<UserConnection?>(new UserConnection
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 Culture = new UserCulture
@@ -603,28 +764,37 @@ namespace Titanic.Test.Entity
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                     Name = "Test"
                 }
-            }));
+            });
         }
     }
 
-    /// <summary>
-    /// Mock DB provider для проверки Entity API без реального PostgreSQL.
-    /// </summary>
+    public sealed class MockEntityApiStructureAuthorizationProvider : IUserConnectionTokenProvider
+    {
+        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
+        {
+            if (token != "allow-structure")
+            {
+                return ValueTask.FromResult<UserConnection?>(null);
+            }
+
+            return ValueTask.FromResult<UserConnection?>(new UserConnection
+            {
+                UserId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                Culture = new UserCulture
+                {
+                    Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                    Name = "Test"
+                }
+            });
+        }
+    }
+
     public sealed class EntityApiMockDbProvider : BaseDbProvider
     {
-        /// <summary>
-        /// Последний SQL, построенный ORM API.
-        /// </summary>
         public static string LastSql { get; private set; } = string.Empty;
 
-        /// <summary>
-        /// Последние параметры, построенные ORM API.
-        /// </summary>
         public static IReadOnlyList<QueryParameter> LastParameters { get; private set; } = [];
 
-        /// <summary>
-        /// История SQL-запросов, построенных ORM API.
-        /// </summary>
         public static IReadOnlyList<string> SqlHistory
         {
             get
@@ -640,19 +810,11 @@ namespace Titanic.Test.Entity
 
         private static readonly List<string> _sqlHistory = [];
 
-        /// <summary>
-        /// Создать mock provider через reflection-фабрику DbManager.
-        /// </summary>
-        /// <param name="connectionString"> Строка подключения. </param>
-        /// <param name="engine"> SQL engine. </param>
         public EntityApiMockDbProvider(string connectionString, BaseDbEngine engine)
             : base(connectionString, engine)
         {
         }
 
-        /// <summary>
-        /// Сбросить состояние mock provider перед тестом.
-        /// </summary>
         public static void ResetState()
         {
             lock (_syncRoot)
@@ -663,14 +825,12 @@ namespace Titanic.Test.Entity
             }
         }
 
-        /// <inheritdoc />
         public override int Execute(IQuery query)
         {
             Capture(query);
             return 1;
         }
 
-        /// <inheritdoc />
         public override T ExecuteScalar<T>(IQuery query)
         {
             Capture(query);
@@ -678,7 +838,6 @@ namespace Titanic.Test.Entity
             return (T)value;
         }
 
-        /// <inheritdoc />
         public override List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
         {
             ArgumentNullException.ThrowIfNull(mapRow);
@@ -694,13 +853,11 @@ namespace Titanic.Test.Entity
             return rows;
         }
 
-        /// <inheritdoc />
         protected override DbConnection CreateConnection()
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database connections.");
         }
 
-        /// <inheritdoc />
         protected override DbParameter CreateParameter(QueryParameter parameter)
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database parameters.");
@@ -741,4 +898,7 @@ namespace Titanic.Test.Entity
         }
     }
 }
+
+
+
 

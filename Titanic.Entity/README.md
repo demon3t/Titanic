@@ -1,16 +1,16 @@
-﻿# Titanic.Entity
+# Titanic.Entity
 
-## Роль в архитектуре
+## Роль
 
-`Titanic.Entity` — ORM-слой поверх `Titanic.Db`. Он связывает SQL builder, metadata-модель сущностей и HTTP API для UI.
+`Titanic.Entity` — ORM-слой поверх `Titanic.Db`. Он связывает Entity-модели, metadata, ORM-пути, локализацию, runtime-менеджеры и HTTP API.
 
-Слой занимает верхнюю позицию среди базовых пакетов решения:
+Порядок слоёв:
 
 ```text
 Titanic.Common -> Titanic.Db -> Titanic.Entity
 ```
 
-Именно здесь находятся Entity-модели, структура колонок, ORM-пути, локализация, `EntityManager`, `EntitySchemaQuery` и автоматическая публикация HTTP endpoint-ов.
+Если нужен только SQL builder без metadata и HTTP API, используйте [Titanic.Db](../Titanic.Db/README.md).
 
 ## Когда использовать
 
@@ -20,50 +20,40 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - строить запросы по ORM-путям вместо ручного SQL;
 - работать с `DisplayValue` и локализуемыми колонками;
 - сохранять и удалять сущности через единый ORM-слой;
-- поднимать HTTP API для frontend или внешних клиентов.
+- публиковать HTTP API для frontend или внешних клиентов.
 
-Если нужен только SQL builder, без metadata и API, достаточно [Titanic.Db](../Titanic.Db/README.md).
-
-## Основные части пакета
+## Основные части
 
 ### Менеджеры
 
-- `EntityManager` — статическая точка входа для регистрации менеджеров, получения менеджера по типу, создания `EntitySchemaQuery`, `EntitySelectBuilder` и `Entity`.
-- `BaseEntityManager` — базовая обёртка над `BaseDbProvider`; хранит провайдер, настройки API, runtime-опции и проверку схемы БД.
-- `EntityDbManager` — стандартная реализация `BaseEntityManager`.
+- `EntityManager` — основная точка регистрации и получения менеджеров.
+- `BaseEntityManager` — обёртка над `BaseDbProvider`, содержащая провайдер, настройки API и runtime-опции.
+- `EntityDbManager` — стандартная реализация менеджера.
 
 ### ORM-запросы
 
 - `EntitySchemaQuery` — основная модель чтения сущностей.
 - `EntitySchemaQuery<TEntity>` — generic-обёртка.
-- `ESQ` и `ESQ<TEntity>` — alias-тип для совместимости.
-- `EntitySelectBuilder` — ORM SELECT builder по путям колонок.
-- `EntityQueryColumnCollection`, `EntityQueryColumn` — описание выбираемых колонок.
-- `EntityQueryFilterCollection`, `EntityQueryFilter` — описание фильтров.
-- `EntityWhereItem` — fluent-условия для `EntitySelectBuilder`.
+- `ESQ` и `ESQ<TEntity>` — alias-типы совместимости.
+- `EntitySelectBuilder` — построитель ORM SELECT по путям колонок.
+- `EntityQueryColumnCollection` и `EntityQueryColumn` — описание выбираемых колонок.
+- `EntityQueryFilterCollection` и `EntityQueryFilter` — описание фильтров.
+- `EntityWhereItem` — fluent API условий.
 
-### Сущности и значения колонок
+### Сущности и metadata
 
-- `Entity` — ORM-сущность, представляющая запись БД.
-- `ColumnValue` — базовый класс значения колонки с `Value` и `DisplayValue`.
-- `ScalarColumnValue` — значение обычной скалярной колонки.
-- `StringColumnValue` — значение строковой колонки.
-- `ReferenceColumnValue` — значение ссылочной колонки с `DisplayValue` связанной записи.
-
-### Metadata и атрибуты
-
+- `Entity` — ORM-сущность, представляющая строку БД.
 - `Structure` — сканирует сборки и хранит metadata Entity-моделей.
 - `EntityStructure` — описание таблицы.
 - `ColumnStructure` — описание колонки.
 - `EntitySchemaValidator` — проверка схемы БД при инициализации менеджера.
-- `EntityAttribute`, `PrimaryColumnAttribute`, `DisplayColumnAttribute`, `ColumnAttribute`, `StringColumnAttribute`, `ReferenceColumnAttribute`, `DisableLocalizationAttribute` — атрибуты описания сущностей.
 
 ### HTTP API
 
-- `ServiceCollectionExtensions` — регистрация Entity ORM сервисов в DI.
-- `WebApplicationExtensions` — регистрация и публикация endpoint-ов.
+- `ServiceCollectionExtensions` — регистрация сервисов Entity ORM в DI.
+- `WebApplicationExtensions` — публикация HTTP endpoint-ов.
 - `EntityManagerConfig`, `EntityManagerSettings`, `EntityManagerApiSettings`, `EntityManagerOptions` — конфигурация менеджеров и API.
-- `EntityApiRequest`, `EntityApiBatchRequest` — модели HTTP-запросов.
+- `EntityApiRequest` и `EntityApiBatchRequest` — модели HTTP-запросов.
 - `EntityApiOperationType` — операции `Select`, `Save`, `Delete`.
 - `EntityApiBatchExecutionMode` — режимы `Sequential` и `Parallel`.
 
@@ -87,7 +77,7 @@ public sealed class DepartmentEntity
 }
 ```
 
-## Пример чтения через EntitySchemaQuery
+## Пример запроса
 
 ```csharp
 var rows = EntityManager
@@ -133,7 +123,8 @@ app.Run();
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
-          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+          "AuthorizationProviderType": "MyApp.Security.EntityApiUserConnectionProvider, MyApp",
+          "StructureAuthorizationProviderType": "MyApp.Security.EntityStructureUserConnectionProvider, MyApp",
           "DefaultBatchExecutionMode": "Sequential"
         },
         "ValidateDatabaseSchemaOnCompile": true,
@@ -150,24 +141,48 @@ app.Run();
 
 - `DbProviderName` — имя провайдера, зарегистрированного в `Titanic.Db`.
 - `ManagerType` — тип пользовательского менеджера поверх `BaseEntityManager`.
-- `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
-- `Api.Path` — базовый route для HTTP API конкретного менеджера.
-- `Api.AuthorizationProviderType` — тип провайдера, который авторизует запрос и возвращает `UserConnection`.
-- `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
+- `EntityModelNamespaces` — namespace-patterns для manager-specific структуры.
+- `Api.Path` — базовый route менеджерского HTTP API.
+- `Api.AuthorizationProviderType` — тип пользовательского провайдера, который ищет `UserConnection` по токену для обычных endpoint-ов.
+- `Api.StructureAuthorizationProviderType` — тип отдельного пользовательского провайдера для endpoint-а структуры.
+- `Options.MaxReadRowCount` — максимальное количество строк в одном read-запросе.
 
-## Что важно знать про слой
+## Авторизация Entity API
+
+Поток запроса:
+
+```text
+Клиент
+  -> X-Entity-Key
+  -> Пользовательское backend-приложение
+  -> IUserConnectionTokenProvider
+  -> UserConnection
+  -> Titanic.Entity
+  -> Titanic.Db
+```
+
+Разделение ответственности:
+
+- `Titanic.Common` задаёт только базовый контракт `UserConnection` и интерфейс `IUserConnectionTokenProvider`.
+- `Titanic.Entity` читает токен из `Api.AuthorizationHeaderName`, вызывает пользовательский provider и работает только с возвращённым `UserConnection`.
+- пользовательское приложение само решает, где искать токен, как валидировать пользователя и как заполнять расширенный пользовательский контекст;
+- если приложению нужны дополнительные поля, оно наследует свой тип от `UserConnection`;
+- если provider не вернул пользователя, Entity API отвечает `403 Forbidden`;
+- endpoint структуры использует отдельный provider `Api.StructureAuthorizationProviderType`, поэтому решение о доступе к структуре полностью остаётся на стороне пользовательского приложения.
+
+## Важные особенности
 
 - имя таблицы в `[Entity("...")]` задаётся без схемы;
-- локализуемые колонки читаются через таблицу `sys_[table_name]_lcz`;
-- менеджер получает свою структуру сущностей через `EntityModelNamespaces`;
-- `UserConnection` обязателен для чтения, сохранения, удаления и построения локализации;
-- HTTP API — это оболочка над Entity ORM, а не отдельная прикладная бизнес-логика.
+- локализуемые колонки читаются через `sys_[table_name]_lcz`;
+- каждый менеджер строит свою собственную структуру через `EntityModelNamespaces`;
+- `UserConnection` обязателен для чтения, сохранения, удаления и локализации;
+- HTTP API — это thin layer над Entity ORM, а не отдельная бизнес-логика.
 
-## Куда идти дальше
+## Куда смотреть дальше
 
-- Если нужно понять общий поток данных и место слоя в решении, откройте [../ARCHITECTURE.md](../ARCHITECTURE.md).
-- Если нужен JSON-контракт API для frontend, откройте [ENTITY_API.md](ENTITY_API.md).
-- Если нужно разобраться в SQL builder, вернитесь к [../Titanic.Db/README.md](../Titanic.Db/README.md).
+- обзор архитектуры: [../ARCHITECTURE.md](../ARCHITECTURE.md)
+- JSON-контракт API: [ENTITY_API.md](ENTITY_API.md)
+- SQL builder: [../Titanic.Db/README.md](../Titanic.Db/README.md)
 
 ## Связанные документы
 
