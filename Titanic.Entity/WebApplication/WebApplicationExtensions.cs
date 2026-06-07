@@ -408,14 +408,18 @@ namespace Titanic.Entity.WebApplication
                     $"Header '{manager.Api.AuthorizationHeaderName}' is required."));
             }
 
+            if (string.IsNullOrWhiteSpace(manager.Api.StructureAuthorizationProviderType))
+            {
+                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail(
+                    $"Structure authorization provider is not configured for manager '{manager.Name}'."));
+            }
+
             var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
             var provider = factory.CreateProvider(
                 context.RequestServices,
-                string.IsNullOrWhiteSpace(manager.Api.StructureAuthorizationProviderType)
-                    ? manager.Api.AuthorizationProviderType
-                    : manager.Api.StructureAuthorizationProviderType,
+                manager.Api.StructureAuthorizationProviderType,
                 $"Entity API structure authorization provider for manager '{manager.Name}'");
-            return ResolveStructureAuthorizationAsync(provider, token.ToString(), context);
+            return ResolveAuthorizationAsync(provider, token.ToString(), context);
         }
 
         private static async ValueTask<EntityApiAuthorizationResult> ResolveAuthorizationAsync(
@@ -427,22 +431,6 @@ namespace Titanic.Entity.WebApplication
             return userConnection == null
                 ? EntityApiAuthorizationResult.Fail("Forbidden.")
                 : EntityApiAuthorizationResult.Success(userConnection);
-        }
-
-        private static async ValueTask<EntityApiAuthorizationResult> ResolveStructureAuthorizationAsync(
-            IUserConnectionTokenProvider provider,
-            string token,
-            HttpContext context)
-        {
-            var userConnection = await provider.FindByTokenAsync(token, context);
-            if (userConnection == null)
-            {
-                return EntityApiAuthorizationResult.Fail("Forbidden.");
-            }
-
-            return userConnection.Roles.Contains("Admin")
-                ? EntityApiAuthorizationResult.Success(userConnection)
-                : EntityApiAuthorizationResult.Fail("Administrator permissions are required.");
         }
 
         #endregion Authorization

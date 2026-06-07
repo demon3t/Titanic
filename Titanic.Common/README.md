@@ -2,7 +2,7 @@
 
 ## Роль в архитектуре
 
-`Titanic.Common` — нижний инфраструктурный слой решения. Он задаёт общий пользовательский контекст и web-механику, которыми пользуются `Titanic.Db` и `Titanic.Entity`.
+`Titanic.Common` — нижний инфраструктурный слой решения. Он задаёт базовый пользовательский контекст и web-механику, которыми пользуются `Titanic.Db` и `Titanic.Entity`.
 
 Пакет не знает о SQL builder и Entity ORM, поэтому может использоваться как самостоятельная база для авторизации, `UserConnection` и ASP.NET Core-инфраструктуры.
 
@@ -19,7 +19,7 @@
 
 ### Пользовательский контекст
 
-- `UserConnection` — контракт пользовательского контекста, содержащий идентификаторы, роли, культуру и сопутствующие системные данные.
+- `UserConnection` — базовый контракт пользовательского контекста, который пользовательское приложение может расширить своими полями.
 - `UserCulture` — культура пользователя, содержащая `Id` и `Name`.
 
 ### Авторизация
@@ -70,10 +70,6 @@ var userConnection = new MyUserConnection
     UserId = Guid.NewGuid(),
     ContactId = Guid.NewGuid(),
     TimeZoneId = "Europe/Moscow",
-    Roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "Admin"
-    },
     Culture = new UserCulture
     {
         Id = Guid.NewGuid(),

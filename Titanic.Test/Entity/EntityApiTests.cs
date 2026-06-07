@@ -31,7 +31,7 @@ namespace Titanic.Test.Entity
         private const string ApiPath = "/entity-api/test";
         private const string HiddenApiPath = "/entity-api/hidden";
         private const string AuthHeader = "X-Test-Entity-Auth";
-        private const string RolesHeader = "X-Test-Entity-Roles";
+        private const string StructureAuthToken = "allow-structure";
 
         [Fact]
         public async Task EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically()
@@ -496,8 +496,8 @@ namespace Titanic.Test.Entity
                     CreateHiddenManagerSettings()
                 ]);
 
-            var rootClient = CreateAuthorizedClient(app, isAdmin: true);
-            var hiddenClient = CreateAuthorizedClient(app, isAdmin: true);
+            var rootClient = CreateStructureAuthorizedClient(app);
+            var hiddenClient = CreateStructureAuthorizedClient(app);
 
             var rootResponse = await rootClient.GetAsync($"{ApiPath}/structure");
             var hiddenResponse = await hiddenClient.GetAsync($"{HiddenApiPath}/structure");
@@ -639,15 +639,17 @@ namespace Titanic.Test.Entity
             };
         }
 
-        private static HttpClient CreateAuthorizedClient(WebApplication app, bool isAdmin = false)
+        private static HttpClient CreateAuthorizedClient(WebApplication app)
         {
             var client = app.GetTestClient();
             client.DefaultRequestHeaders.Add(AuthHeader, "allow");
-            if (isAdmin)
-            {
-                client.DefaultRequestHeaders.Add(RolesHeader, "Admin");
-            }
+            return client;
+        }
 
+        private static HttpClient CreateStructureAuthorizedClient(WebApplication app)
+        {
+            var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add(AuthHeader, StructureAuthToken);
             return client;
         }
 
@@ -710,6 +712,7 @@ namespace Titanic.Test.Entity
                     Path = ApiPath,
                     AuthorizationHeaderName = AuthHeader,
                     AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
+                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
                     DefaultBatchExecutionMode = defaultBatchExecutionMode
                 },
                 Options = new EntityManagerOptions
@@ -733,6 +736,7 @@ namespace Titanic.Test.Entity
                     Path = HiddenApiPath,
                     AuthorizationHeaderName = AuthHeader,
                     AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
+                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
                     DefaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential
                 },
                 Options = new EntityManagerOptions
@@ -755,7 +759,6 @@ namespace Titanic.Test.Entity
             return ValueTask.FromResult<UserConnection?>(new UserConnection
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                Roles = ResolveRoles(context),
                 Culture = new UserCulture
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -763,19 +766,26 @@ namespace Titanic.Test.Entity
                 }
             });
         }
+    }
 
-        private static HashSet<string> ResolveRoles(HttpContext context)
+    public sealed class MockEntityApiStructureAuthorizationProvider : IUserConnectionTokenProvider
+    {
+        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
         {
-            if (!context.Request.Headers.TryGetValue("X-Test-Entity-Roles", out var headerValue))
+            if (token != "allow-structure")
             {
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                return ValueTask.FromResult<UserConnection?>(null);
             }
 
-            return headerValue
-                .ToString()
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return ValueTask.FromResult<UserConnection?>(new UserConnection
+            {
+                UserId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                Culture = new UserCulture
+                {
+                    Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                    Name = "Test"
+                }
+            });
         }
     }
 

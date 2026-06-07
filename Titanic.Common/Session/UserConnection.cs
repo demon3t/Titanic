@@ -1,11 +1,18 @@
 namespace Titanic.Common.Session
 {
+    /// <summary>
+    /// Базовый контракт пользовательского контекста.
+    /// </summary>
     public class UserConnection
     {
+        /// <summary>
+        /// Идентификатор пользователя.
+        /// </summary>
         public Guid UserId { get; set; }
 
-        public HashSet<string> Roles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
+        /// <summary>
+        /// Культура пользователя.
+        /// </summary>
         public UserCulture Culture { get; set; } = new();
     }
 }

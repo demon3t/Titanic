@@ -6,10 +6,20 @@ using Titanic.Entity.WebApplication.Configuration;
 
 namespace Titanic.Entity
 {
+    /// <summary>
+    /// Методы регистрации Entity ORM в DI-контейнере.
+    /// </summary>
     public static class ServiceCollectionExtensions
     {
         #region Registration
 
+        /// <summary>
+        /// Инициализировать Entity ORM из конфигурации приложения.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
+        /// <param name="configuration"> Конфигурация приложения. </param>
+        /// <param name="configSectionName"> Имя секции конфигурации. </param>
+        /// <returns> Коллекция сервисов для цепочки вызовов. </returns>
         public static IServiceCollection AddTitanicEntity(
             this IServiceCollection services,
             IConfiguration configuration,
@@ -29,6 +39,12 @@ namespace Titanic.Entity
             return services;
         }
 
+        /// <summary>
+        /// Инициализировать Entity ORM через делегат настройки.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
+        /// <param name="configure"> Делегат настройки конфигурации. </param>
+        /// <returns> Коллекция сервисов для цепочки вызовов. </returns>
         public static IServiceCollection AddTitanicEntity(
             this IServiceCollection services,
             Action<EntityManagerConfig> configure)
@@ -51,6 +67,13 @@ namespace Titanic.Entity
             return services;
         }
 
+        /// <summary>
+        /// Инициализировать Entity ORM и зарегистрировать базовые сервисы Entity API.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
+        /// <param name="configuration"> Конфигурация приложения. </param>
+        /// <param name="configSectionName"> Имя секции конфигурации. </param>
+        /// <returns> Коллекция сервисов для цепочки вызовов. </returns>
         public static IServiceCollection AddTitanicEntityApi(
             this IServiceCollection services,
             IConfiguration configuration,
@@ -59,6 +82,12 @@ namespace Titanic.Entity
             return services.AddTitanicEntity(configuration, configSectionName);
         }
 
+        /// <summary>
+        /// Инициализировать Entity ORM и зарегистрировать базовые сервисы Entity API через делегат настройки.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
+        /// <param name="configure"> Делегат настройки конфигурации. </param>
+        /// <returns> Коллекция сервисов для цепочки вызовов. </returns>
         public static IServiceCollection AddTitanicEntityApi(
             this IServiceCollection services,
             Action<EntityManagerConfig> configure)
@@ -70,11 +99,19 @@ namespace Titanic.Entity
 
         #region Private Methods
 
+        /// <summary>
+        /// Зарегистрировать служебные сервисы Entity API.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
             services.AddSingleton<EntityApiAuthorizationProviderFactory>();
         }
 
+        /// <summary>
+        /// Зарегистрировать текущие менеджеры Entity ORM в DI.
+        /// </summary>
+        /// <param name="services"> Коллекция сервисов. </param>
         private static void RegisterManagersInServices(IServiceCollection services)
         {
             foreach (var manager in EntityManager.GetManagers())

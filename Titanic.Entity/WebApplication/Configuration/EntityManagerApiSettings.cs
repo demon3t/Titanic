@@ -35,7 +35,8 @@ namespace Titanic.Entity.WebApplication.Configuration
         /// Полное имя типа провайдера поиска <see cref="Common.Session.UserConnection" />
         /// для endpoint-а структуры менеджера.
         /// Тип должен реализовывать <see cref="IUserConnectionTokenProvider" />.
-        /// Если не задан, используется <see cref="AuthorizationProviderType" />.
+        /// Провайдер реализуется на стороне пользовательского приложения и сам решает,
+        /// кто имеет доступ к структуре менеджера.
         /// </summary>
         public string? StructureAuthorizationProviderType { get; set; }
 

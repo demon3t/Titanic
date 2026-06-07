@@ -14,18 +14,7 @@ namespace Titanic.Test.Common
             var connection = new UserConnection();
 
             Assert.NotNull(connection.Culture);
-            Assert.Empty(connection.Roles);
             Assert.Equal(string.Empty, connection.Culture.Name);
-        }
-
-        [Fact]
-        public void UserConnection_Roles_ShouldStoreRoleNames()
-        {
-            var connection = new UserConnection();
-
-            connection.Roles.Add("Admin");
-
-            Assert.Contains("Admin", connection.Roles);
         }
 
         [Fact]
