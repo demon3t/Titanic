@@ -6,12 +6,14 @@ internal static class OrmTestUserConnection
 {
     public static UserConnection Create(Guid? cultureId = null)
     {
+        var userId = Guid.NewGuid();
+
         return new UserConnection
         {
-            UserId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            UserId = userId,
             Culture = new UserCulture
             {
-                Id = cultureId ?? Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                Id = cultureId ?? Guid.NewGuid(),
                 Name = "Test"
             }
         };

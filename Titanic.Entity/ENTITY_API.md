@@ -1,4 +1,4 @@
-﻿# Entity ORM HTTP API
+# Entity ORM HTTP API
 
 Документ описывает HTTP-контракт Entity ORM из проекта `Titanic.Entity`. Его цель - дать фронтенду или другому AI достаточно информации, чтобы написать UI-компоненты, клиентский SDK и сценарии взаимодействия с Entity ORM через HTTP.
 
@@ -33,7 +33,7 @@ Endpoint-ы поднимаются автоматически для каждо�
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
-          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+          "AuthorizationProviderType": "MyApp.Security.EntityApiUserConnectionProvider, MyApp",
           "DefaultBatchExecutionMode": "Sequential"
         },
         "ValidateDatabaseSchemaOnCompile": true,
@@ -78,9 +78,9 @@ Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/
 
 ## Авторизация и UserConnection
 
-Каждый запрос проходит через `IEntityApiAuthorizationProvider`. Провайдер авторизации должен вернуть `UserConnection`; дальше все операции Entity ORM выполняются только с этим `UserConnection`.
+Каждый запрос передает токен из заголовка `Api.AuthorizationHeaderName` в пользовательский provider, реализующий `Titanic.Common.Services.Authorization.Interfaces.IUserConnectionTokenProvider`. Provider должен вернуть `UserConnection`; дальше все операции Entity ORM выполняются только с этим `UserConnection`.
 
-Минимальный тестовый provider `HeaderEntityApiAuthorizationProvider` читает ключ из заголовка, имя которого задано в `Api.AuthorizationHeaderName`.
+`Titanic.Entity` не содержит встроенной production-реализации поиска пользователя. Где искать токен, как проверять его и как заполнять `UserConnection`, решает пользовательское приложение.
 
 Пример HTTP-заголовков:
 
@@ -88,10 +88,9 @@ Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/
 Content-Type: application/json
 Accept: application/json
 X-Entity-Key: postman-local-user
-X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 ```
 
-`X-Entity-Culture` поддерживается стандартным header-provider как отладочный способ передать культуру. В production лучше реализовать собственный `IEntityApiAuthorizationProvider`, который сам проверяет пользователя и заполняет `UserConnection.Culture`.
+Если provider не нашел пользователя по токену, Entity API возвращает `403 Forbidden`.
 
 ## Числовые enum-значения
 
@@ -670,7 +669,6 @@ departments -> sys_departments_lcz
 Культура берется из `UserConnection`, который создает authorization provider. Для стандартного header-provider можно передать:
 
 ```http
-X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 ```
 
 Если локализованное значение не найдено или пустое, backend возвращает значение основной таблицы.
@@ -1031,6 +1029,9 @@ export class EntityOrmClient {
 - `In` и `NotIn` рассчитаны на backend subquery и не являются удобным UI-оператором в текущей JSON-модели.
 - `Save` и `Delete` работают с корневой таблицей; связанные таблицы, прочитанные через JOIN, не сохраняются автоматически.
 - Локализация настраивается в backend metadata и `UserConnection`, а не в JSON-запросе.
+
+
+
 
 
 

@@ -67,7 +67,7 @@ namespace Titanic.Test.Entity
                             AutoRegisterEndpoint = true,
                             Path = "/api/entity/test",
                             AuthorizationHeaderName = "X-Test-Entity-Key",
-                            AuthorizationProviderType = "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity"
+                            AuthorizationProviderType = "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test"
                         },
                         Options = new EntityManagerOptions
                         {
@@ -87,7 +87,7 @@ namespace Titanic.Test.Entity
             Assert.Equal("/api/entity/test", manager.Api.Path);
             Assert.Equal("X-Test-Entity-Key", manager.Api.AuthorizationHeaderName);
             Assert.Equal(
-                "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
+                "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test",
                 manager.Api.AuthorizationProviderType);
             Assert.Equal(25, manager.Options.MaxReadRowCount);
             Assert.False(manager.ValidateDatabaseSchemaOnCompile);
@@ -132,6 +132,58 @@ namespace Titanic.Test.Entity
             var build = hiddenQuery.Build();
 
             Assert.Contains("\"hidden_scoped_entities\"", build.Sql, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void EntitySelectBuilder_PathToEntityOutsideManagerScope_ShouldThrow()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "RootScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(EntityDbManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity"]
+                    }
+                ]
+            });
+
+            var manager = EntityManager.GetManager<EntityDbManager>();
+            var builder = manager.Select(typeof(OrmEmployeeHiddenLinkEntity), OrmTestUserConnection.Create());
+
+            Assert.Throws<NotExistTableException>(() => builder.AddColumn("HiddenId.Name"));
+            Assert.Throws<NotExistTableException>(() => builder.Where("HiddenId.Name"));
+        }
+
+        [Fact]
+        public void HiddenScopeManager_ShouldNotResolveRootEntityType()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "HiddenScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"]
+                    }
+                ]
+            });
+
+            var manager = EntityManager.GetManager<HiddenScopeEntityManager>();
+
+            Assert.Throws<NotExistTableException>(
+                () => manager.Query(typeof(OrmEmployeeEntity), OrmTestUserConnection.Create()));
+            Assert.Throws<NotExistTableException>(
+                () => new ESQJsonModel
+                {
+                    EntityTypeName = nameof(OrmEmployeeEntity)
+                }.ToESQ(manager, OrmTestUserConnection.Create()));
         }
 
         [Fact]
@@ -1070,6 +1122,7 @@ namespace Titanic.Test.Entity
     {
     }
 }
+
 
 
 

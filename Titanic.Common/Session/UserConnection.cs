@@ -1,9 +1,9 @@
-﻿namespace Titanic.Common.Session
+namespace Titanic.Common.Session
 {
     /// <summary>
-    /// Контекст подключения.
+    /// Базовый контракт пользовательского контекста.
     /// </summary>
-    public sealed class UserConnection
+    public class UserConnection
     {
         /// <summary>
         /// Идентификатор пользователя.
