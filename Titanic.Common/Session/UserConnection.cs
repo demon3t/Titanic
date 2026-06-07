@@ -6,19 +6,14 @@
     public sealed class UserConnection
     {
         /// <summary>
-        /// Имя роли администратора.
-        /// </summary>
-        public const string AdministratorRole = "Admin";
-
-        /// <summary>
         /// Идентификатор пользователя.
         /// </summary>
         public Guid UserId { get; set; }
 
         /// <summary>
-        /// Контакт пользователя.
+        /// Идентификатор контакта пользователя.
         /// </summary>
-        public string? Contact { get; set; }
+        public Guid? ContactId { get; set; }
 
         /// <summary>
         /// Идентификатор таймзоны пользователя.
@@ -34,7 +29,7 @@
         /// Признак администратора.
         /// Администратор может вызывать служебные endpoint-ы Entity ORM.
         /// </summary>
-        public bool IsAdmin => Roles.Contains(AdministratorRole);
+        public bool IsAdmin => Roles.Contains(UserRoles.Administrator);
 
         /// <summary>
         /// Культура пользователя.

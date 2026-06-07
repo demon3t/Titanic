@@ -26,10 +26,10 @@ namespace Titanic.Test.Common
 
             Assert.False(connection.IsAdmin);
 
-            connection.Roles.Add(UserConnection.AdministratorRole);
+            connection.Roles.Add(UserRoles.Administrator);
 
             Assert.True(connection.IsAdmin);
-            Assert.True(connection.HasRole(UserConnection.AdministratorRole));
+            Assert.True(connection.HasRole(UserRoles.Administrator));
         }
 
         [Fact]
@@ -75,7 +75,7 @@ namespace Titanic.Test.Common
             return new UserConnection
             {
                 UserId = Guid.NewGuid(),
-                Contact = "test@example.com",
+                ContactId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
                 TimeZoneId = "Europe/Moscow",
                 Culture = new UserCulture
                 {

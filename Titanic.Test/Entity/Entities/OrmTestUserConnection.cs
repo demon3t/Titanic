@@ -7,7 +7,7 @@ internal static class OrmTestUserConnection
     public static UserConnection Create(Guid? cultureId = null, bool isAdmin = false)
     {
         var roles = isAdmin
-            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { UserConnection.AdministratorRole }
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { UserRoles.Administrator }
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         return new UserConnection
