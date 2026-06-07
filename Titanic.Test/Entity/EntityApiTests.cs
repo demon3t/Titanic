@@ -202,8 +202,6 @@ namespace Titanic.Test.Entity
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var root = json.RootElement;
 
-            Assert.Equal("EntityApiMock", root.GetProperty("managerName").GetString());
-
             var entities = root.GetProperty("entities").EnumerateArray().ToList();
             Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "employees");
             Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "departments");

@@ -85,7 +85,6 @@ Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/
 
 ```json
 {
-  "managerName": "posgreTest",
   "entities": [
     {
       "tableName": "employees",

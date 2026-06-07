@@ -489,7 +489,6 @@ namespace Titanic.Entity.WebApplication
         {
             return new EntityApiManagerStructureResponse
             {
-                ManagerName = manager.Name,
                 Entities = manager.StructureScope.EntitiesStructure
                     .Select(entity => new EntityApiStructureEntityResponse
                     {
