@@ -64,6 +64,7 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - `WebApplicationExtensions` — регистрация и публикация endpoint-ов.
 - `EntityManagerConfig`, `EntityManagerSettings`, `EntityManagerApiSettings`, `EntityManagerOptions` — конфигурация менеджеров и API.
 - `EntityApiRequest`, `EntityApiBatchRequest` — модели HTTP-запросов.
+- `EntityApiManagerStructureResponse` — модель ответа endpoint-а структуры менеджера.
 - `EntityApiOperationType` — операции `Select`, `Save`, `Delete`.
 - `EntityApiBatchExecutionMode` — режимы `Sequential` и `Parallel`.
 
@@ -115,6 +116,12 @@ var app = builder.Build();
 app.MapTitanicEntityApi();
 app.Run();
 ```
+
+После `MapTitanicEntityApi()` для каждого менеджера с `Api.AutoRegisterEndpoint = true` публикуются endpoint-ы:
+
+- `GET {Api.Path}/structure`
+- `POST {Api.Path}`
+- `POST {Api.Path}/batch`
 
 ## Пример конфигурации
 

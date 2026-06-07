@@ -30,6 +30,7 @@ namespace Titanic.Test.Entity
     public sealed class EntityApiTests
     {
         private const string ApiPath = "/entity-api/test";
+        private const string StructurePath = $"{ApiPath}/structure";
         private const string AuthHeader = "X-Test-Entity-Auth";
 
         [Fact]
@@ -40,9 +41,11 @@ namespace Titanic.Test.Entity
 
             var operationResponse = await client.PostAsJsonAsync(ApiPath, CreateSelectOperationRequest());
             var batchResponse = await client.PostAsJsonAsync($"{ApiPath}/batch", CreateBatchRequest());
+            var structureResponse = await client.GetAsync(StructurePath);
 
             Assert.Equal(HttpStatusCode.Forbidden, operationResponse.StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, batchResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, structureResponse.StatusCode);
         }
 
         [Fact]
@@ -169,9 +172,71 @@ namespace Titanic.Test.Entity
 
             var operationResponse = await client.PostAsJsonAsync(ApiPath, CreateSelectOperationRequest());
             var batchResponse = await client.PostAsJsonAsync($"{ApiPath}/batch", CreateBatchRequest());
+            var structureResponse = await client.GetAsync(StructurePath);
 
             Assert.Equal(HttpStatusCode.NotFound, operationResponse.StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, batchResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, structureResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task EntityApi_Structure_ShouldReturnForbiddenWithoutMockAuthorization()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = app.GetTestClient();
+
+            var response = await client.GetAsync(StructurePath);
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task EntityApi_Structure_ShouldReturnManagerMetadataWithMockAuthorization()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.GetAsync(StructurePath);
+
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = json.RootElement;
+
+            Assert.Equal("EntityApiMock", root.GetProperty("managerName").GetString());
+
+            var entities = root.GetProperty("entities").EnumerateArray().ToList();
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "employees");
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "departments");
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "addresses");
+
+            var employee = entities.Single(x =>
+                x.GetProperty("entityTypeName").GetString() == typeof(OrmEmployeeEntity).FullName);
+            Assert.Equal("employees", employee.GetProperty("tableName").GetString());
+
+            var columns = employee.GetProperty("columns").EnumerateArray().ToList();
+            Assert.Contains(columns, x => x.GetProperty("propertyName").GetString() == "Name");
+            Assert.Contains(columns, x => x.GetProperty("propertyName").GetString() == "Email");
+
+            var departmentId = columns.Single(x => x.GetProperty("propertyName").GetString() == "DepartmentId");
+            Assert.True(departmentId.GetProperty("isReference").GetBoolean());
+            Assert.Equal("departments", departmentId.GetProperty("referenceTableName").GetString());
+        }
+
+        [Fact]
+        public async Task EntityApi_Structure_ShouldRespectManagerScope()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.GetAsync(StructurePath);
+
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var entities = json.RootElement.GetProperty("entities").EnumerateArray().ToList();
+
+            Assert.DoesNotContain(entities, x => x.GetProperty("tableName").GetString() == "hidden_scoped_entities");
+            Assert.DoesNotContain(entities, x =>
+                x.GetProperty("entityTypeName").GetString() == typeof(Hidden.OrmHiddenScopedEntity).FullName);
         }
 
         [Fact]
@@ -558,6 +623,7 @@ namespace Titanic.Test.Entity
                     {
                         Name = "EntityApiMock",
                         DbProviderName = "EntityApiMock",
+                        EntityModelNamespaces = ["Titanic.Test.Entity"],
                         Api = new EntityManagerApiSettings
                         {
                             AutoRegisterEndpoint = autoRegisterApiEndpoint,
