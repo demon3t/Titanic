@@ -8,6 +8,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function ConvertTo-ProjectXml {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$XmlText
+    )
+
+    $normalizedXmlText = $XmlText.TrimStart([char]0xFEFF, [char]0x200B, [char]0x2060)
+    $projectXml = New-Object System.Xml.XmlDocument
+    $projectXml.LoadXml($normalizedXmlText)
+    return $projectXml
+}
+
 function Get-ProjectVersion {
     param(
         [Parameter(Mandatory = $true)]
@@ -17,14 +29,14 @@ function Get-ProjectVersion {
     )
 
     if ([string]::IsNullOrWhiteSpace($GitRef)) {
-        [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
+        $projectXml = ConvertTo-ProjectXml -XmlText (Get-Content -LiteralPath $ProjectPath -Raw)
     } else {
         $projectText = @(git show "${GitRef}:$ProjectPath" 2>$null) -join "`n"
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($projectText)) {
             return $null
         }
 
-        [xml]$projectXml = $projectText
+        $projectXml = ConvertTo-ProjectXml -XmlText $projectText
     }
 
     $propertyGroups = @($projectXml.Project.PropertyGroup)
