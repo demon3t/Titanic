@@ -34,10 +34,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 9.0.x
 
@@ -48,4 +48,26 @@ jobs:
         run: dotnet build Titanic.sln --configuration Release --no-restore --nologo
 
       - name: Run tests
-        run: dotnet test Titanic.Test/Titanic.Test.csproj --configuration Release --no-build --nologo
+        shell: pwsh
+        run: |
+          dotnet test Titanic.Test/Titanic.Test.csproj `
+            --configuration Release `
+            --no-build `
+            --nologo `
+            --results-directory "Titanic.Test/TestResults" `
+            --logger "trx;LogFileName=test-results.trx"
+
+          [xml]$trx = Get-Content "Titanic.Test/TestResults/test-results.trx"
+          $counters = $trx.TestRun.ResultSummary.Counters
+          $total = [int]$counters.total
+          $passed = [int]$counters.passed
+          $failed = [int]$counters.failed
+          $skipped = [int]$counters.notExecuted
+
+          Write-Host "Parsed test summary: Total=$total; Passed=$passed; Failed=$failed; Skipped=$skipped"
+
+          if ($skipped -gt 0) {
+            Write-Host "::warning::Test run contains skipped tests: $skipped"
+          } else {
+            Write-Host "No skipped tests detected."
+          }
