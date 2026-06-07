@@ -12,6 +12,7 @@
     <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>orm;entity;http-api;database;postgresql</PackageTags>
+    <NoWarn>$(NoWarn);NU5125</NoWarn>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeCommonOutputInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
