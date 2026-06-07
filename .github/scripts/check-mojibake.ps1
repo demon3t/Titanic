@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoRoot = (Get-Location).Path,
     [switch]$PathsOnly,
     [switch]$FirstMatchPerFile
@@ -6,18 +6,8 @@
 
 $patterns = @('*.cs', '*.md', '*.json', '*.ps1', '*.toml', '*.yml', '*.yaml')
 $replacementChar = [string][char]0xFFFD
-$cyrillicEr = [string][char]0x0420
-$cyrillicEs = [string][char]0x0421
-$latinEthUpper = [string][char]0x00D0
-$latinEnyeUpper = [string][char]0x00D1
-
-$escapedReplacement = [regex]::Escape($replacementChar)
-$escapedEr = [regex]::Escape($cyrillicEr)
-$escapedEs = [regex]::Escape($cyrillicEs)
-$escapedEth = [regex]::Escape($latinEthUpper)
-$escapedEnye = [regex]::Escape($latinEnyeUpper)
-$suspiciousPattern = "$escapedReplacement|$escapedEr[А-Яа-яЁё]$escapedEs[А-Яа-яЁё]|$escapedEth.|$escapedEnye."
-$regex = [regex]::new($suspiciousPattern)
+$replacementRegex = [regex]::new([regex]::Escape($replacementChar))
+$utf8Strict = New-Object System.Text.UTF8Encoding($false, $true)
 
 $separator = [IO.Path]::DirectorySeparatorChar
 $files = Get-ChildItem -Path $RepoRoot -Recurse -File -Include $patterns |
@@ -29,11 +19,27 @@ $files = Get-ChildItem -Path $RepoRoot -Recurse -File -Include $patterns |
     }
 
 $findings = foreach ($file in $files) {
+    $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+
+    try {
+        $content = $utf8Strict.GetString($bytes)
+    }
+    catch {
+        [PSCustomObject]@{
+            File = $file.FullName
+            Line = 1
+            Column = 1
+            Sample = 'Invalid UTF-8'
+            Text = 'File is not valid UTF-8.'
+        }
+        continue
+    }
+
     $lineNumber = 0
     $matchedInFile = $false
-    foreach ($line in Get-Content $file.FullName -ErrorAction SilentlyContinue) {
+    foreach ($line in ($content -split "`r?`n")) {
         $lineNumber++
-        $matches = $regex.Matches($line)
+        $matches = $replacementRegex.Matches($line)
         foreach ($match in $matches) {
             $matchedInFile = $true
             [PSCustomObject]@{
