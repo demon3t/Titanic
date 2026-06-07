@@ -1,4 +1,4 @@
-name: .NET CI
+﻿name: .NET CI
 
 on:
   push:
@@ -11,8 +11,23 @@ on:
       - 'release/*'
 
 jobs:
-  build-and-test:
+  preflight-validation:
+    name: Repository validation
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run repository pre-checks
+        shell: pwsh
+        run: |
+          ./.github/scripts/check-mojibake.ps1 -RepoRoot $PWD -FirstMatchPerFile
+
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    needs: preflight-validation
 
     services:
       postgres:
@@ -71,3 +86,4 @@ jobs:
           } else {
             Write-Host "No skipped tests detected."
           }
+
