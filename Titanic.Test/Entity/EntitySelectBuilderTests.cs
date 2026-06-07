@@ -135,6 +135,58 @@ namespace Titanic.Test.Entity
         }
 
         [Fact]
+        public void EntitySelectBuilder_PathToEntityOutsideManagerScope_ShouldThrow()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "RootScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(EntityDbManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity"]
+                    }
+                ]
+            });
+
+            var manager = EntityManager.GetManager<EntityDbManager>();
+            var builder = manager.Select(typeof(OrmEmployeeHiddenLinkEntity), OrmTestUserConnection.Create());
+
+            Assert.Throws<NotExistTableException>(() => builder.AddColumn("HiddenId.Name"));
+            Assert.Throws<NotExistTableException>(() => builder.Where("HiddenId.Name"));
+        }
+
+        [Fact]
+        public void HiddenScopeManager_ShouldNotResolveRootEntityType()
+        {
+            EntityManager.Initialize(new EntityManagerConfig
+            {
+                Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "HiddenScope",
+                        DbProviderName = "TestPostgres",
+                        ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
+                        EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"]
+                    }
+                ]
+            });
+
+            var manager = EntityManager.GetManager<HiddenScopeEntityManager>();
+
+            Assert.Throws<NotExistTableException>(
+                () => manager.Query(typeof(OrmEmployeeEntity), OrmTestUserConnection.Create()));
+            Assert.Throws<NotExistTableException>(
+                () => new ESQJsonModel
+                {
+                    EntityTypeName = nameof(OrmEmployeeEntity)
+                }.ToESQ(manager, OrmTestUserConnection.Create()));
+        }
+
+        [Fact]
         public void EntitySchemaQuery_MaxReadRowCount_ShouldLimitReturnedRows()
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(_provider, OrmTestUserConnection.Create());

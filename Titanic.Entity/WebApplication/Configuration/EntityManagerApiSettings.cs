@@ -31,6 +31,13 @@ namespace Titanic.Entity.WebApplication.Configuration
         public string? AuthorizationProviderType { get; set; }
 
         /// <summary>
+        /// Полное имя типа провайдера авторизации endpoint-а структуры менеджера.
+        /// Тип должен реализовывать <see cref="IEntityStructureAuthorizationProvider" />.
+        /// Если не задан, используется встроенная проверка администратора.
+        /// </summary>
+        public string? StructureAuthorizationProviderType { get; set; }
+
+        /// <summary>
         /// Режим обработки batch-запросов Entity API по умолчанию.
         /// </summary>
         public EntityApiBatchExecutionMode DefaultBatchExecutionMode { get; set; } =

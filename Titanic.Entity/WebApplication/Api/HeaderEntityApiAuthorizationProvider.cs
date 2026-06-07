@@ -13,6 +13,7 @@ namespace Titanic.Entity.WebApplication.Api
         #region Constants
 
         private const string CultureHeaderName = "X-Entity-Culture";
+        private const string AdminHeaderName = "X-Entity-IsAdmin";
 
         #endregion Constants
 
@@ -32,6 +33,7 @@ namespace Titanic.Entity.WebApplication.Api
             var userConnection = new UserConnection
             {
                 UserId = Guid.TryParse(headerValue, out var userId) ? userId : CreateDeterministicGuid(headerValue),
+                IsAdmin = ResolveIsAdmin(context),
                 Culture = ResolveCulture(context)
             };
 
@@ -70,6 +72,18 @@ namespace Titanic.Entity.WebApplication.Api
                 Id = cultureId,
                 Name = "Default"
             };
+        }
+
+        /// <summary>
+        /// Получить признак администратора из заголовков запроса.
+        /// </summary>
+        /// <param name="context"> HTTP-контекст. </param>
+        /// <returns> <c>true</c>, если запрос пришёл от администратора. </returns>
+        private static bool ResolveIsAdmin(HttpContext context)
+        {
+            return context.Request.Headers.TryGetValue(AdminHeaderName, out var headerValue)
+                && bool.TryParse(headerValue.ToString(), out var isAdmin)
+                && isAdmin;
         }
 
         #endregion Private Methods

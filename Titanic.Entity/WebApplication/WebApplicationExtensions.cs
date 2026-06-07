@@ -168,7 +168,9 @@ namespace Titanic.Entity.WebApplication
         /// <param name="services"> Коллекция сервисов. </param>
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
+            services.AddSingleton<EntityApiAuthorizationProviderFactory>();
             services.AddSingleton<HeaderEntityApiAuthorizationProvider>();
+            services.AddSingleton<AdminEntityStructureAuthorizationProvider>();
         }
 
         /// <summary>
@@ -228,6 +230,23 @@ namespace Titanic.Entity.WebApplication
                     ExecutionMode = executionMode,
                     Results = results
                 });
+            });
+
+            app.MapGet($"{basePath}/structure", async Task<IResult> (HttpContext context) =>
+            {
+                var authorization = await AuthorizeStructureAsync(context, manager);
+                if (!authorization.IsAuthorized || authorization.UserConnection == null)
+                {
+                    return Results.Json(
+                        new EntityApiErrorResponse
+                        {
+                            Error = authorization.ErrorMessage ?? "Forbidden.",
+                            StatusCode = StatusCodes.Status403Forbidden
+                        },
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                return Results.Ok(ToStructureResponse(manager));
             });
         }
 
@@ -460,13 +479,7 @@ namespace Titanic.Entity.WebApplication
         {
             return result.Success
                 ? Results.Ok(result.Result)
-                : Results.Json(
-                    new
-                    {
-                        error = result.ErrorMessage,
-                        operation = result.Operation
-                    },
-                    statusCode: result.StatusCode);
+                : Results.Json(result, statusCode: result.StatusCode);
         }
 
         #endregion Operation Execution
@@ -481,35 +494,22 @@ namespace Titanic.Entity.WebApplication
         /// <returns> Результат авторизации. </returns>
         private static ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
-            var provider = CreateAuthorizationProvider(context.RequestServices, manager);
+            var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
+            var provider = factory.CreateApiProvider(context.RequestServices, manager);
             return provider.AuthorizeAsync(context, manager);
         }
 
         /// <summary>
-        /// Создать провайдер авторизации для Entity API.
+        /// Выполнить авторизацию endpoint-а структуры менеджера.
         /// </summary>
-        /// <param name="services"> Провайдер сервисов. </param>
+        /// <param name="context"> HTTP-контекст. </param>
         /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <returns> Провайдер авторизации. </returns>
-        private static IEntityApiAuthorizationProvider CreateAuthorizationProvider(
-            IServiceProvider services,
-            BaseEntityManager manager)
+        /// <returns> Результат авторизации. </returns>
+        private static ValueTask<EntityApiAuthorizationResult> AuthorizeStructureAsync(HttpContext context, BaseEntityManager manager)
         {
-            if (string.IsNullOrWhiteSpace(manager.Api.AuthorizationProviderType))
-            {
-                return services.GetRequiredService<HeaderEntityApiAuthorizationProvider>();
-            }
-
-            var providerType = Type.GetType(manager.Api.AuthorizationProviderType)
-                ?? throw new InvalidOperationException(
-                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' not found.");
-            if (!typeof(IEntityApiAuthorizationProvider).IsAssignableFrom(providerType))
-            {
-                throw new InvalidOperationException(
-                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' must implement IEntityApiAuthorizationProvider.");
-            }
-
-            return (IEntityApiAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
+            var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
+            var provider = factory.CreateStructureProvider(context.RequestServices, manager);
+            return provider.AuthorizeAsync(context, manager);
         }
 
         #endregion Authorization
@@ -831,6 +831,46 @@ namespace Titanic.Entity.WebApplication
             var normalized = path.Trim();
             normalized = normalized.StartsWith('/') ? normalized : $"/{normalized}";
             return normalized.EndsWith('/') ? normalized.TrimEnd('/') : normalized;
+        }
+
+        /// <summary>
+        /// Преобразовать manager-specific scope в HTTP-модель структуры.
+        /// </summary>
+        /// <param name="manager"> Entity ORM менеджер. </param>
+        /// <returns> Структура менеджера для HTTP API. </returns>
+        private static EntityManagerStructureResponse ToStructureResponse(BaseEntityManager manager)
+        {
+            return new EntityManagerStructureResponse
+            {
+                ManagerName = manager.Name,
+                NamespacePatterns = manager.StructureScope.NamespacePatterns.ToList(),
+                Entities = manager.StructureScope.EntitiesStructure
+                    .OrderBy(entity => entity.TableName, StringComparer.OrdinalIgnoreCase)
+                    .Select(entity => new EntityStructureResponse
+                    {
+                        EntityTypeName = entity.EntityType.FullName ?? entity.EntityType.Name,
+                        EntityTypeShortName = entity.EntityType.Name,
+                        TableName = entity.TableName,
+                        IsView = entity.IsView,
+                        IsLocalizationDisabled = entity.IsLocalizationDisabled,
+                        Columns = entity.ColumnsStructure
+                            .OrderBy(column => column.PropertyName, StringComparer.OrdinalIgnoreCase)
+                            .Select(column => new EntityColumnStructureResponse
+                            {
+                                PropertyName = column.PropertyName,
+                                ColumnName = column.ColumnName,
+                                DataValueType = column.DataValueType,
+                                IsNullable = column.IsNullable,
+                                IsPrimary = column.IsPrimary,
+                                IsDisplay = column.IsDisplay,
+                                IsLocalized = column.IsLocalized,
+                                IsReference = column.IsReference,
+                                ReferenceTableName = column.ReferenceTableName
+                            })
+                            .ToList()
+                    })
+                    .ToList()
+            };
         }
 
         #endregion Path Helpers

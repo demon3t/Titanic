@@ -14,6 +14,7 @@ namespace Titanic.Test.Common
             var connection = new UserConnection();
 
             Assert.NotNull(connection.Culture);
+            Assert.False(connection.IsAdmin);
             Assert.Equal(string.Empty, connection.Culture.Name);
         }
 
