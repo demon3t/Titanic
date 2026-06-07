@@ -13,49 +13,53 @@ namespace Titanic.Entity.WebApplication.Api
         /// </summary>
         public IEntityApiAuthorizationProvider CreateApiProvider(IServiceProvider services, BaseEntityManager manager)
         {
-            ArgumentNullException.ThrowIfNull(services);
-            ArgumentNullException.ThrowIfNull(manager);
-
-            if (string.IsNullOrWhiteSpace(manager.Api.AuthorizationProviderType))
-            {
-                return services.GetRequiredService<HeaderEntityApiAuthorizationProvider>();
-            }
-
-            var providerType = Type.GetType(manager.Api.AuthorizationProviderType)
-                ?? throw new InvalidOperationException(
-                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' not found.");
-            if (!typeof(IEntityApiAuthorizationProvider).IsAssignableFrom(providerType))
-            {
-                throw new InvalidOperationException(
-                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' must implement IEntityApiAuthorizationProvider.");
-            }
-
-            return (IEntityApiAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
+            return CreateProvider(
+                services,
+                manager.Api.AuthorizationProviderType,
+                typeof(HeaderEntityApiAuthorizationProvider),
+                "Entity API authorization provider");
         }
 
         /// <summary>
         /// Создать провайдер авторизации для endpoint-а структуры менеджера.
         /// </summary>
-        public IEntityStructureAuthorizationProvider CreateStructureProvider(IServiceProvider services, BaseEntityManager manager)
+        public IEntityApiAuthorizationProvider CreateStructureProvider(IServiceProvider services, BaseEntityManager manager)
+        {
+            return CreateProvider(
+                services,
+                manager.Api.StructureAuthorizationProviderType,
+                typeof(AdminEntityStructureAuthorizationProvider),
+                "Entity structure authorization provider");
+        }
+
+        /// <summary>
+        /// Создать провайдер авторизации по имени типа или типу по умолчанию.
+        /// </summary>
+        private static IEntityApiAuthorizationProvider CreateProvider(
+            IServiceProvider services,
+            string? providerTypeName,
+            Type defaultProviderType,
+            string providerDescription)
         {
             ArgumentNullException.ThrowIfNull(services);
-            ArgumentNullException.ThrowIfNull(manager);
+            ArgumentNullException.ThrowIfNull(defaultProviderType);
+            ArgumentException.ThrowIfNullOrWhiteSpace(providerDescription);
 
-            if (string.IsNullOrWhiteSpace(manager.Api.StructureAuthorizationProviderType))
+            if (string.IsNullOrWhiteSpace(providerTypeName))
             {
-                return services.GetRequiredService<AdminEntityStructureAuthorizationProvider>();
+                return (IEntityApiAuthorizationProvider)ActivatorUtilities.GetServiceOrCreateInstance(services, defaultProviderType);
             }
 
-            var providerType = Type.GetType(manager.Api.StructureAuthorizationProviderType)
+            var providerType = Type.GetType(providerTypeName)
                 ?? throw new InvalidOperationException(
-                    $"Entity structure authorization provider '{manager.Api.StructureAuthorizationProviderType}' not found.");
-            if (!typeof(IEntityStructureAuthorizationProvider).IsAssignableFrom(providerType))
+                    $"{providerDescription} '{providerTypeName}' not found.");
+            if (!typeof(IEntityApiAuthorizationProvider).IsAssignableFrom(providerType))
             {
                 throw new InvalidOperationException(
-                    $"Entity structure authorization provider '{manager.Api.StructureAuthorizationProviderType}' must implement IEntityStructureAuthorizationProvider.");
+                    $"{providerDescription} '{providerTypeName}' must implement {nameof(IEntityApiAuthorizationProvider)}.");
             }
 
-            return (IEntityStructureAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
+            return (IEntityApiAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
         }
     }
 }

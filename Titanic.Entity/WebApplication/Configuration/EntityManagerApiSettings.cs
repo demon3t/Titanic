@@ -32,7 +32,7 @@ namespace Titanic.Entity.WebApplication.Configuration
 
         /// <summary>
         /// Полное имя типа провайдера авторизации endpoint-а структуры менеджера.
-        /// Тип должен реализовывать <see cref="IEntityStructureAuthorizationProvider" />.
+        /// Тип должен реализовывать <see cref="Api.IEntityApiAuthorizationProvider" />.
         /// Если не задан, используется встроенная проверка администратора.
         /// </summary>
         public string? StructureAuthorizationProviderType { get; set; }
