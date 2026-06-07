@@ -495,7 +495,7 @@ namespace Titanic.Entity.WebApplication
         private static ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
             var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
-            var provider = factory.CreateApiProvider(context.RequestServices, manager);
+            var provider = factory.CreateProvider(context.RequestServices, manager, EntityApiAuthorizationProviderKind.Default);
             return provider.AuthorizeAsync(context, manager);
         }
 
@@ -508,7 +508,7 @@ namespace Titanic.Entity.WebApplication
         private static ValueTask<EntityApiAuthorizationResult> AuthorizeStructureAsync(HttpContext context, BaseEntityManager manager)
         {
             var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
-            var provider = factory.CreateStructureProvider(context.RequestServices, manager);
+            var provider = factory.CreateProvider(context.RequestServices, manager, EntityApiAuthorizationProviderKind.Structure);
             return provider.AuthorizeAsync(context, manager);
         }
 

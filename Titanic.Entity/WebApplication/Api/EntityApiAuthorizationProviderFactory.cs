@@ -9,27 +9,33 @@ namespace Titanic.Entity.WebApplication.Api
     internal sealed class EntityApiAuthorizationProviderFactory
     {
         /// <summary>
-        /// Создать провайдер авторизации для обычных Entity API endpoint-ов.
+        /// Создать провайдер авторизации Entity API.
         /// </summary>
-        public IEntityApiAuthorizationProvider CreateApiProvider(IServiceProvider services, BaseEntityManager manager)
+        /// <param name="services"> Провайдер сервисов. </param>
+        /// <param name="manager"> Entity ORM менеджер. </param>
+        /// <param name="kind"> Тип провайдера. </param>
+        /// <returns> Провайдер авторизации. </returns>
+        public IEntityApiAuthorizationProvider CreateProvider(
+            IServiceProvider services,
+            BaseEntityManager manager,
+            EntityApiAuthorizationProviderKind kind)
         {
-            return CreateProvider(
-                services,
-                manager.Api.AuthorizationProviderType,
-                typeof(HeaderEntityApiAuthorizationProvider),
-                "Entity API authorization provider");
-        }
+            ArgumentNullException.ThrowIfNull(manager);
 
-        /// <summary>
-        /// Создать провайдер авторизации для endpoint-а структуры менеджера.
-        /// </summary>
-        public IEntityApiAuthorizationProvider CreateStructureProvider(IServiceProvider services, BaseEntityManager manager)
-        {
-            return CreateProvider(
-                services,
-                manager.Api.StructureAuthorizationProviderType,
-                typeof(AdminEntityStructureAuthorizationProvider),
-                "Entity structure authorization provider");
+            return kind switch
+            {
+                EntityApiAuthorizationProviderKind.Default => CreateProvider(
+                    services,
+                    manager.Api.AuthorizationProviderType,
+                    typeof(HeaderEntityApiAuthorizationProvider),
+                    "Entity API authorization provider"),
+                EntityApiAuthorizationProviderKind.Structure => CreateProvider(
+                    services,
+                    manager.Api.StructureAuthorizationProviderType,
+                    typeof(AdminEntityStructureAuthorizationProvider),
+                    "Entity structure authorization provider"),
+                _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported authorization provider kind.")
+            };
         }
 
         /// <summary>

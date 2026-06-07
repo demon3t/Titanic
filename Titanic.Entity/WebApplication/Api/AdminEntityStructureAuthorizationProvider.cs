@@ -22,7 +22,7 @@ namespace Titanic.Entity.WebApplication.Api
         /// <inheritdoc />
         public async ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
-            var apiAuthorizationProvider = _factory.CreateApiProvider(context.RequestServices, manager);
+            var apiAuthorizationProvider = _factory.CreateProvider(context.RequestServices, manager, EntityApiAuthorizationProviderKind.Default);
             var authorization = await apiAuthorizationProvider.AuthorizeAsync(context, manager);
             if (!authorization.IsAuthorized || authorization.UserConnection == null)
             {
