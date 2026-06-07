@@ -24,4 +24,5 @@
 *.tsbuildinfo
 **/appsettings*.local.json
 !/ARCHITECTURE.md
+!/LICENSE.txt
 
