@@ -1,0 +1,77 @@
+name: NuGet publish
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-release-packages:
+    name: Validate package versions
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Validate affected package versions
+        shell: pwsh
+        run: |
+          ./.github/scripts/get-package-release-plan.ps1 `
+            -BaseSha "${{ github.event.pull_request.base.sha }}" `
+            -HeadSha "${{ github.event.pull_request.head.sha }}"
+
+  publish-packages:
+    name: Publish changed packages
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Detect publish plan
+        id: plan
+        shell: pwsh
+        run: |
+          ./.github/scripts/get-package-release-plan.ps1 `
+            -BaseSha "${{ github.event.before }}" `
+            -HeadSha "${{ github.sha }}"
+
+      - name: Restore dependencies
+        if: steps.plan.outputs.has_affected == 'true'
+        run: dotnet restore Titanic.sln
+
+      - name: Pack Titanic.Db
+        if: steps.plan.outputs.titanic_db_affected == 'true'
+        run: dotnet pack Titanic.Db/Titanic.Db.csproj --configuration Release --no-restore --output ./artifacts/nuget
+
+      - name: Pack Titanic.Entity
+        if: steps.plan.outputs.titanic_entity_affected == 'true'
+        run: dotnet pack Titanic.Entity/Titanic.Entity.csproj --configuration Release --no-restore --output ./artifacts/nuget
+
+      - name: Push Titanic.Db
+        if: steps.plan.outputs.titanic_db_affected == 'true'
+        run: dotnet nuget push "./artifacts/nuget/Titanic.Db.${{ steps.plan.outputs.titanic_db_version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+
+      - name: Push Titanic.Entity
+        if: steps.plan.outputs.titanic_entity_affected == 'true'
+        run: dotnet nuget push "./artifacts/nuget/Titanic.Entity.${{ steps.plan.outputs.titanic_entity_version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
