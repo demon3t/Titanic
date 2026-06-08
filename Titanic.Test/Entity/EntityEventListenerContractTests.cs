@@ -1,38 +1,37 @@
 using Microsoft.Extensions.DependencyInjection;
-using Titanic.Common.Services.Factory;
 using Titanic.Common.Session;
-using Titanic.Db;
+using Titanic.Db.PosgreSql;
 using Titanic.Entity.Attributes;
 using Titanic.Entity.Events;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.WebApplication.Configuration;
-using Titanic.Test.Db;
 
 namespace Titanic.Test.Entity
 {
     /// <summary>
     /// Тесты контрактов и базового pipeline событий Entity ORM.
     /// </summary>
-    public sealed class EntityEventListenerContractTests : IClassFixture<DbManagerFixture>
+    public sealed class EntityEventListenerContractTests
     {
         #region Members
 
-        private readonly Titanic.Db.Abstractions.BaseDbProvider _provider;
+        private readonly EntityApiMockDbProvider _provider;
         private static TestEventSink? _currentSink;
 
         /// <summary>
-        /// Инициализирует новый экземпляр EntityEventListenerContractTests.
+        /// Создаёт набор тестов и сбрасывает состояние событийного слоя.
         /// </summary>
-        public EntityEventListenerContractTests(DbManagerFixture fixture)
+        public EntityEventListenerContractTests()
         {
-            _provider = DbManager.GetProvider();
+            EntityApiMockDbProvider.ResetState();
+            _provider = new EntityApiMockDbProvider("mock", new PostgresEngine());
             global::Titanic.Entity.EntityManager.ResetServices();
             EmployeeEventListener.IsEnabled = false;
             DepartmentCancelEventListener.IsEnabled = false;
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр EntityEventListenerAttribute_ShouldStoreEntityName.
+        /// Проверяет, что атрибут обработчика хранит имя Entity-таблицы.
         /// </summary>
         [Fact]
         public void EntityEventListenerAttribute_ShouldStoreEntityName()
@@ -43,7 +42,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр EntityEventArgs_Cancel_ShouldMarkPipelineAsCanceled.
+        /// Проверяет, что отмена события помечает pipeline остановленным.
         /// </summary>
         [Fact]
         public void EntityEventArgs_Cancel_ShouldMarkPipelineAsCanceled()
@@ -59,7 +58,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр BaseEntityEventListener_DefaultHandlers_ShouldBeNoOp.
+        /// Проверяет, что базовые обработчики событий ничего не делают по умолчанию.
         /// </summary>
         [Fact]
         public void BaseEntityEventListener_DefaultHandlers_ShouldBeNoOp()
@@ -78,7 +77,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр Entity_Save_ShouldCallInsertEventPipeline.
+        /// Проверяет, что сохранение новой сущности вызывает pipeline вставки.
         /// </summary>
         [Fact]
         public void Entity_Save_ShouldCallInsertEventPipeline()
@@ -103,7 +102,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр Entity_Save_WithManualPrimaryKeyForNewRecord_ShouldUseInsertPipeline.
+        /// Проверяет, что новая запись с заданным первичным ключом проходит pipeline вставки.
         /// </summary>
         [Fact]
         public void Entity_Save_WithManualPrimaryKeyForNewRecord_ShouldUseInsertPipeline()
@@ -130,7 +129,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр Entity_Save_ShouldStopPipeline_WhenListenerCancelsOperation.
+        /// Проверяет, что listener может остановить сохранение сущности.
         /// </summary>
         [Fact]
         public void Entity_Save_ShouldStopPipeline_WhenListenerCancelsOperation()
@@ -148,7 +147,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateEntity.
+        /// Создаёт тестовую ORM-сущность сотрудника.
         /// </summary>
         private global::Titanic.Entity.Orm.Entity CreateEntity()
         {
@@ -159,7 +158,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateManager.
+        /// Создаёт и инициализирует тестовый Entity ORM менеджер.
         /// </summary>
         private BaseEntityManager CreateManager()
         {
@@ -175,7 +174,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateArgs.
+        /// Создаёт аргументы события для заданной стадии pipeline.
         /// </summary>
         private static EntityEventArgs CreateArgs(EntityEventStage stage)
         {
@@ -185,7 +184,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateUserConnection.
+        /// Создаёт тестовый пользовательский контекст.
         /// </summary>
         private static UserConnection CreateUserConnection()
         {
@@ -201,7 +200,7 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр ConfigureEntityServices.
+        /// Настраивает DI и включает тестовые listener-ы.
         /// </summary>
         private static void ConfigureEntityServices(TestEventSink sink)
         {
@@ -214,28 +213,40 @@ namespace Titanic.Test.Entity
             global::Titanic.Entity.EntityManager.ConfigureServices(provider);
         }
 
+        /// <summary>
+        /// Тестовый listener без переопределённых обработчиков.
+        /// </summary>
         private sealed class TestEntityEventListener : BaseEntityEventListener
         {
         }
 
+        /// <summary>
+        /// Тестовый listener событий сотрудников.
+        /// </summary>
         [EntityEventListener("employees")]
         private sealed class EmployeeEventListener : BaseEntityEventListener
         {
+            /// <summary>
+            /// Признак включения listener-а в текущем тесте.
+            /// </summary>
             public static bool IsEnabled { get; set; }
 
             private readonly string _entityName;
 
             /// <summary>
-            /// Инициализирует новый экземпляр EmployeeEventListener.
+            /// Создаёт listener для указанной Entity-таблицы.
             /// </summary>
+            /// <param name="entityName">Имя Entity-таблицы.</param>
             public EmployeeEventListener(string entityName)
             {
                 _entityName = entityName;
             }
 
             /// <summary>
-            /// Инициализирует новый экземпляр OnSaving.
+            /// Фиксирует начало сохранения сотрудника.
             /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
             public override void OnSaving(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
             {
                 if (!IsEnabled)
@@ -247,8 +258,10 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
-            /// Инициализирует новый экземпляр OnInserting.
+            /// Фиксирует начало вставки сотрудника.
             /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
             public override void OnInserting(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
             {
                 if (!IsEnabled)
@@ -260,8 +273,10 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
-            /// Инициализирует новый экземпляр OnInserted.
+            /// Фиксирует завершение вставки сотрудника.
             /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
             public override void OnInserted(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
             {
                 if (!IsEnabled)
@@ -273,8 +288,10 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
-            /// Инициализирует новый экземпляр OnSaved.
+            /// Фиксирует завершение сохранения сотрудника.
             /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
             public override void OnSaved(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
             {
                 if (!IsEnabled)
@@ -286,24 +303,33 @@ namespace Titanic.Test.Entity
             }
         }
 
+        /// <summary>
+        /// Тестовый listener, отменяющий сохранение подразделения.
+        /// </summary>
         [EntityEventListener("departments")]
         private sealed class DepartmentCancelEventListener : BaseEntityEventListener
         {
+            /// <summary>
+            /// Признак включения listener-а в текущем тесте.
+            /// </summary>
             public static bool IsEnabled { get; set; }
 
             private readonly string _entityName;
 
             /// <summary>
-            /// Инициализирует новый экземпляр DepartmentCancelEventListener.
+            /// Создаёт listener для указанной Entity-таблицы.
             /// </summary>
+            /// <param name="entityName">Имя Entity-таблицы.</param>
             public DepartmentCancelEventListener(string entityName)
             {
                 _entityName = entityName;
             }
 
             /// <summary>
-            /// Инициализирует новый экземпляр OnSaving.
+            /// Отменяет сохранение подразделения на стадии OnSaving.
             /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
             public override void OnSaving(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
             {
                 if (!IsEnabled)
@@ -317,8 +343,14 @@ namespace Titanic.Test.Entity
             }
         }
 
+        /// <summary>
+        /// Накопитель вызванных стадий событийного pipeline.
+        /// </summary>
         private sealed class TestEventSink
         {
+            /// <summary>
+            /// Список зафиксированных событий.
+            /// </summary>
             public List<string> Events { get; } = new();
         }
 
