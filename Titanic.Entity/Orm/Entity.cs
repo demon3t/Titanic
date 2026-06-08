@@ -51,6 +51,11 @@ namespace Titanic.Entity.Orm
         private readonly BaseEntityManager? _manager;
 
         /// <summary>
+        /// Идентификатор текущего событийного pipeline для внешнего listener-а.
+        /// </summary>
+        private readonly string _eventDispatchId = Guid.NewGuid().ToString("N");
+
+        /// <summary>
         /// Признак того, что сущность была создана как новая запись и ещё не была сохранена.
         /// </summary>
         private bool _isNew;
@@ -111,6 +116,11 @@ namespace Titanic.Entity.Orm
         /// Имя таблицы корневой сущности.
         /// </summary>
         internal string TableName => _structure.TableName;
+
+        /// <summary>
+        /// Идентификатор текущего событийного pipeline для внешнего listener-а.
+        /// </summary>
+        internal string EventDispatchId => _eventDispatchId;
 
         /// <summary>
         /// Известные ORM-пути выбранных колонок и соответствующие им SQL-алиасы.

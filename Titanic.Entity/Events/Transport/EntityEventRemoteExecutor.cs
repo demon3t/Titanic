@@ -95,6 +95,7 @@ namespace Titanic.Entity.Events
             {
                 ManagerName = manager.Name,
                 TableName = entity.TableName,
+                DispatchId = entity.EventDispatchId,
                 Stage = stage.ToString(),
                 IsNew = entity.IsNew,
                 UserConnection = CloneUserConnection(entity.UserConnection),
@@ -173,6 +174,7 @@ namespace Titanic.Entity.Events
             {
                 ManagerName = request.ManagerName,
                 TableName = request.TableName,
+                DispatchId = request.DispatchId,
                 Stage = request.Stage,
                 IsNew = request.IsNew,
                 UserConnection = new EntityEventGrpcUserConnection

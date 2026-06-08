@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Google.Protobuf.WellKnownTypes;
 using Titanic.Common.Session;
+using Titanic.Entity.Interfaces;
 
 namespace Titanic.Entity.Events
 {
@@ -12,8 +13,10 @@ namespace Titanic.Entity.Events
         #region Members
 
         /// <summary>
-        /// Инициализирует новый экземпляр Execute.
+        /// Выполняет dispatch-запрос по имени менеджера из запроса.
         /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат обработки события.</returns>
         internal static EntityEventDispatchResponse Execute(EntityEventDispatchRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
@@ -43,20 +46,27 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр Execute.
+        /// Выполняет dispatch-запрос для указанного менеджера.
         /// </summary>
-        internal static EntityEventDispatchResponse Execute(Interfaces.BaseEntityManager manager, EntityEventDispatchRequest request)
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат обработки события.</returns>
+        internal static EntityEventDispatchResponse Execute(BaseEntityManager manager, EntityEventDispatchRequest request)
         {
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(request);
 
+            var releaseListeners = false;
             try
             {
                 var stage = ParseStage(request.Stage);
+                releaseListeners = IsFinalStage(stage);
+
                 var entity = manager.Create(request.TableName, request.UserConnection, request.IsNew);
                 entity.SetValues(request.Values);
 
-                EntityEventLocalExecutor.Dispatch(entity, manager, stage);
+                var listeners = EntityEventRemoteListenerCache.GetListeners(manager, request);
+                EntityEventLocalExecutor.Dispatch(entity, manager, stage, listeners);
 
                 return new EntityEventDispatchResponse
                 {
@@ -66,6 +76,7 @@ namespace Titanic.Entity.Events
             }
             catch (InvalidOperationException ex)
             {
+                releaseListeners = true;
                 return new EntityEventDispatchResponse
                 {
                     Success = false,
@@ -75,23 +86,34 @@ namespace Titanic.Entity.Events
             }
             catch (Exception ex)
             {
+                releaseListeners = true;
                 return new EntityEventDispatchResponse
                 {
                     Success = false,
                     ErrorMessage = ex.Message
                 };
             }
+            finally
+            {
+                if (releaseListeners)
+                {
+                    EntityEventRemoteListenerCache.Release(manager, request);
+                }
+            }
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр FromGrpc.
+        /// Преобразует gRPC-запрос во внутренний dispatch-контракт.
         /// </summary>
+        /// <param name="request">gRPC-запрос события.</param>
+        /// <returns>Dispatch-запрос события.</returns>
         internal static EntityEventDispatchRequest FromGrpc(Grpc.EntityEventGrpcRequest request)
         {
             return new EntityEventDispatchRequest
             {
                 ManagerName = request.ManagerName,
                 TableName = request.TableName,
+                DispatchId = request.DispatchId,
                 Stage = request.Stage,
                 IsNew = request.IsNew,
                 UserConnection = new UserConnection
@@ -111,8 +133,10 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр ParseStage.
+        /// Преобразует строковое имя стадии в enum.
         /// </summary>
+        /// <param name="stage">Строковое имя стадии.</param>
+        /// <returns>Стадия событийного pipeline.</returns>
         private static EntityEventStage ParseStage(string stage)
         {
             if (System.Enum.TryParse<EntityEventStage>(stage, true, out var parsed))
@@ -124,8 +148,20 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр FromGrpcValue.
+        /// Проверяет, завершает ли стадия текущий событийный pipeline.
         /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns><see langword="true" />, если listener-ы нужно удалить сразу.</returns>
+        private static bool IsFinalStage(EntityEventStage stage)
+        {
+            return stage is EntityEventStage.Saved or EntityEventStage.Deleted;
+        }
+
+        /// <summary>
+        /// Преобразует protobuf-значение в CLR-значение.
+        /// </summary>
+        /// <param name="value">Protobuf-значение.</param>
+        /// <returns>CLR-значение.</returns>
         private static object? FromGrpcValue(Value value)
         {
             return value.KindCase switch
@@ -141,8 +177,10 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр TryRestoreNumber.
+        /// Восстанавливает целочисленное значение, если protobuf передал число без дробной части.
         /// </summary>
+        /// <param name="value">Числовое значение protobuf.</param>
+        /// <returns>CLR-число.</returns>
         private static object TryRestoreNumber(double value)
         {
             if (Math.Abs(value % 1) < double.Epsilon)

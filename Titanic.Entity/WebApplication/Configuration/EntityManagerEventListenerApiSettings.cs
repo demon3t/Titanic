@@ -13,9 +13,14 @@ namespace Titanic.Entity.WebApplication.Configuration
         public EntityEventListenerApiMode Mode { get; set; } = EntityEventListenerApiMode.None;
 
         /// <summary>
-        /// Возвращает или задаёт путь.
+        /// HTTP-путь endpoint-а обработчика событий.
         /// </summary>
         public string Path { get; set; } = "/entity-event-listener";
+
+        /// <summary>
+        /// Время хранения экземпляра remote listener-а без новых запросов по той же сущности.
+        /// </summary>
+        public TimeSpan ListenerInstanceIdleTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
         #endregion Members
     }

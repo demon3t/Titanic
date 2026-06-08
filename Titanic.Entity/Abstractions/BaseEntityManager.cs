@@ -244,6 +244,11 @@ namespace Titanic.Entity.Interfaces
             EntityManagerEventListenerApiSettings? settings)
         {
             var api = settings ?? new EntityManagerEventListenerApiSettings();
+            if (api.ListenerInstanceIdleTimeout <= TimeSpan.Zero)
+            {
+                api.ListenerInstanceIdleTimeout = TimeSpan.FromMinutes(5);
+            }
+
             if (api.Mode == EntityEventListenerApiMode.Http)
             {
                 api.Path = string.IsNullOrWhiteSpace(api.Path)

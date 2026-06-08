@@ -20,6 +20,11 @@ namespace Titanic.Entity.Events
         public string TableName { get; set; } = string.Empty;
 
         /// <summary>
+        /// Идентификатор обработки одной ORM-сущности во внешнем listener-е.
+        /// </summary>
+        public string DispatchId { get; set; } = string.Empty;
+
+        /// <summary>
         /// Этап событийного pipeline.
         /// </summary>
         public string Stage { get; set; } = string.Empty;

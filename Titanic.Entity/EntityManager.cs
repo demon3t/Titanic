@@ -79,6 +79,7 @@ namespace Titanic.Entity
             _serviceProvider = null;
             Titanic.Common.Services.Factory.ClassFactory.Reset();
             EntityEventListenerRegistry.Reset();
+            EntityEventRemoteListenerCache.Reset();
         }
 
         /// <summary>
