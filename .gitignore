@@ -25,3 +25,5 @@
 **/appsettings*.local.json
 !/ARCHITECTURE.md
 
+
+local-secrets/

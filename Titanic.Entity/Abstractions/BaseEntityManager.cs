@@ -1,4 +1,4 @@
-﻿using Titanic.Common.Session;
+using Titanic.Common.Session;
 using Titanic.Db.Abstractions;
 using Titanic.Entity.Orm;
 using Titanic.Entity.Strurture;
@@ -7,40 +7,54 @@ using Titanic.Entity.WebApplication.Configuration;
 namespace Titanic.Entity.Interfaces
 {
     /// <summary>
-    /// Базовая обертка Entity ORM над провайдером БД.
+    /// Базовый класс менеджеров Entity ORM.
     /// </summary>
     public abstract class BaseEntityManager
     {
         #region Properties
 
         /// <summary>
-        /// Имя Entity ORM менеджера в конфигурации.
-        /// Реестр менеджеров использует runtime-тип менеджера, а не это имя.
+        /// Возвращает имя менеджера Entity ORM.
         /// </summary>
         public string Name { get; private set; } = string.Empty;
 
         /// <summary>
-        /// Провайдер БД, через который Entity ORM строит и выполняет запросы.
+        /// Возвращает провайдер БД, используемый менеджером.
         /// </summary>
         public BaseDbProvider Provider { get; private set; } = null!;
 
         /// <summary>
-        /// Настройки публикации HTTP API для менеджера.
+        /// Возвращает настройки Entity API для менеджера.
         /// </summary>
         public EntityManagerApiSettings Api { get; private set; } = new();
 
         /// <summary>
-        /// Runtime-опции Entity ORM менеджера из конфигурации.
+        /// Возвращает runtime-настройки Entity ORM для менеджера.
         /// </summary>
         public EntityManagerOptions Options { get; private set; } = new();
 
         /// <summary>
-        /// Признак проверки структуры БД на наличие таблиц и колонок Entity-моделей при инициализации.
+        /// Возвращает признак проверки схемы БД при инициализации.
         /// </summary>
         public bool ValidateDatabaseSchemaOnCompile { get; private set; }
 
         /// <summary>
-        /// Структура Entity-моделей, доступная этому менеджеру.
+        /// Возвращает расположение удалённого обработчика событий.
+        /// </summary>
+        public string? EventListener { get; private set; }
+
+        /// <summary>
+        /// Возвращает признак локальной обработки событий.
+        /// </summary>
+        public bool HasLocalEventListener => string.IsNullOrWhiteSpace(EventListener);
+
+        /// <summary>
+        /// Возвращает настройки API обработчика событий для менеджера.
+        /// </summary>
+        public EntityManagerEventListenerApiSettings EventListenerApi { get; private set; } = new();
+
+        /// <summary>
+        /// Возвращает scope структур сущностей, используемый менеджером.
         /// </summary>
         internal EntityStructureScope StructureScope { get; private set; } = Structure.DefaultScope;
 
@@ -49,11 +63,8 @@ namespace Titanic.Entity.Interfaces
         #region Initialization
 
         /// <summary>
-        /// Инициализировать менеджер готовым провайдером БД.
+        /// Инициализирует новый экземпляр Initialize.
         /// </summary>
-        /// <param name="name"> Имя менеджера из конфигурации. </param>
-        /// <param name="provider"> Провайдер БД. </param>
-        /// <param name="settings"> Настройки менеджера. </param>
         public virtual void Initialize(string name, BaseDbProvider provider, EntityManagerSettings? settings = null)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -67,6 +78,8 @@ namespace Titanic.Entity.Interfaces
             Provider = provider;
             Api = NormalizeApiSettings(settings?.Api);
             Options = settings?.Options ?? new EntityManagerOptions();
+            EventListener = NormalizeEventListener(settings?.EventListener);
+            EventListenerApi = NormalizeEventListenerApiSettings(name, settings?.EventListenerApi);
             ValidateDatabaseSchemaOnCompile = settings?.ValidateDatabaseSchemaOnCompile ?? false;
             StructureScope = Structure.GetScope(settings?.EntityModelNamespaces);
 
@@ -77,13 +90,8 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Собрать менеджер из готового провайдера БД.
+        /// Создаёт и инициализирует менеджер Entity ORM.
         /// </summary>
-        /// <typeparam name="TManager"> Тип менеджера. </typeparam>
-        /// <param name="name"> Имя менеджера. </param>
-        /// <param name="provider"> Провайдер БД. </param>
-        /// <param name="settings"> Настройки менеджера. </param>
-        /// <returns> Инициализированный менеджер. </returns>
         internal static TManager BuildManager<TManager>(string name, BaseDbProvider provider, EntityManagerSettings? settings = null)
             where TManager : BaseEntityManager, new()
         {
@@ -97,11 +105,8 @@ namespace Titanic.Entity.Interfaces
         #region Entity Queries
 
         /// <summary>
-        /// Создать Entity Schema Query по CLR-модели сущности.
+        /// Создаёт Entity Schema Query.
         /// </summary>
-        /// <typeparam name="TEntity"> Тип CLR-модели сущности. </typeparam>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery<TEntity> Query<TEntity>(UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(userConnection);
@@ -109,11 +114,8 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Создать Entity Schema Query по CLR-типу сущности.
+        /// Инициализирует новый экземпляр Query.
         /// </summary>
-        /// <param name="entityType"> CLR-тип сущности. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery Query(Type entityType, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(entityType);
@@ -122,11 +124,8 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Создать Entity Schema Query по имени таблицы.
+        /// Инициализирует новый экземпляр Query.
         /// </summary>
-        /// <param name="tableName"> Имя таблицы. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Entity Schema Query. </returns>
         public EntitySchemaQuery Query(string tableName, UserConnection userConnection)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
@@ -139,11 +138,8 @@ namespace Titanic.Entity.Interfaces
         #region Entity Select Builders
 
         /// <summary>
-        /// Создать ORM SELECT builder по CLR-модели сущности.
+        /// Создаёт ORM SELECT builder.
         /// </summary>
-        /// <typeparam name="TEntity"> Тип CLR-модели сущности. </typeparam>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder<TEntity> Select<TEntity>(UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(userConnection);
@@ -151,11 +147,8 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Создать ORM SELECT builder по CLR-типу сущности.
+        /// Инициализирует новый экземпляр Select.
         /// </summary>
-        /// <param name="entityType"> CLR-тип сущности. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder Select(Type entityType, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(entityType);
@@ -164,11 +157,8 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Создать ORM SELECT builder по имени таблицы.
+        /// Инициализирует новый экземпляр Select.
         /// </summary>
-        /// <param name="tableName"> Имя таблицы. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> ORM SELECT builder. </returns>
         public EntitySelectBuilder Select(string tableName, UserConnection userConnection)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
@@ -181,41 +171,42 @@ namespace Titanic.Entity.Interfaces
         #region Entity CRUD
 
         /// <summary>
-        /// Создать пустую сущность по CLR-модели.
+        /// Создаёт экземпляр ORM-сущности.
         /// </summary>
-        /// <typeparam name="TEntity"> Тип CLR-модели сущности. </typeparam>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create<TEntity>(UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(userConnection);
-            return EntityManager.Create(StructureScope.GetEntityStructure(typeof(TEntity)), Provider, userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(typeof(TEntity)), Provider, userConnection, isNew: true, manager: this);
         }
 
         /// <summary>
-        /// Создать пустую сущность по CLR-типу.
+        /// Инициализирует новый экземпляр Create.
         /// </summary>
-        /// <param name="entityType"> CLR-тип сущности. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create(Type entityType, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ArgumentNullException.ThrowIfNull(userConnection);
-            return EntityManager.Create(StructureScope.GetEntityStructure(entityType), Provider, userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(entityType), Provider, userConnection, isNew: true, manager: this);
         }
 
         /// <summary>
-        /// Создать пустую сущность по имени таблицы.
+        /// Инициализирует новый экземпляр Create.
         /// </summary>
-        /// <param name="tableName"> Имя таблицы. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <returns> Новая ORM-сущность. </returns>
         public Orm.Entity Create(string tableName, UserConnection userConnection)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
             ArgumentNullException.ThrowIfNull(userConnection);
-            return EntityManager.Create(StructureScope.GetEntityStructure(tableName), Provider, userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(tableName), Provider, userConnection, isNew: true, manager: this);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
+        public Orm.Entity Create(string tableName, UserConnection userConnection, bool isNew)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+            ArgumentNullException.ThrowIfNull(userConnection);
+            return EntityManager.Create(StructureScope.GetEntityStructure(tableName), Provider, userConnection, isNew: isNew, manager: this);
         }
 
         #endregion Entity CRUD
@@ -223,10 +214,8 @@ namespace Titanic.Entity.Interfaces
         #region Private Methods
 
         /// <summary>
-        /// Нормализовать настройки API менеджера.
+        /// Инициализирует новый экземпляр NormalizeApiSettings.
         /// </summary>
-        /// <param name="settings"> Настройки из конфигурации. </param>
-        /// <returns> Настройки API с заполненными значениями по умолчанию. </returns>
         private static EntityManagerApiSettings NormalizeApiSettings(EntityManagerApiSettings? settings)
         {
             var api = settings ?? new EntityManagerApiSettings();
@@ -238,11 +227,36 @@ namespace Titanic.Entity.Interfaces
         }
 
         /// <summary>
-        /// Применить настройки менеджера к EntitySchemaQuery.
+        /// Инициализирует новый экземпляр NormalizeEventListener.
         /// </summary>
-        /// <typeparam name="TQuery"> Тип запроса. </typeparam>
-        /// <param name="query"> Запрос сущностей. </param>
-        /// <returns> Запрос с примененными настройками менеджера. </returns>
+        private static string? NormalizeEventListener(string? eventListener)
+        {
+            return string.IsNullOrWhiteSpace(eventListener)
+                ? null
+                : eventListener.Trim();
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр NormalizeEventListenerApiSettings.
+        /// </summary>
+        private static EntityManagerEventListenerApiSettings NormalizeEventListenerApiSettings(
+            string managerName,
+            EntityManagerEventListenerApiSettings? settings)
+        {
+            var api = settings ?? new EntityManagerEventListenerApiSettings();
+            if (api.Mode == EntityEventListenerApiMode.Http)
+            {
+                api.Path = string.IsNullOrWhiteSpace(api.Path)
+                    ? $"/entity-event-listener/{managerName}"
+                    : api.Path;
+            }
+
+            return api;
+        }
+
+        /// <summary>
+        /// Применяет настройки менеджера к запросу.
+        /// </summary>
         private TQuery ApplyQuerySettings<TQuery>(TQuery query)
             where TQuery : EntitySchemaQuery
         {

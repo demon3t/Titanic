@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option csharp_namespace = "Titanic.Entity.Events.Grpc";
+
+package titanic.entity.events;
+
+import "google/protobuf/struct.proto";
+
+service EntityEventListenerGrpc {
+  rpc Dispatch (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+}
+
+message EntityEventGrpcRequest {
+  string manager_name = 1;
+  string table_name = 2;
+  string stage = 3;
+  bool is_new = 4;
+  EntityEventGrpcUserConnection user_connection = 5;
+  map<string, google.protobuf.Value> values = 6;
+}
+
+message EntityEventGrpcUserConnection {
+  string user_id = 1;
+  EntityEventGrpcUserCulture culture = 2;
+}
+
+message EntityEventGrpcUserCulture {
+  string id = 1;
+  string name = 2;
+}
+
+message EntityEventGrpcResponse {
+  bool success = 1;
+  bool canceled = 2;
+  string cancel_reason = 3;
+  string error_message = 4;
+  map<string, google.protobuf.Value> values = 5;
+}

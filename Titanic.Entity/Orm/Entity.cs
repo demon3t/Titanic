@@ -2,6 +2,8 @@
 using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
+using Titanic.Entity.Events;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
@@ -43,6 +45,16 @@ namespace Titanic.Entity.Orm
         /// </summary>
         private readonly UserConnection _userConnection;
 
+        /// <summary>
+        /// Менеджер Entity ORM, создавший текущую сущность.
+        /// </summary>
+        private readonly BaseEntityManager? _manager;
+
+        /// <summary>
+        /// Признак того, что сущность была создана как новая запись и ещё не была сохранена.
+        /// </summary>
+        private bool _isNew;
+
         #endregion Fields
 
         #region Constructors
@@ -62,7 +74,9 @@ namespace Titanic.Entity.Orm
             Dictionary<string, ColumnStructure> aliasToColumn,
             EntityStructure structure,
             BaseDbProvider provider,
-            UserConnection userConnection)
+            UserConnection userConnection,
+            bool isNew,
+            BaseEntityManager? manager = null)
         {
             _values = values;
             _pathToAlias = pathToAlias;
@@ -70,6 +84,8 @@ namespace Titanic.Entity.Orm
             _structure = structure;
             _provider = provider;
             _userConnection = userConnection ?? throw new ArgumentNullException(nameof(userConnection));
+            _isNew = isNew;
+            _manager = manager;
         }
 
         #endregion Constructors
@@ -87,16 +103,14 @@ namespace Titanic.Entity.Orm
         public IReadOnlyDictionary<string, ColumnValue> Values => _values;
 
         /// <summary>
-        /// Признак новой сущности без заполненного первичного ключа.
+        /// Признак новой сущности, которая ещё не была сохранена в БД.
         /// </summary>
-        public bool IsNew
-        {
-            get
-            {
-                var primaryColumn = _structure.GetPrimaryColumnStructure();
-                return !TryGetColumnValue(primaryColumn, out var value) || IsDefaultPrimaryValue(value);
-            }
-        }
+        public bool IsNew => _isNew;
+
+        /// <summary>
+        /// Имя таблицы корневой сущности.
+        /// </summary>
+        internal string TableName => _structure.TableName;
 
         /// <summary>
         /// Известные ORM-пути выбранных колонок и соответствующие им SQL-алиасы.
@@ -213,16 +227,34 @@ namespace Titanic.Entity.Orm
         /// <returns> <see langword="true" />, если операция выполнена. </returns>
         public bool Save()
         {
-            var primaryColumn = _structure.GetPrimaryColumnStructure();
-            var hasPrimaryValue = TryGetColumnValue(primaryColumn, out var primaryValue)
-                && !IsDefaultPrimaryValue(primaryValue);
+            DispatchEvent(EntityEventStage.Saving);
 
-            if (hasPrimaryValue && UpdateEntity(primaryColumn, primaryValue) > 0)
+            if (!_isNew)
             {
-                return true;
+                var primaryColumn = _structure.GetPrimaryColumnStructure();
+                if (!TryGetColumnValue(primaryColumn, out var primaryValue) || IsDefaultPrimaryValue(primaryValue))
+                {
+                    throw new InvalidOperationException("Entity primary key value is required for Save() of existing record.");
+                }
+
+                DispatchEvent(EntityEventStage.Updating);
+
+                if (UpdateEntity(primaryColumn, primaryValue) > 0)
+                {
+                    DispatchEvent(EntityEventStage.Updated);
+                    DispatchEvent(EntityEventStage.Saved);
+                    return true;
+                }
             }
 
+            var insertPrimaryColumn = _structure.GetPrimaryColumnStructure();
+            var hasPrimaryValue = TryGetColumnValue(insertPrimaryColumn, out var insertPrimaryValue)
+                && !IsDefaultPrimaryValue(insertPrimaryValue);
+            DispatchEvent(EntityEventStage.Inserting);
             InsertEntity(includePrimary: hasPrimaryValue);
+            _isNew = false;
+            DispatchEvent(EntityEventStage.Inserted);
+            DispatchEvent(EntityEventStage.Saved);
             return true;
         }
 
@@ -232,6 +264,8 @@ namespace Titanic.Entity.Orm
         /// <returns> <see langword="true" />, если строка была удалена. </returns>
         public bool Delete()
         {
+            DispatchEvent(EntityEventStage.Deleting);
+
             var primaryColumn = _structure.GetPrimaryColumnStructure();
             if (!TryGetColumnValue(primaryColumn, out var primaryValue) || IsDefaultPrimaryValue(primaryValue))
             {
@@ -243,6 +277,11 @@ namespace Titanic.Entity.Orm
                 .Where("t", primaryColumn.ColumnName)
                 .IsEqual(Column.Parameter(primaryValue))
                 .Execute();
+
+            if (affected > 0)
+            {
+                DispatchEvent(EntityEventStage.Deleted);
+            }
 
             return affected > 0;
         }
@@ -556,6 +595,20 @@ namespace Titanic.Entity.Orm
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// Выполнить этап pipeline событийного слоя.
+        /// </summary>
+        /// <param name="stage"> Этап pipeline. </param>
+        private void DispatchEvent(EntityEventStage stage)
+        {
+            if (_manager == null)
+            {
+                return;
+            }
+
+            EntityEventDispatcher.Dispatch(this, _manager, stage);
         }
 
         #endregion Private Methods

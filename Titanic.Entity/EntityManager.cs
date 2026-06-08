@@ -1,8 +1,10 @@
 ﻿using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Entity.Attributes;
+using Titanic.Entity.Events;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.Orm;
 using Titanic.Entity.Strurture;
@@ -17,8 +19,10 @@ namespace Titanic.Entity
     {
         #region Fields
 
-        private static readonly Dictionary<Type, BaseEntityManager> _managers = new();
+        private static readonly Dictionary<string, BaseEntityManager> _managers =
+            new(StringComparer.OrdinalIgnoreCase);
         private static readonly object _initLock = new();
+        private static IServiceProvider? _serviceProvider;
 
         #endregion Fields
 
@@ -52,6 +56,39 @@ namespace Titanic.Entity
             {
                 _managers.Clear();
             }
+        }
+
+        /// <summary>
+        /// Передать Entity ORM корневой провайдер сервисов приложения.
+        /// </summary>
+        /// <param name="serviceProvider"> Корневой провайдер сервисов. </param>
+        public static void ConfigureServices(IServiceProvider serviceProvider)
+        {
+            ArgumentNullException.ThrowIfNull(serviceProvider);
+
+            _serviceProvider = serviceProvider;
+            Titanic.Common.Services.Factory.ClassFactory.Configure(serviceProvider);
+            EntityEventListenerRegistry.RegisterListeners();
+        }
+
+        /// <summary>
+        /// Сбросить привязанный провайдер сервисов и кэш событийного слоя.
+        /// </summary>
+        public static void ResetServices()
+        {
+            _serviceProvider = null;
+            Titanic.Common.Services.Factory.ClassFactory.Reset();
+            EntityEventListenerRegistry.Reset();
+        }
+
+        /// <summary>
+        /// Получить корневой провайдер сервисов, привязанный к Entity ORM.
+        /// </summary>
+        /// <returns> Провайдер сервисов приложения. </returns>
+        internal static IServiceProvider GetServiceProvider()
+        {
+            return _serviceProvider
+                ?? throw new InvalidOperationException("EntityManager service provider is not configured.");
         }
 
         /// <summary>
@@ -113,14 +150,13 @@ namespace Titanic.Entity
                 throw new ArgumentException("Entity manager name is empty", nameof(manager));
             }
 
-            var managerType = manager.GetType();
-            if (_managers.ContainsKey(managerType))
+            if (_managers.ContainsKey(manager.Name))
             {
                 throw new InvalidOperationException(
-                    $"Entity manager of type '{managerType.FullName}' is already registered.");
+                    $"Entity manager with name '{manager.Name}' is already registered.");
             }
 
-            _managers[managerType] = manager;
+            _managers[manager.Name] = manager;
         }
 
         #endregion Initialization
@@ -144,10 +180,33 @@ namespace Titanic.Entity
         /// <returns> Зарегистрированный менеджер. </returns>
         public static TManager GetManager<TManager>() where TManager : BaseEntityManager
         {
-            return _managers.TryGetValue(typeof(TManager), out var manager)
-                ? (TManager)manager
-                : throw new KeyNotFoundException(
-                    $"Entity manager of type '{typeof(TManager).FullName}' is not registered.");
+            var matches = _managers.Values
+                .Where(x => x is TManager)
+                .Cast<TManager>()
+                .ToArray();
+
+            return matches.Length switch
+            {
+                0 => throw new KeyNotFoundException(
+                    $"Entity manager of type '{typeof(TManager).FullName}' is not registered."),
+                1 => matches[0],
+                _ => throw new InvalidOperationException(
+                    $"More than one Entity manager of type '{typeof(TManager).FullName}' is registered. Use GetManager(name).")
+            };
+        }
+
+        /// <summary>
+        /// Получить Entity ORM менеджер по имени из конфигурации.
+        /// </summary>
+        /// <param name="name"> Имя менеджера. </param>
+        /// <returns> Зарегистрированный менеджер. </returns>
+        public static BaseEntityManager GetManager(string name)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+            return _managers.TryGetValue(name, out var manager)
+                ? manager
+                : throw new KeyNotFoundException($"Entity manager with name '{name}' is not registered.");
         }
 
         /// <summary>
@@ -163,6 +222,9 @@ namespace Titanic.Entity
 
         #region Select Builders
 
+        /// <summary>
+        /// Создаёт ORM SELECT builder.
+        /// </summary>
         public static EntitySelectBuilder<TEntity> Select<TEntity>(UserConnection userConnection)
         {
             return GetSingleManager().Select<TEntity>(userConnection);
@@ -174,6 +236,9 @@ namespace Titanic.Entity
             return GetManager<TManager>().Select<TEntity>(userConnection);
         }
 
+        /// <summary>
+        /// Создаёт ORM SELECT builder.
+        /// </summary>
         public static EntitySelectBuilder<TEntity> Select<TEntity>(BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -181,6 +246,9 @@ namespace Titanic.Entity
             return new EntitySelectBuilder<TEntity>(provider, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Select.
+        /// </summary>
         public static EntitySelectBuilder Select(Type entityType, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -188,6 +256,9 @@ namespace Titanic.Entity
             return new EntitySelectBuilder(provider, entityType, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Select.
+        /// </summary>
         public static EntitySelectBuilder Select(string tableName, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -195,18 +266,27 @@ namespace Titanic.Entity
             return new EntitySelectBuilder(provider, tableName, userConnection);
         }
 
+        /// <summary>
+        /// Создаёт ORM SELECT builder.
+        /// </summary>
         public static EntitySelectBuilder<TEntity> Select<TEntity>(BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Select<TEntity>(GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Select.
+        /// </summary>
         public static EntitySelectBuilder Select(Type entityType, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Select(entityType, GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Select.
+        /// </summary>
         public static EntitySelectBuilder Select(string tableName, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
@@ -217,6 +297,9 @@ namespace Titanic.Entity
 
         #region Entity Schema Queries
 
+        /// <summary>
+        /// Создаёт Entity Schema Query.
+        /// </summary>
         public static EntitySchemaQuery<TEntity> Query<TEntity>(UserConnection userConnection)
         {
             return GetSingleManager().Query<TEntity>(userConnection);
@@ -228,6 +311,9 @@ namespace Titanic.Entity
             return GetManager<TManager>().Query<TEntity>(userConnection);
         }
 
+        /// <summary>
+        /// Создаёт Entity Schema Query.
+        /// </summary>
         public static EntitySchemaQuery<TEntity> Query<TEntity>(BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -235,6 +321,9 @@ namespace Titanic.Entity
             return new EntitySchemaQuery<TEntity>(provider, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Query.
+        /// </summary>
         public static EntitySchemaQuery Query(Type entityType, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -242,6 +331,9 @@ namespace Titanic.Entity
             return new EntitySchemaQuery(provider, entityType, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Query.
+        /// </summary>
         public static EntitySchemaQuery Query(string tableName, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -249,18 +341,27 @@ namespace Titanic.Entity
             return new EntitySchemaQuery(provider, tableName, userConnection);
         }
 
+        /// <summary>
+        /// Создаёт Entity Schema Query.
+        /// </summary>
         public static EntitySchemaQuery<TEntity> Query<TEntity>(BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Query<TEntity>(GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Query.
+        /// </summary>
         public static EntitySchemaQuery Query(Type entityType, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Query(entityType, GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Query.
+        /// </summary>
         public static EntitySchemaQuery Query(string tableName, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
@@ -271,6 +372,9 @@ namespace Titanic.Entity
 
         #region Entity CRUD
 
+        /// <summary>
+        /// Создаёт экземпляр ORM-сущности.
+        /// </summary>
         public static Orm.Entity Create<TEntity>(UserConnection userConnection)
         {
             return GetSingleManager().Create<TEntity>(userConnection);
@@ -282,6 +386,9 @@ namespace Titanic.Entity
             return GetManager<TManager>().Create<TEntity>(userConnection);
         }
 
+        /// <summary>
+        /// Создаёт экземпляр ORM-сущности.
+        /// </summary>
         public static Orm.Entity Create<TEntity>(BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -289,6 +396,9 @@ namespace Titanic.Entity
             return Create(Structure.GetEntityStructure<TEntity>(), provider, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
         public static Orm.Entity Create(Type entityType, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -296,6 +406,9 @@ namespace Titanic.Entity
             return Create(Structure.GetEntityStructure(entityType), provider, userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
         public static Orm.Entity Create(string tableName, BaseDbProvider provider, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -303,18 +416,27 @@ namespace Titanic.Entity
             return Create(Structure.GetEntityStructure(tableName), provider, userConnection);
         }
 
+        /// <summary>
+        /// Создаёт экземпляр ORM-сущности.
+        /// </summary>
         public static Orm.Entity Create<TEntity>(BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Create<TEntity>(GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
         public static Orm.Entity Create(Type entityType, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
             return Create(entityType, GetProvider(database), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
         public static Orm.Entity Create(string tableName, BaseDatabase database, UserConnection userConnection)
         {
             ArgumentNullException.ThrowIfNull(database);
@@ -325,7 +447,23 @@ namespace Titanic.Entity
 
         #region Private Methods
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
         internal static Orm.Entity Create(EntityStructure structure, BaseDbProvider provider, UserConnection userConnection)
+        {
+            return Create(structure, provider, userConnection, isNew: true, manager: null);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр Create.
+        /// </summary>
+        internal static Orm.Entity Create(
+            EntityStructure structure,
+            BaseDbProvider provider,
+            UserConnection userConnection,
+            bool isNew,
+            BaseEntityManager? manager)
         {
             var pathToAlias = structure.ColumnsStructure
                 .SelectMany(column => new[]
@@ -351,9 +489,14 @@ namespace Titanic.Entity
                 aliasToColumn,
                 structure,
                 provider,
-                userConnection);
+                userConnection,
+                isNew,
+                manager);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр GetSingleManager.
+        /// </summary>
         private static BaseEntityManager GetSingleManager()
         {
             return _managers.Count switch
@@ -365,12 +508,18 @@ namespace Titanic.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр GetProvider.
+        /// </summary>
         private static BaseDbProvider GetProvider(BaseDatabase database)
         {
             return database.Select().Provider
                 ?? throw new InvalidOperationException("Database provider is not initialized.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateManagerInstance.
+        /// </summary>
         private static BaseEntityManager CreateManagerInstance(string? managerTypeName)
         {
             if (string.IsNullOrWhiteSpace(managerTypeName))
@@ -391,6 +540,9 @@ namespace Titanic.Entity
                 : throw new InvalidOperationException($"Cannot create Entity manager '{managerTypeName}'.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ResolveManagerName.
+        /// </summary>
         private static string ResolveManagerName(string? managerTypeName, string dbProviderName)
         {
             if (!string.IsNullOrWhiteSpace(managerTypeName))
@@ -405,6 +557,9 @@ namespace Titanic.Entity
             return dbProviderName;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ResolveManagerName.
+        /// </summary>
         private static string ResolveManagerName(Type managerType, string dbProviderName)
         {
             var attr = managerType.GetCustomAttribute<EntityManagerConnectionAttribute>();

@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Titanic.Entity.Events;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.WebApplication.Api;
 using Titanic.Entity.WebApplication.Configuration;
@@ -108,6 +109,8 @@ namespace Titanic.Entity
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
             services.AddSingleton<HeaderEntityApiAuthorizationProvider>();
+            services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
+            services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
         }
 
         /// <summary>

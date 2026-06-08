@@ -123,6 +123,86 @@ app.Run();
 - `POST {Api.Path}`
 - `POST {Api.Path}/batch`
 
+## Событийный слой Entity
+
+`Titanic.Entity` поддерживает событийный pipeline вокруг `Save()` и `Delete()`:
+
+- `OnSaving`
+- `OnSaved`
+- `OnInserting`
+- `OnInserted`
+- `OnUpdating`
+- `OnUpdated`
+- `OnDeleting`
+- `OnDeleted`
+
+Событийный слой может работать в двух режимах:
+
+- локально, в том же приложении, где поднят `EntityManager`;
+- внешне, через отдельный listener-сервис.
+
+Режим задаётся настройкой `EventListener` в конфигурации менеджера:
+
+- пустое значение или отсутствие поля — локальный listener;
+- заполненное значение — внешний listener.
+
+Локальный режим означает, что обработчики ищутся по `[EntityEventListener("table_name")]` и вызываются внутри текущего процесса.
+
+Внешний режим означает, что вызов событийного слоя должен идти через transport-слой. Для этого поддерживается единый логический контракт события:
+
+- `managerName`
+- `tableName`
+- `stage`
+- `isNew`
+- `userConnection`
+- `values`
+- `requestId`
+- `correlationId`
+- `occurredAtUtc`
+
+### HTTP-контракт внешнего listener-а
+
+Рекомендуемый endpoint:
+
+```text
+POST /entity-event-listener/dispatch
+```
+
+Один HTTP-вызов соответствует одному этапу событийного pipeline.
+
+Минимальный ответ:
+
+```json
+{
+  "success": true,
+  "canceled": false,
+  "cancelReason": null,
+  "errorCode": null,
+  "errorMessage": null
+}
+```
+
+Если listener отменяет операцию, внешний сервис должен вернуть `canceled = true`. Если обработчик падает, он должен вернуть `success = false` и текст ошибки.
+
+### gRPC-контракт внешнего listener-а
+
+Рекомендуемый service:
+
+```text
+EntityEventListenerGrpc.Dispatch(EntityEventDispatchRequest)
+```
+
+gRPC-контракт повторяет ту же семантику, что и HTTP:
+
+- один вызов = одно событие;
+- передаётся `managerName`, `tableName`, `stage`, `isNew`, `userConnection` и типизированные `values`;
+- ответ сообщает, обработано ли событие, было ли оно отменено и есть ли ошибка.
+
+Практический смысл такого разделения:
+
+- локальный listener подходит для лёгкой бизнес-логики рядом с ORM;
+- внешний listener подходит для тяжёлой или изолированной обработки, которую нужно вынести в отдельное приложение.
+
 ## Пример конфигурации
 
 ```json
@@ -143,6 +223,7 @@ app.Run();
           "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
           "DefaultBatchExecutionMode": "Sequential"
         },
+        "EventListener": "",
         "ValidateDatabaseSchemaOnCompile": true,
         "Options": {
           "MaxReadRowCount": 20000
@@ -160,6 +241,7 @@ app.Run();
 - `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
 - `Api.Path` — базовый route для HTTP API конкретного менеджера.
 - `Api.AuthorizationProviderType` — тип провайдера, который авторизует запрос и возвращает `UserConnection`.
+- `EventListener` — способ вызова событийного слоя: пусто для локального режима, непустое значение для внешнего listener-сервиса.
 - `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
 
 ## Что важно знать про слой
