@@ -22,7 +22,6 @@ namespace Titanic.Entity
         private static readonly Dictionary<string, BaseEntityManager> _managers =
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly object _initLock = new();
-        private static IServiceProvider? _serviceProvider;
 
         #endregion Fields
 
@@ -66,7 +65,7 @@ namespace Titanic.Entity
         {
             ArgumentNullException.ThrowIfNull(serviceProvider);
 
-            _serviceProvider = serviceProvider;
+            EntityEventProviderResolver.ConfigureServices(serviceProvider);
             Titanic.Common.Services.Factory.ClassFactory.Configure(serviceProvider);
             EntityEventListenerRegistry.RegisterListeners();
         }
@@ -76,29 +75,10 @@ namespace Titanic.Entity
         /// </summary>
         public static void ResetServices()
         {
-            _serviceProvider = null;
+            EntityEventProviderResolver.ResetServices();
             Titanic.Common.Services.Factory.ClassFactory.Reset();
             EntityEventListenerRegistry.Reset();
             EntityEventRemoteListenerCache.Reset();
-        }
-
-        /// <summary>
-        /// Получить корневой провайдер сервисов, привязанный к Entity ORM.
-        /// </summary>
-        /// <returns> Провайдер сервисов приложения. </returns>
-        internal static IServiceProvider GetServiceProvider()
-        {
-            return _serviceProvider
-                ?? throw new InvalidOperationException("EntityManager service provider is not configured.");
-        }
-
-        /// <summary>
-        /// Получить корневой провайдер сервисов, если он уже привязан к Entity ORM.
-        /// </summary>
-        /// <returns>Провайдер сервисов приложения или <see langword="null" />.</returns>
-        internal static IServiceProvider? TryGetServiceProvider()
-        {
-            return _serviceProvider;
         }
 
         /// <summary>

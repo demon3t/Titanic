@@ -199,6 +199,9 @@ namespace Titanic.Entity.WebApplication
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
             services.AddSingleton<HeaderEntityApiAuthorizationProvider>();
+            services.AddSingleton<BaseEntityEventProvider, LocalEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, HttpEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, GrpcEntityEventProvider>();
             services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
             services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
         }
@@ -230,7 +233,7 @@ namespace Titanic.Entity.WebApplication
         {
             var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
 
-            app.MapPost($"{basePath}/{EntityEventListenerApiDefaults.HttpCreateActionPath}", (EntityEventDispatchRequest request) =>
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.CreateActionPath}", (EntityEventDispatchRequest request) =>
             {
                 request.ManagerName = manager.Name;
                 return ToEventListenerResult(EntityEventListenerRequestExecutor.Create(manager, request));
@@ -245,7 +248,7 @@ namespace Titanic.Entity.WebApplication
             MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleting);
             MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleted);
 
-            app.MapPost($"{basePath}/{EntityEventListenerApiDefaults.HttpDeleteActionPath}", (EntityEventDispatchRequest request) =>
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.DeleteActionPath}", (EntityEventDispatchRequest request) =>
             {
                 request.ManagerName = manager.Name;
                 return ToEventListenerResult(EntityEventListenerRequestExecutor.Delete(manager, request));
@@ -271,7 +274,7 @@ namespace Titanic.Entity.WebApplication
             BaseEntityManager manager,
             EntityEventStage stage)
         {
-            var actionPath = EntityEventListenerApiDefaults.GetHttpActionPath(stage);
+            var actionPath = HttpEntityEventProvider.GetActionPath(stage);
             app.MapPost($"{basePath}/{actionPath}", (EntityEventDispatchRequest request) =>
             {
                 request.ManagerName = manager.Name;
@@ -506,12 +509,20 @@ namespace Titanic.Entity.WebApplication
                     request.Name);
             }
 
+            var oldValues = hasPrimaryKey
+                ? LoadOldEntityValues(manager, userConnection, structure, primaryColumn, primaryValue)
+                : null;
             var entity = EntityManager.Create(
                 structure,
                 manager.Provider,
                 userConnection,
                 isNew: !hasPrimaryKey,
                 manager: manager);
+            if (oldValues != null)
+            {
+                entity.SetOldValues(oldValues);
+            }
+
             entity.SetValues(values);
             entity.Save();
 
@@ -549,6 +560,35 @@ namespace Titanic.Entity.WebApplication
             });
 
             return EntityApiOperationResult.Ok(request.Operation, new { deleted = affected > 0, affected }, request.Name);
+        }
+
+        /// <summary>
+        /// Загружает старые значения строки перед update-операцией Entity API.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="userConnection">Контекст пользователя.</param>
+        /// <param name="structure">Структура сущности.</param>
+        /// <param name="primaryColumn">Первичная колонка сущности.</param>
+        /// <param name="primaryValue">Значение первичного ключа.</param>
+        /// <returns>Старые значения строки или пустой словарь, если строка не найдена.</returns>
+        private static Dictionary<string, object?> LoadOldEntityValues(
+            BaseEntityManager manager,
+            UserConnection userConnection,
+            EntityStructure structure,
+            ColumnStructure primaryColumn,
+            object? primaryValue)
+        {
+            var query = new EntitySchemaQuery(manager.Provider, structure, manager.StructureScope, userConnection, manager)
+            {
+                RowCount = 1
+            };
+            query.AddAllSchemaColumns();
+            query.AddFilter(EntityComparisonType.Equal, primaryColumn.PropertyName, primaryValue);
+
+            return query.GetEntityCollection()
+                .FirstOrDefault()
+                ?.ToDictionary()
+                ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>

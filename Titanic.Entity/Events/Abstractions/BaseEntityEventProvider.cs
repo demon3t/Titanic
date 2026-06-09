@@ -6,17 +6,36 @@ using Titanic.Entity.Interfaces;
 namespace Titanic.Entity.Events
 {
     /// <summary>
-    /// Базовый provider вызова событийного слоя Entity ORM.
+    /// Базовый провайдер вызова событийного слоя Entity ORM.
     /// </summary>
     public abstract class BaseEntityEventProvider
     {
         #region Members
 
         /// <summary>
-        /// Проверяет, может ли provider обработать события указанного менеджера.
+        /// Передаёт событие подходящему провайдеру событийного слоя.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        internal static void DispatchEntityEvent(
+            global::Titanic.Entity.Orm.Entity entity,
+            BaseEntityManager manager,
+            EntityEventStage stage)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            ArgumentNullException.ThrowIfNull(manager);
+
+            var services = EntityEventProviderResolver.GetServices();
+            var provider = EntityEventProviderResolver.Resolve(manager, services);
+            provider.Dispatch(entity, manager, stage, services);
+        }
+
+        /// <summary>
+        /// Проверяет, может ли провайдер обработать события указанного менеджера.
         /// </summary>
         /// <param name="manager">Менеджер Entity ORM.</param>
-        /// <returns><see langword="true" />, если provider поддерживает менеджер.</returns>
+        /// <returns><see langword="true" />, если провайдер поддерживает менеджер.</returns>
         public abstract bool CanDispatch(BaseEntityManager manager);
 
         /// <summary>
@@ -31,6 +50,80 @@ namespace Titanic.Entity.Events
             BaseEntityManager manager,
             EntityEventStage stage,
             IServiceProvider services);
+
+        /// <summary>
+        /// Проверяет, является ли стадия началом обработки одной сущности.
+        /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns><see langword="true" />, если перед стадией нужно создать remote listener.</returns>
+        protected internal static bool IsInitialStage(EntityEventStage stage)
+        {
+            return stage is EntityEventStage.Saving or EntityEventStage.Deleting;
+        }
+
+        /// <summary>
+        /// Проверяет, является ли стадия завершением обработки одной сущности.
+        /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns><see langword="true" />, если после стадии нужно удалить remote listener.</returns>
+        protected internal static bool IsFinalStage(EntityEventStage stage)
+        {
+            return stage is EntityEventStage.Saved or EntityEventStage.Deleted;
+        }
+
+        /// <summary>
+        /// Вызывает локальные listener-ы, зарегистрированные для таблицы текущей сущности.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        protected internal static void DispatchLocalListeners(
+            global::Titanic.Entity.Orm.Entity entity,
+            BaseEntityManager manager,
+            EntityEventStage stage)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            ArgumentNullException.ThrowIfNull(manager);
+
+            DispatchListeners(entity, manager, stage, EntityEventListenerRegistry.GetListeners(entity.TableName));
+        }
+
+        /// <summary>
+        /// Вызывает переданные listener-ы для указанной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <param name="listeners">Экземпляры listener-ов событийного слоя.</param>
+        protected internal static void DispatchListeners(
+            global::Titanic.Entity.Orm.Entity entity,
+            BaseEntityManager manager,
+            EntityEventStage stage,
+            IReadOnlyCollection<BaseEntityEventListener> listeners)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            ArgumentNullException.ThrowIfNull(manager);
+            ArgumentNullException.ThrowIfNull(listeners);
+
+            if (listeners.Count == 0)
+            {
+                return;
+            }
+
+            var args = new EntityEventArgs(manager, stage);
+            foreach (var listener in listeners)
+            {
+                InvokeListener(listener, entity, args);
+
+                if (args.IsCanceled)
+                {
+                    throw new InvalidOperationException(
+                        string.IsNullOrWhiteSpace(args.CancelReason)
+                            ? $"Entity event pipeline was canceled during '{stage}'."
+                            : args.CancelReason);
+                }
+            }
+        }
 
         /// <summary>
         /// Создаёт транспортный dispatch-запрос из текущей ORM-сущности.
@@ -55,7 +148,8 @@ namespace Titanic.Entity.Events
                 Stage = stage.ToString(),
                 IsNew = entity.IsNew,
                 UserConnection = CloneUserConnection(entity.UserConnection),
-                Values = entity.ToDictionary()
+                Values = CopyValues(entity.ToDictionary()),
+                OldValues = CopyValues(entity.OldValues)
             };
         }
 
@@ -147,13 +241,71 @@ namespace Titanic.Entity.Events
         /// </summary>
         /// <param name="values">Значения из ответа listener-а.</param>
         /// <returns>Нормализованный словарь значений.</returns>
-        protected static Dictionary<string, object?> NormalizeValues(IReadOnlyDictionary<string, object?> values)
+        protected internal static Dictionary<string, object?> NormalizeValues(IReadOnlyDictionary<string, object?> values)
         {
             ArgumentNullException.ThrowIfNull(values);
 
             return values.ToDictionary(
                 x => x.Key,
                 x => NormalizeJsonValue(x.Value),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Вызывает метод listener-а, соответствующий стадии события.
+        /// </summary>
+        /// <param name="listener">Listener событийного слоя.</param>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="args">Аргументы события.</param>
+        private static void InvokeListener(
+            BaseEntityEventListener listener,
+            global::Titanic.Entity.Orm.Entity entity,
+            EntityEventArgs args)
+        {
+            switch (args.Stage)
+            {
+                case EntityEventStage.Saving:
+                    listener.OnSaving(entity, args);
+                    break;
+                case EntityEventStage.Saved:
+                    listener.OnSaved(entity, args);
+                    break;
+                case EntityEventStage.Inserting:
+                    listener.OnInserting(entity, args);
+                    break;
+                case EntityEventStage.Inserted:
+                    listener.OnInserted(entity, args);
+                    break;
+                case EntityEventStage.Updating:
+                    listener.OnUpdating(entity, args);
+                    break;
+                case EntityEventStage.Updated:
+                    listener.OnUpdated(entity, args);
+                    break;
+                case EntityEventStage.Deleting:
+                    listener.OnDeleting(entity, args);
+                    break;
+                case EntityEventStage.Deleted:
+                    listener.OnDeleted(entity, args);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(args),
+                        args.Stage,
+                        "Unsupported entity event stage.");
+            }
+        }
+
+        /// <summary>
+        /// Создаёт копию словаря значений сущности для транспортного запроса.
+        /// </summary>
+        /// <param name="values">Исходные значения сущности.</param>
+        /// <returns>Копия словаря значений.</returns>
+        private static Dictionary<string, object?> CopyValues(IReadOnlyDictionary<string, object?> values)
+        {
+            return values.ToDictionary(
+                x => x.Key,
+                x => x.Value,
                 StringComparer.OrdinalIgnoreCase);
         }
 

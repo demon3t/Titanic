@@ -4,6 +4,7 @@ using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
@@ -25,6 +26,7 @@ namespace Titanic.Entity.Orm
         private readonly EntityStructure _rootStructure;
         private readonly EntityStructureScope _structureScope;
         private readonly BaseDbProvider _provider;
+        private readonly BaseEntityManager? _manager;
         private QueryExpression? _whereExpression;
         private int _joinAliasIndex;
 
@@ -57,8 +59,9 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             Type entityType,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection, manager)
         {
         }
 
@@ -69,8 +72,9 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             string tableName,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection, manager)
         {
         }
 
@@ -80,8 +84,9 @@ namespace Titanic.Entity.Orm
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructure rootStructure,
-            UserConnection userConnection)
-            : this(provider, rootStructure, Structure.DefaultScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, rootStructure, Structure.DefaultScope, userConnection, manager)
         {
         }
 
@@ -92,7 +97,8 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructure rootStructure,
             EntityStructureScope structureScope,
-            UserConnection userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
         {
             ArgumentNullException.ThrowIfNull(provider);
             ArgumentNullException.ThrowIfNull(rootStructure);
@@ -102,6 +108,7 @@ namespace Titanic.Entity.Orm
             _provider = provider;
             _rootStructure = rootStructure;
             _structureScope = structureScope;
+            _manager = manager;
             UserConnection = userConnection;
             UseLocalization(userConnection.Culture?.Id);
             Select = provider.Select();
@@ -326,7 +333,8 @@ namespace Titanic.Entity.Orm
                 _rootStructure,
                 _provider,
                 UserConnection,
-                isNew: false);
+                isNew: false,
+                manager: _manager);
         }
 
         /// <summary>

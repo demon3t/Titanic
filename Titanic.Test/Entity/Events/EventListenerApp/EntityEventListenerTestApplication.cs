@@ -24,6 +24,7 @@ namespace Titanic.Test.Entity
         {
             _app = app;
             HttpBaseAddress = new Uri($"http://127.0.0.1:{httpPort}");
+            GrpcBaseAddress = new Uri($"http://127.0.0.1:{grpcPort}");
             GrpcListenerUri = $"grpc://127.0.0.1:{grpcPort}";
         }
 
@@ -35,6 +36,11 @@ namespace Titanic.Test.Entity
         /// Базовый HTTP-адрес listener API.
         /// </summary>
         public Uri HttpBaseAddress { get; }
+
+        /// <summary>
+        /// Базовый HTTP/2-адрес gRPC listener API.
+        /// </summary>
+        public Uri GrpcBaseAddress { get; }
 
         /// <summary>
         /// URI gRPC listener API для настройки remote provider-а.

@@ -3,7 +3,7 @@ using Titanic.Entity.Interfaces;
 namespace Titanic.Entity.Events
 {
     /// <summary>
-    /// Provider локального вызова обработчиков событий Entity ORM.
+    /// Провайдер локального вызова обработчиков событий Entity ORM.
     /// </summary>
     public sealed class LocalEntityEventProvider : BaseEntityEventProvider
     {
@@ -28,7 +28,7 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(services);
 
-            EntityEventLocalExecutor.Dispatch(entity, manager, stage);
+            DispatchLocalListeners(entity, manager, stage);
         }
 
         #endregion Members

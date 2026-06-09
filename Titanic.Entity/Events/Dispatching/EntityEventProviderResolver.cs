@@ -4,7 +4,7 @@ using Titanic.Entity.Interfaces;
 namespace Titanic.Entity.Events
 {
     /// <summary>
-    /// Выбирает provider вызова событийного слоя для конкретного менеджера.
+    /// Выбирает провайдер вызова событийного слоя для конкретного менеджера.
     /// </summary>
     internal static class EntityEventProviderResolver
     {
@@ -17,17 +17,42 @@ namespace Titanic.Entity.Events
             new GrpcEntityEventProvider()
         ];
 
-        /// <summary>
-        /// Пустой provider сервисов для сценариев без настроенного DI.
-        /// </summary>
-        internal static IServiceProvider EmptyServices { get; } = new EmptyServiceProvider();
+        private static IServiceProvider? _services;
 
         /// <summary>
-        /// Возвращает provider, который должен обработать события указанного менеджера.
+        /// Привязывает провайдер сервисов приложения к событийному слою.
+        /// </summary>
+        /// <param name="services">Провайдер сервисов приложения.</param>
+        internal static void ConfigureServices(IServiceProvider services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+
+            _services = services;
+        }
+
+        /// <summary>
+        /// Сбрасывает провайдер сервисов приложения.
+        /// </summary>
+        internal static void ResetServices()
+        {
+            _services = null;
+        }
+
+        /// <summary>
+        /// Возвращает провайдер сервисов приложения или пустую реализацию.
+        /// </summary>
+        /// <returns>Провайдер сервисов для событийного слоя.</returns>
+        internal static IServiceProvider GetServices()
+        {
+            return _services ?? EmptyServiceProvider.Instance;
+        }
+
+        /// <summary>
+        /// Возвращает провайдер, который должен обработать события указанного менеджера.
         /// </summary>
         /// <param name="manager">Менеджер Entity ORM.</param>
         /// <param name="services">Провайдер сервисов приложения.</param>
-        /// <returns>Provider событийного слоя.</returns>
+        /// <returns>Провайдер событийного слоя.</returns>
         internal static BaseEntityEventProvider Resolve(BaseEntityManager manager, IServiceProvider services)
         {
             ArgumentNullException.ThrowIfNull(manager);
@@ -46,15 +71,16 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Возвращает provider-ы из DI и встроенные provider-ы по умолчанию.
+        /// Возвращает провайдеры из DI и встроенные провайдеры по умолчанию.
         /// </summary>
         /// <param name="services">Провайдер сервисов приложения.</param>
-        /// <returns>Список provider-ов событийного слоя.</returns>
+        /// <returns>Список провайдеров событийного слоя.</returns>
         private static IEnumerable<BaseEntityEventProvider> GetProviders(IServiceProvider services)
         {
             return services
                 .GetServices<BaseEntityEventProvider>()
-                .Concat(BuiltInProviders);
+                .Concat(BuiltInProviders)
+                .DistinctBy(provider => provider.GetType());
         }
 
         /// <summary>
@@ -81,10 +107,19 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Пустой IServiceProvider, который не возвращает сервисы.
+        /// Пустой провайдер сервисов, который не возвращает зависимости.
         /// </summary>
         private sealed class EmptyServiceProvider : IServiceProvider
         {
+            /// <summary>
+            /// Единственный экземпляр пустого провайдера сервисов.
+            /// </summary>
+            internal static readonly EmptyServiceProvider Instance = new();
+
+            private EmptyServiceProvider()
+            {
+            }
+
             /// <inheritdoc />
             public object? GetService(Type serviceType)
             {

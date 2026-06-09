@@ -10,6 +10,61 @@ namespace Titanic.Entity.Events
     {
         #region Members
 
+        /// <summary>
+        /// Базовый HTTP-путь API обработчика событий.
+        /// </summary>
+        public const string BasePath = "/entity-event-listener";
+
+        /// <summary>
+        /// HTTP-действие создания экземпляра remote listener-а.
+        /// </summary>
+        public const string CreateActionPath = "create";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Saving.
+        /// </summary>
+        public const string OnSavingActionPath = "on-saving";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Saved.
+        /// </summary>
+        public const string OnSavedActionPath = "on-saved";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Inserting.
+        /// </summary>
+        public const string OnInsertingActionPath = "on-inserting";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Inserted.
+        /// </summary>
+        public const string OnInsertedActionPath = "on-inserted";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Updating.
+        /// </summary>
+        public const string OnUpdatingActionPath = "on-updating";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Updated.
+        /// </summary>
+        public const string OnUpdatedActionPath = "on-updated";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Deleting.
+        /// </summary>
+        public const string OnDeletingActionPath = "on-deleting";
+
+        /// <summary>
+        /// HTTP-действие вызова стадии Deleted.
+        /// </summary>
+        public const string OnDeletedActionPath = "on-deleted";
+
+        /// <summary>
+        /// HTTP-действие удаления экземпляра remote listener-а.
+        /// </summary>
+        public const string DeleteActionPath = "delete";
+
         /// <inheritdoc />
         public override bool CanDispatch(BaseEntityManager manager)
         {
@@ -36,16 +91,16 @@ namespace Titanic.Entity.Events
             var baseUri = ResolveHttpBaseUri(GetListenerUri(manager));
             using var client = CreateClient(baseUri, services);
 
-            if (EntityEventListenerApiDefaults.IsInitialStage(stage))
+            if (IsInitialStage(stage))
             {
-                SendHttp(request, BuildActionUri(baseUri, EntityEventListenerApiDefaults.HttpCreateActionPath), client);
+                SendHttp(request, BuildActionUri(baseUri, CreateActionPath), client);
             }
 
             try
             {
                 var response = SendHttp(
                     request,
-                    BuildActionUri(baseUri, EntityEventListenerApiDefaults.GetHttpActionPath(stage)),
+                    BuildActionUri(baseUri, GetActionPath(stage)),
                     client);
                 ApplyResponseValues(entity, response);
             }
@@ -55,10 +110,31 @@ namespace Titanic.Entity.Events
                 throw;
             }
 
-            if (EntityEventListenerApiDefaults.IsFinalStage(stage))
+            if (IsFinalStage(stage))
             {
                 TryDeleteRemoteListener(request, baseUri, client);
             }
+        }
+
+        /// <summary>
+        /// Возвращает HTTP-действие для указанной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns>Относительный HTTP-путь действия.</returns>
+        public static string GetActionPath(EntityEventStage stage)
+        {
+            return stage switch
+            {
+                EntityEventStage.Saving => OnSavingActionPath,
+                EntityEventStage.Saved => OnSavedActionPath,
+                EntityEventStage.Inserting => OnInsertingActionPath,
+                EntityEventStage.Inserted => OnInsertedActionPath,
+                EntityEventStage.Updating => OnUpdatingActionPath,
+                EntityEventStage.Updated => OnUpdatedActionPath,
+                EntityEventStage.Deleting => OnDeletingActionPath,
+                EntityEventStage.Deleted => OnDeletedActionPath,
+                _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "Unsupported entity event stage.")
+            };
         }
 
         /// <summary>
@@ -109,7 +185,7 @@ namespace Titanic.Entity.Events
         {
             try
             {
-                SendHttp(request, BuildActionUri(baseUri, EntityEventListenerApiDefaults.HttpDeleteActionPath), client);
+                SendHttp(request, BuildActionUri(baseUri, DeleteActionPath), client);
             }
             catch
             {
@@ -132,7 +208,7 @@ namespace Titanic.Entity.Events
 
             if (string.IsNullOrWhiteSpace(builder.Path) || builder.Path == "/")
             {
-                builder.Path = EntityEventListenerApiDefaults.HttpBasePath.TrimStart('/');
+                builder.Path = BasePath.TrimStart('/');
             }
 
             return new Uri(builder.Uri.AbsoluteUri.TrimEnd('/') + "/");

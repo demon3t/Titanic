@@ -21,6 +21,11 @@ namespace Titanic.Entity.Orm
         private readonly Dictionary<string, ColumnValue> _values;
 
         /// <summary>
+        /// Снимок значений сущности до текущей операции сохранения или удаления.
+        /// </summary>
+        private readonly Dictionary<string, object?> _oldValues;
+
+        /// <summary>
         /// Соответствие ORM-пути к SQL-алиасу выбранной колонки.
         /// </summary>
         private readonly Dictionary<string, string> _pathToAlias;
@@ -51,11 +56,6 @@ namespace Titanic.Entity.Orm
         private readonly BaseEntityManager? _manager;
 
         /// <summary>
-        /// Идентификатор текущего событийного pipeline для внешнего listener-а.
-        /// </summary>
-        private readonly string _eventDispatchId = Guid.NewGuid().ToString("N");
-
-        /// <summary>
         /// Признак того, что сущность была создана как новая запись и ещё не была сохранена.
         /// </summary>
         private bool _isNew;
@@ -73,6 +73,9 @@ namespace Titanic.Entity.Orm
         /// <param name="structure"> Метаданные корневой сущности. </param>
         /// <param name="provider"> Провайдер БД. </param>
         /// <param name="userConnection"> Контекст пользователя. </param>
+        /// <param name="isNew"> Признак новой записи. </param>
+        /// <param name="manager"> Менеджер Entity ORM. </param>
+        /// <param name="oldValues"> Снимок старых значений сущности. </param>
         internal Entity(
             Dictionary<string, ColumnValue> values,
             Dictionary<string, string> pathToAlias,
@@ -81,9 +84,15 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             UserConnection userConnection,
             bool isNew,
-            BaseEntityManager? manager = null)
+            BaseEntityManager? manager = null,
+            IReadOnlyDictionary<string, object?>? oldValues = null)
         {
             _values = values;
+            _oldValues = oldValues != null
+                ? CopyValues(oldValues)
+                : isNew
+                    ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    : CopyColumnValues(values);
             _pathToAlias = pathToAlias;
             _aliasToColumn = aliasToColumn;
             _structure = structure;
@@ -108,6 +117,11 @@ namespace Titanic.Entity.Orm
         public IReadOnlyDictionary<string, ColumnValue> Values => _values;
 
         /// <summary>
+        /// Старые значения колонок до текущей операции сохранения или удаления.
+        /// </summary>
+        public IReadOnlyDictionary<string, object?> OldValues => _oldValues;
+
+        /// <summary>
         /// Признак новой сущности, которая ещё не была сохранена в БД.
         /// </summary>
         public bool IsNew => _isNew;
@@ -120,7 +134,7 @@ namespace Titanic.Entity.Orm
         /// <summary>
         /// Идентификатор текущего событийного pipeline для внешнего listener-а.
         /// </summary>
-        internal string EventDispatchId => _eventDispatchId;
+        internal string EventDispatchId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
         /// Известные ORM-пути выбранных колонок и соответствующие им SQL-алиасы.
@@ -253,6 +267,7 @@ namespace Titanic.Entity.Orm
                 {
                     DispatchEvent(EntityEventStage.Updated);
                     DispatchEvent(EntityEventStage.Saved);
+                    RefreshOldValues();
                     return true;
                 }
             }
@@ -265,6 +280,7 @@ namespace Titanic.Entity.Orm
             _isNew = false;
             DispatchEvent(EntityEventStage.Inserted);
             DispatchEvent(EntityEventStage.Saved);
+            RefreshOldValues();
             return true;
         }
 
@@ -400,6 +416,24 @@ namespace Titanic.Entity.Orm
             }
 
             return new ScalarColumnValue(alias, column?.DataValueType ?? DataValueType.String, value);
+        }
+
+        /// <summary>
+        /// Заменяет снимок старых значений сущности.
+        /// </summary>
+        /// <param name="values">Старые значения по ORM-путям, именам колонок или SQL-алиасам.</param>
+        /// <returns>Текущая сущность для fluent-цепочки.</returns>
+        internal Entity SetOldValues(IReadOnlyDictionary<string, object?> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+
+            _oldValues.Clear();
+            foreach (var value in values)
+            {
+                _oldValues[value.Key] = value.Value;
+            }
+
+            return this;
         }
 
         #endregion Internal Methods
@@ -568,6 +602,44 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
+        /// Обновляет снимок старых значений после успешного сохранения.
+        /// </summary>
+        private void RefreshOldValues()
+        {
+            _oldValues.Clear();
+            foreach (var value in ToDictionary())
+            {
+                _oldValues[value.Key] = value.Value;
+            }
+        }
+
+        /// <summary>
+        /// Создаёт копию словаря сырых значений.
+        /// </summary>
+        /// <param name="values">Исходный словарь значений.</param>
+        /// <returns>Копия словаря значений.</returns>
+        private static Dictionary<string, object?> CopyValues(IReadOnlyDictionary<string, object?> values)
+        {
+            return values.ToDictionary(
+                x => x.Key,
+                x => x.Value,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Создаёт снимок сырых значений из объектов значений колонок.
+        /// </summary>
+        /// <param name="values">Значения колонок сущности.</param>
+        /// <returns>Снимок сырых значений.</returns>
+        private static Dictionary<string, object?> CopyColumnValues(IReadOnlyDictionary<string, ColumnValue> values)
+        {
+            return values.ToDictionary(
+                x => x.Key,
+                x => x.Value.Value,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Проверить, считается ли значение первичного ключа незаполненным.
         /// </summary>
         /// <param name="value"> Проверяемое значение первичного ключа. </param>
@@ -618,7 +690,7 @@ namespace Titanic.Entity.Orm
                 return;
             }
 
-            EntityEventDispatcher.Dispatch(this, _manager, stage);
+            BaseEntityEventProvider.DispatchEntityEvent(this, _manager, stage);
         }
 
         #endregion Private Methods

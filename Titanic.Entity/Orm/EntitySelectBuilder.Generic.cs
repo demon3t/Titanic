@@ -1,11 +1,12 @@
 using Titanic.Common.Session;
 using Titanic.Db.Abstractions;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
 {
     /// <summary>
-    /// Generic convenience wrapper over the non-generic builder.
+    /// Типизированная обёртка над нетипизированным SELECT builder-ом.
     /// </summary>
     public sealed class EntitySelectBuilder<TEntity> : EntitySelectBuilder
     {
@@ -17,8 +18,9 @@ namespace Titanic.Entity.Orm
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructureScope structureScope,
-            UserConnection userConnection)
-            : base(provider, structureScope, typeof(TEntity), userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : base(provider, structureScope, typeof(TEntity), userConnection, manager)
         {
         }
     }

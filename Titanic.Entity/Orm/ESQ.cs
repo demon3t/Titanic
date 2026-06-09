@@ -2,18 +2,20 @@
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
 {
     /// <summary>
-    /// Entity Schema Query: query model for reading entities from the database.
+    /// Entity Schema Query: модель запроса для чтения сущностей из базы данных.
     /// </summary>
     public class EntitySchemaQuery
     {
         private readonly BaseDbProvider _provider;
         private readonly EntityStructure _structure;
         private readonly EntityStructureScope _structureScope;
+        private readonly BaseEntityManager? _manager;
         private readonly List<EntityQueryOrder> _orders = new();
         private readonly List<string> _groupBy = new();
 
@@ -66,8 +68,9 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             Type entityType,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection, manager)
         {
         }
 
@@ -75,8 +78,9 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             string tableName,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection, manager)
         {
         }
 
@@ -89,11 +93,13 @@ namespace Titanic.Entity.Orm
             BaseDbProvider provider,
             EntityStructure structure,
             EntityStructureScope structureScope,
-            UserConnection userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _structure = structure ?? throw new ArgumentNullException(nameof(structure));
             _structureScope = structureScope ?? throw new ArgumentNullException(nameof(structureScope));
+            _manager = manager;
             UserConnection = userConnection ?? throw new ArgumentNullException(nameof(userConnection));
         }
 
@@ -217,7 +223,7 @@ namespace Titanic.Entity.Orm
 
         public EntitySelectBuilder BuildSelect()
         {
-            var builder = new EntitySelectBuilder(_provider, _structure, _structureScope, UserConnection);
+            var builder = new EntitySelectBuilder(_provider, _structure, _structureScope, UserConnection, _manager);
 
             if (IsDistinct)
             {

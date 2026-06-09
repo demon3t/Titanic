@@ -105,7 +105,7 @@ namespace Titanic.Test.Entity
         private static async Task CreateAsync(HttpClient client, string dispatchId)
         {
             var response = await client.PostAsJsonAsync(
-                BuildActionPath(EntityEventListenerApiDefaults.HttpCreateActionPath),
+                BuildActionPath(HttpEntityEventProvider.CreateActionPath),
                 CreateDispatchRequest(EntityEventStage.Saving, dispatchId));
             response.EnsureSuccessStatusCode();
         }
@@ -132,7 +132,7 @@ namespace Titanic.Test.Entity
         private static async Task DeleteAsync(HttpClient client, string dispatchId)
         {
             var response = await client.PostAsJsonAsync(
-                BuildActionPath(EntityEventListenerApiDefaults.HttpDeleteActionPath),
+                BuildActionPath(HttpEntityEventProvider.DeleteActionPath),
                 CreateDispatchRequest(EntityEventStage.Saved, dispatchId));
             response.EnsureSuccessStatusCode();
         }
@@ -245,7 +245,7 @@ namespace Titanic.Test.Entity
         /// <returns>Полный путь HTTP endpoint-а стадии.</returns>
         private static string BuildStagePath(EntityEventStage stage)
         {
-            return BuildActionPath(EntityEventListenerApiDefaults.GetHttpActionPath(stage));
+            return BuildActionPath(HttpEntityEventProvider.GetActionPath(stage));
         }
 
         /// <summary>

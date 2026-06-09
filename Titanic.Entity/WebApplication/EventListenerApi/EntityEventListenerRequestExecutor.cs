@@ -19,30 +19,7 @@ namespace Titanic.Entity.Events
         /// <returns>Результат обработки события.</returns>
         internal static EntityEventDispatchResponse Execute(EntityEventDispatchRequest request)
         {
-            ArgumentNullException.ThrowIfNull(request);
-
-            try
-            {
-                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
-                return Execute(manager, request);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return new EntityEventDispatchResponse
-                {
-                    Success = false,
-                    Canceled = true,
-                    CancelReason = ex.Message
-                };
-            }
-            catch (Exception ex)
-            {
-                return new EntityEventDispatchResponse
-                {
-                    Success = false,
-                    ErrorMessage = ex.Message
-                };
-            }
+            return ExecuteForManager(request, manager => Execute(manager, request), cancelInvalidOperation: true);
         }
 
         /// <summary>
@@ -52,17 +29,7 @@ namespace Titanic.Entity.Events
         /// <returns>Результат создания экземпляра listener-а.</returns>
         internal static EntityEventDispatchResponse Create(EntityEventDispatchRequest request)
         {
-            ArgumentNullException.ThrowIfNull(request);
-
-            try
-            {
-                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
-                return Create(manager, request);
-            }
-            catch (Exception ex)
-            {
-                return Error(ex);
-            }
+            return ExecuteForManager(request, manager => Create(manager, request), cancelInvalidOperation: false);
         }
 
         /// <summary>
@@ -72,17 +39,7 @@ namespace Titanic.Entity.Events
         /// <returns>Результат удаления экземпляра listener-а.</returns>
         internal static EntityEventDispatchResponse Delete(EntityEventDispatchRequest request)
         {
-            ArgumentNullException.ThrowIfNull(request);
-
-            try
-            {
-                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
-                return Delete(manager, request);
-            }
-            catch (Exception ex)
-            {
-                return Error(ex);
-            }
+            return ExecuteForManager(request, manager => Delete(manager, request), cancelInvalidOperation: false);
         }
 
         /// <summary>
@@ -93,21 +50,10 @@ namespace Titanic.Entity.Events
         /// <returns>Результат обработки события.</returns>
         internal static EntityEventDispatchResponse ExecuteStage(EntityEventDispatchRequest request, EntityEventStage stage)
         {
-            ArgumentNullException.ThrowIfNull(request);
-
-            try
-            {
-                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
-                return ExecuteStage(manager, request, stage);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Canceled(ex);
-            }
-            catch (Exception ex)
-            {
-                return Error(ex);
-            }
+            return ExecuteForManager(
+                request,
+                manager => ExecuteStage(manager, request, stage),
+                cancelInvalidOperation: true);
         }
 
         /// <summary>
@@ -203,12 +149,13 @@ namespace Titanic.Entity.Events
                 request.Stage = stage.ToString();
 
                 var entity = manager.Create(request.TableName, request.UserConnection, request.IsNew);
-                entity.SetValues(request.Values);
+                entity.SetOldValues(BaseEntityEventProvider.NormalizeValues(request.OldValues));
+                entity.SetValues(BaseEntityEventProvider.NormalizeValues(request.Values));
 
                 var listeners = EntityEventRemoteListenerCache.GetListeners(manager, request);
-                EntityEventLocalExecutor.Dispatch(entity, manager, stage, listeners);
+                BaseEntityEventProvider.DispatchListeners(entity, manager, stage, listeners);
 
-                releaseListeners = releaseOnFinalStage && EntityEventListenerApiDefaults.IsFinalStage(stage);
+                releaseListeners = releaseOnFinalStage && BaseEntityEventProvider.IsFinalStage(stage);
                 return Success(entity.ToDictionary());
             }
             catch (InvalidOperationException ex)
@@ -227,6 +174,36 @@ namespace Titanic.Entity.Events
                 {
                     EntityEventRemoteListenerCache.Release(manager, request);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Находит менеджер из запроса и выполняет действие listener API.
+        /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <param name="execute">Действие, которое нужно выполнить для найденного менеджера.</param>
+        /// <param name="cancelInvalidOperation">Возвращать отмену pipeline для ошибок бизнес-валидации.</param>
+        /// <returns>Результат действия listener API.</returns>
+        private static EntityEventDispatchResponse ExecuteForManager(
+            EntityEventDispatchRequest request,
+            Func<BaseEntityManager, EntityEventDispatchResponse> execute,
+            bool cancelInvalidOperation)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNull(execute);
+
+            try
+            {
+                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
+                return execute(manager);
+            }
+            catch (InvalidOperationException ex) when (cancelInvalidOperation)
+            {
+                return Canceled(ex);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
             }
         }
 
@@ -254,6 +231,10 @@ namespace Titanic.Entity.Events
                     }
                 },
                 Values = request.Values.ToDictionary(
+                    x => x.Key,
+                    x => FromGrpcValue(x.Value),
+                    StringComparer.OrdinalIgnoreCase),
+                OldValues = request.OldValues.ToDictionary(
                     x => x.Key,
                     x => FromGrpcValue(x.Value),
                     StringComparer.OrdinalIgnoreCase)

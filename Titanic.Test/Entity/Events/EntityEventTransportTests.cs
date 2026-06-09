@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using Google.Protobuf.WellKnownTypes;
+using Grpc.Net.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
 using Titanic.Db;
@@ -7,6 +9,7 @@ using Titanic.Db.PosgreSql;
 using Titanic.Db.WebApplication;
 using Titanic.Entity.Attributes;
 using Titanic.Entity.Events;
+using Titanic.Entity.Events.Grpc;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.WebApplication;
 using Titanic.Entity.WebApplication.Configuration;
@@ -26,6 +29,7 @@ namespace Titanic.Test.Entity
         private const string GrpcManagerName = "TransportManagerGrpc";
         private const string HttpListenerPath = "/entity-event-listener/transport-http";
         private const string FilledDescription = "filled-by-event-listener";
+        private const string OldDescription = "old-description";
 
         /// <summary>
         /// Инициализирует новый экземпляр Entity_Save_WithLocalEventListener_ShouldFillFieldAndPersistIt.
@@ -127,6 +131,24 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Проверяет, что remote gRPC provider передаёт старые значения существующей сущности.
+        /// </summary>
+        [Fact]
+        public async Task Entity_Save_WithRemoteGrpcEventListener_ShouldPassOldValuesToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+
+            var manager = CreateInMemoryManager(GrpcManagerName, listenerApp.GrpcListenerUri);
+            var entity = CreateExistingDepartmentEntity(manager, "transport-grpc-old", OldDescription);
+            entity.Set(nameof(OrmDepartmentEntity.Description), "updated-description");
+
+            entity.Save();
+
+            Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр EntityEventListenerApi_HttpEndpoint_ShouldReturnSuccessAndMutatedValues.
         /// </summary>
         [Fact]
@@ -138,13 +160,13 @@ namespace Titanic.Test.Entity
             var request = CreateDispatchRequest(EntityEventStage.Saving);
 
             var createResponse = await client.PostAsJsonAsync(
-                BuildActionPath(HttpListenerPath, EntityEventListenerApiDefaults.HttpCreateActionPath),
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.CreateActionPath),
                 request);
             var response = await client.PostAsJsonAsync(
                 BuildStagePath(HttpListenerPath, EntityEventStage.Saving),
                 request);
             var deleteResponse = await client.PostAsJsonAsync(
-                BuildActionPath(HttpListenerPath, EntityEventListenerApiDefaults.HttpDeleteActionPath),
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.DeleteActionPath),
                 request);
 
             createResponse.EnsureSuccessStatusCode();
@@ -156,6 +178,57 @@ namespace Titanic.Test.Entity
             Assert.True(body.Success);
             Assert.Equal(new[] { "saving:departments" }, TransportEventSink.Events);
             Assert.Equal(FilledDescription, GetStringValue(body.Values, nameof(OrmDepartmentEntity.Description)));
+        }
+
+        /// <summary>
+        /// Проверяет, что HTTP listener API передаёт старые значения в локальный listener.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_HttpEndpoint_ShouldPassOldValuesToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var client = listenerApp.CreateHttpClient();
+            var request = CreateDispatchRequest(EntityEventStage.Updating);
+            request.Values[nameof(OrmDepartmentEntity.Description)] = "updated-description";
+            request.OldValues[nameof(OrmDepartmentEntity.Description)] = OldDescription;
+
+            var createResponse = await client.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.CreateActionPath),
+                request);
+            var response = await client.PostAsJsonAsync(
+                BuildStagePath(HttpListenerPath, EntityEventStage.Updating),
+                request);
+            var deleteResponse = await client.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.DeleteActionPath),
+                request);
+
+            createResponse.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
+            deleteResponse.EnsureSuccessStatusCode();
+            Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
+        }
+
+        /// <summary>
+        /// Проверяет, что gRPC listener API передаёт старые значения в локальный listener.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_GrpcEndpoint_ShouldPassOldValuesToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var channel = GrpcChannel.ForAddress(listenerApp.GrpcBaseAddress);
+            var client = new EntityEventListenerGrpc.EntityEventListenerGrpcClient(channel);
+            var request = CreateGrpcDispatchRequest(EntityEventStage.Updating);
+            request.Values[nameof(OrmDepartmentEntity.Description)] = Value.ForString("updated-description");
+            request.OldValues[nameof(OrmDepartmentEntity.Description)] = Value.ForString(OldDescription);
+
+            client.Create(request);
+            var response = client.OnUpdating(request);
+            client.Delete(request);
+
+            Assert.True(response.Success);
+            Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
         }
 
         /// <summary>
@@ -173,22 +246,22 @@ namespace Titanic.Test.Entity
             var secondRequest = CreateDispatchRequest(EntityEventStage.Saving, "TransportManagerB");
 
             var firstCreateResponse = await client.PostAsJsonAsync(
-                BuildActionPath(firstPath, EntityEventListenerApiDefaults.HttpCreateActionPath),
+                BuildActionPath(firstPath, HttpEntityEventProvider.CreateActionPath),
                 firstRequest);
             var firstResponse = await client.PostAsJsonAsync(
                 BuildStagePath(firstPath, EntityEventStage.Saving),
                 firstRequest);
             var firstDeleteResponse = await client.PostAsJsonAsync(
-                BuildActionPath(firstPath, EntityEventListenerApiDefaults.HttpDeleteActionPath),
+                BuildActionPath(firstPath, HttpEntityEventProvider.DeleteActionPath),
                 firstRequest);
             var secondCreateResponse = await client.PostAsJsonAsync(
-                BuildActionPath(secondPath, EntityEventListenerApiDefaults.HttpCreateActionPath),
+                BuildActionPath(secondPath, HttpEntityEventProvider.CreateActionPath),
                 secondRequest);
             var secondResponse = await client.PostAsJsonAsync(
                 BuildStagePath(secondPath, EntityEventStage.Saving),
                 secondRequest);
             var secondDeleteResponse = await client.PostAsJsonAsync(
-                BuildActionPath(secondPath, EntityEventListenerApiDefaults.HttpDeleteActionPath),
+                BuildActionPath(secondPath, HttpEntityEventProvider.DeleteActionPath),
                 secondRequest);
 
             firstCreateResponse.EnsureSuccessStatusCode();
@@ -405,6 +478,31 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Создаёт существующую тестовую сущность со снимком старых значений.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="namePrefix">Префикс имени сущности.</param>
+        /// <param name="description">Исходное описание сущности.</param>
+        /// <returns>Существующая ORM-сущность.</returns>
+        private static global::Titanic.Entity.Orm.Entity CreateExistingDepartmentEntity(
+            BaseEntityManager manager,
+            string namePrefix,
+            string description)
+        {
+            var builder = manager.Select<OrmDepartmentEntity>(CreateUserConnection());
+            builder.AddColumn(nameof(OrmDepartmentEntity.Id));
+            builder.AddColumn(nameof(OrmDepartmentEntity.Name));
+            builder.AddColumn(nameof(OrmDepartmentEntity.Description));
+
+            return builder.CreateRecord(new Dictionary<string, object?>
+            {
+                [nameof(OrmDepartmentEntity.Id)] = 1,
+                [nameof(OrmDepartmentEntity.Name)] = $"{namePrefix}-{Guid.NewGuid():N}",
+                [nameof(OrmDepartmentEntity.Description)] = description
+            });
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр CreateDispatchRequest.
         /// </summary>
         private static EntityEventDispatchRequest CreateDispatchRequest(EntityEventStage stage, string managerName = HttpManagerName)
@@ -422,6 +520,34 @@ namespace Titanic.Test.Entity
                     [nameof(OrmDepartmentEntity.Name)] = "manual-http-dispatch"
                 }
             };
+        }
+
+        /// <summary>
+        /// Создаёт gRPC dispatch-запрос с указанной стадией.
+        /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns>gRPC dispatch-запрос.</returns>
+        private static EntityEventGrpcRequest CreateGrpcDispatchRequest(EntityEventStage stage)
+        {
+            var request = new EntityEventGrpcRequest
+            {
+                ManagerName = GrpcManagerName,
+                TableName = "departments",
+                DispatchId = Guid.NewGuid().ToString("N"),
+                Stage = stage.ToString(),
+                IsNew = true,
+                UserConnection = new EntityEventGrpcUserConnection
+                {
+                    UserId = "11111111-1111-1111-1111-111111111111",
+                    Culture = new EntityEventGrpcUserCulture
+                    {
+                        Id = "22222222-2222-2222-2222-222222222222",
+                        Name = "Test"
+                    }
+                }
+            };
+            request.Values[nameof(OrmDepartmentEntity.Name)] = Value.ForString("manual-grpc-dispatch");
+            return request;
         }
 
         /// <summary>
@@ -443,7 +569,7 @@ namespace Titanic.Test.Entity
         /// <returns>Полный путь HTTP endpoint-а стадии.</returns>
         private static string BuildStagePath(string basePath, EntityEventStage stage)
         {
-            return BuildActionPath(basePath, EntityEventListenerApiDefaults.GetHttpActionPath(stage));
+            return BuildActionPath(basePath, HttpEntityEventProvider.GetActionPath(stage));
         }
 
         /// <summary>
@@ -621,6 +747,18 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
+            /// Фиксирует старые значения перед обновлением сущности.
+            /// </summary>
+            public override void OnUpdating(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (IsEnabled)
+                {
+                    TransportEventSink.SetOldDescription(GetOldDescription(entity));
+                    TransportEventSink.Add($"updating:{_entityName}");
+                }
+            }
+
+            /// <summary>
             /// Инициализирует новый экземпляр OnInserted.
             /// </summary>
             public override void OnInserted(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
@@ -641,6 +779,18 @@ namespace Titanic.Test.Entity
                     TransportEventSink.Add($"saved:{_entityName}");
                 }
             }
+
+            /// <summary>
+            /// Возвращает старое значение описания из снимка ORM-сущности.
+            /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <returns>Старое описание сущности.</returns>
+            private static string? GetOldDescription(global::Titanic.Entity.Orm.Entity entity)
+            {
+                return entity.OldValues.TryGetValue(nameof(OrmDepartmentEntity.Description), out var value)
+                    ? value?.ToString()
+                    : null;
+            }
         }
 
         private static class TransportEventSink
@@ -648,6 +798,7 @@ namespace Titanic.Test.Entity
             private static readonly object SyncRoot = new();
             private static readonly List<string> InternalEvents = [];
             private static UserConnection? _lastUserConnection;
+            private static string? _lastOldDescription;
 
             public static IReadOnlyList<string> Events
             {
@@ -667,6 +818,17 @@ namespace Titanic.Test.Entity
                     lock (SyncRoot)
                     {
                         return _lastUserConnection;
+                    }
+                }
+            }
+
+            public static string? LastOldDescription
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return _lastOldDescription;
                     }
                 }
             }
@@ -702,6 +864,18 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
+            /// Сохраняет старое описание, полученное listener-ом.
+            /// </summary>
+            /// <param name="description">Старое описание сущности.</param>
+            public static void SetOldDescription(string? description)
+            {
+                lock (SyncRoot)
+                {
+                    _lastOldDescription = description;
+                }
+            }
+
+            /// <summary>
             /// Инициализирует новый экземпляр Reset.
             /// </summary>
             public static void Reset()
@@ -710,6 +884,7 @@ namespace Titanic.Test.Entity
                 {
                     InternalEvents.Clear();
                     _lastUserConnection = null;
+                    _lastOldDescription = null;
                 }
             }
         }

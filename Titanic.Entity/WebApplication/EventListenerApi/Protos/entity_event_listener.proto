@@ -28,6 +28,7 @@ message EntityEventGrpcRequest {
   EntityEventGrpcUserConnection user_connection = 5;
   map<string, google.protobuf.Value> values = 6;
   string dispatch_id = 7;
+  map<string, google.protobuf.Value> old_values = 8;
 }
 
 message EntityEventGrpcUserConnection {

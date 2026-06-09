@@ -39,7 +39,7 @@ namespace Titanic.Entity.Events
             var listenerUri = NormalizeGrpcUri(GetListenerUri(manager));
             var client = CreateClient(listenerUri, services);
 
-            if (EntityEventListenerApiDefaults.IsInitialStage(stage))
+            if (IsInitialStage(stage))
             {
                 SendLifecycleGrpc(client.Create(ToGrpcRequest(request)));
             }
@@ -55,7 +55,7 @@ namespace Titanic.Entity.Events
                 throw;
             }
 
-            if (EntityEventListenerApiDefaults.IsFinalStage(stage))
+            if (IsFinalStage(stage))
             {
                 TryDeleteRemoteListener(client, request);
             }
@@ -204,6 +204,11 @@ namespace Titanic.Entity.Events
             foreach (var value in request.Values)
             {
                 result.Values.Add(value.Key, ToGrpcValue(value.Value));
+            }
+
+            foreach (var value in request.OldValues)
+            {
+                result.OldValues.Add(value.Key, ToGrpcValue(value.Value));
             }
 
             return result;

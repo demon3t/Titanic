@@ -44,6 +44,11 @@ namespace Titanic.Entity.Events
         /// </summary>
         public Dictionary<string, object?> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Старые значения колонок сущности до текущей операции.
+        /// </summary>
+        public Dictionary<string, object?> OldValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
         #endregion Members
     }
 }
