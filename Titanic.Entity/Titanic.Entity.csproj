@@ -11,12 +11,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.35.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.76.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.81.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" />
     <ProjectReference Include="..\Titanic.Db\Titanic.Db.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Abstractions\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="WebApplication\EventListenerApi\Protos\entity_event_listener.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

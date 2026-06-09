@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Entity.Exceptions;
+using Titanic.Entity.Events;
+using Titanic.Entity.Events.Grpc;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.Orm;
 using Titanic.Entity.Strurture;
@@ -15,18 +17,15 @@ using Orm = Titanic.Entity.Orm;
 namespace Titanic.Entity.WebApplication
 {
     /// <summary>
-    /// Расширения для инициализации Entity ORM и Entity API в web-приложении.
+    /// Методы расширения для настройки Entity ORM и Entity API в web-приложениях.
     /// </summary>
     public static class WebApplicationExtensions
     {
         #region Builder Extensions
 
         /// <summary>
-        /// Инициализировать Entity ORM менеджеры из конфигурации приложения.
+        /// Инициализирует новый экземпляр AddTitanicEntity.
         /// </summary>
-        /// <param name="builder"> WebApplicationBuilder. </param>
-        /// <param name="configSectionName"> Имя секции конфигурации. По умолчанию TitanicEntity. </param>
-        /// <returns> WebApplicationBuilder для цепочки вызовов. </returns>
         public static WebApplicationBuilder AddTitanicEntity(
             this WebApplicationBuilder builder,
             string configSectionName = "TitanicEntity")
@@ -45,11 +44,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Инициализировать Entity ORM менеджеры через делегат конфигурации.
+        /// Инициализирует новый экземпляр AddTitanicEntity.
         /// </summary>
-        /// <param name="builder"> WebApplicationBuilder. </param>
-        /// <param name="configure"> Делегат настройки конфигурации. </param>
-        /// <returns> WebApplicationBuilder для цепочки вызовов. </returns>
         public static WebApplicationBuilder AddTitanicEntity(
             this WebApplicationBuilder builder,
             Action<EntityManagerConfig> configure)
@@ -73,11 +69,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Инициализировать Entity ORM и подготовить автоматические Entity API endpoint-ы.
+        /// Инициализирует новый экземпляр AddTitanicEntityApi.
         /// </summary>
-        /// <param name="builder"> WebApplicationBuilder. </param>
-        /// <param name="configSectionName"> Имя секции конфигурации. По умолчанию TitanicEntity. </param>
-        /// <returns> WebApplicationBuilder для цепочки вызовов. </returns>
         public static WebApplicationBuilder AddTitanicEntityApi(
             this WebApplicationBuilder builder,
             string configSectionName = "TitanicEntity")
@@ -86,11 +79,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Инициализировать Entity ORM и подготовить автоматические Entity API endpoint-ы через делегат настройки.
+        /// Инициализирует новый экземпляр AddTitanicEntityApi.
         /// </summary>
-        /// <param name="builder"> WebApplicationBuilder. </param>
-        /// <param name="configure"> Делегат настройки конфигурации. </param>
-        /// <returns> WebApplicationBuilder для цепочки вызовов. </returns>
         public static WebApplicationBuilder AddTitanicEntityApi(
             this WebApplicationBuilder builder,
             Action<EntityManagerConfig> configure)
@@ -99,12 +89,32 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Инициализировать один Entity ORM менеджер по ключу в секции Titanic:EntityManagers.
+        /// Инициализирует новый экземпляр AddTitanicEntityEventListenerApi.
         /// </summary>
-        /// <typeparam name="TManager"> Тип менеджера. </typeparam>
-        /// <param name="builder"> WebApplicationBuilder. </param>
-        /// <param name="managerKey"> Ключ настроек менеджера. </param>
-        /// <returns> WebApplicationBuilder для цепочки вызовов. </returns>
+        public static WebApplicationBuilder AddTitanicEntityEventListenerApi(
+            this WebApplicationBuilder builder,
+            string configSectionName = "TitanicEntity")
+        {
+            builder.AddTitanicEntity(configSectionName);
+            builder.Services.AddGrpc();
+            return builder;
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntityEventListenerApi.
+        /// </summary>
+        public static WebApplicationBuilder AddTitanicEntityEventListenerApi(
+            this WebApplicationBuilder builder,
+            Action<EntityManagerConfig> configure)
+        {
+            builder.AddTitanicEntity(configure);
+            builder.Services.AddGrpc();
+            return builder;
+        }
+
+        /// <summary>
+        /// Инициализирует менеджер Entity ORM из конфигурации.
+        /// </summary>
         public static WebApplicationBuilder InitEntityManager<TManager>(this WebApplicationBuilder builder, string managerKey)
             where TManager : BaseEntityManager, new()
         {
@@ -142,17 +152,38 @@ namespace Titanic.Entity.WebApplication
         #region App Extensions
 
         /// <summary>
-        /// Поднять Entity API endpoint-ы для менеджеров с включенным Api.AutoRegisterEndpoint.
+        /// Инициализирует новый экземпляр MapTitanicEntityApi.
         /// </summary>
-        /// <param name="app"> WebApplication. </param>
-        /// <returns> WebApplication для цепочки вызовов. </returns>
         public static Microsoft.AspNetCore.Builder.WebApplication MapTitanicEntityApi(this Microsoft.AspNetCore.Builder.WebApplication app)
         {
             ArgumentNullException.ThrowIfNull(app);
+            EntityManager.ConfigureServices(app.Services);
 
             foreach (var manager in EntityManager.GetManagers().Where(x => x.Api.AutoRegisterEndpoint))
             {
                 MapManagerEndpoints(app, manager);
+            }
+
+            return app;
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр MapTitanicEntityEventListenerApi.
+        /// </summary>
+        public static Microsoft.AspNetCore.Builder.WebApplication MapTitanicEntityEventListenerApi(
+            this Microsoft.AspNetCore.Builder.WebApplication app)
+        {
+            ArgumentNullException.ThrowIfNull(app);
+            EntityManager.ConfigureServices(app.Services);
+
+            foreach (var manager in EntityManager.GetManagers().Where(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Http))
+            {
+                MapEventListenerEndpoints(app, manager);
+            }
+
+            if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Grpc))
+            {
+                app.MapGrpcService<EntityEventListenerGrpcService>();
             }
 
             return app;
@@ -163,18 +194,21 @@ namespace Titanic.Entity.WebApplication
         #region Registration Helpers
 
         /// <summary>
-        /// Зарегистрировать базовые сервисы Entity API.
+        /// Инициализирует новый экземпляр RegisterEntityApiServices.
         /// </summary>
-        /// <param name="services"> Коллекция сервисов. </param>
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
             services.AddSingleton<HeaderEntityApiAuthorizationProvider>();
+            services.AddSingleton<BaseEntityEventProvider, LocalEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, HttpEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, GrpcEntityEventProvider>();
+            services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
+            services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
         }
 
         /// <summary>
-        /// Зарегистрировать все текущие менеджеры EntityManager в DI контейнере.
+        /// Инициализирует новый экземпляр RegisterManagersInServices.
         /// </summary>
-        /// <param name="services"> Коллекция сервисов. </param>
         private static void RegisterManagersInServices(IServiceCollection services)
         {
             foreach (var manager in EntityManager.GetManagers())
@@ -189,10 +223,88 @@ namespace Titanic.Entity.WebApplication
         #region Endpoint Mapping
 
         /// <summary>
-        /// Зарегистрировать endpoint-ы конкретного Entity ORM менеджера.
+        /// Регистрирует HTTP endpoint-ы событийного listener API для менеджера.
         /// </summary>
-        /// <param name="app"> WebApplication. </param>
-        /// <param name="manager"> Entity ORM менеджер. </param>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        private static void MapEventListenerEndpoints(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            BaseEntityManager manager)
+        {
+            var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
+
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.CreateActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Create(manager, request));
+            });
+
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saving);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saved);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserted);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updating);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updated);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleted);
+
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.DeleteActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Delete(manager, request));
+            });
+
+            app.MapPost(basePath, (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Execute(manager, request));
+            });
+        }
+
+        /// <summary>
+        /// Регистрирует HTTP endpoint конкретной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="basePath">Базовый путь listener API.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        private static void MapEventListenerStageEndpoint(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            string basePath,
+            BaseEntityManager manager,
+            EntityEventStage stage)
+        {
+            var actionPath = HttpEntityEventProvider.GetActionPath(stage);
+            app.MapPost($"{basePath}/{actionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.ExecuteStage(manager, request, stage));
+            });
+        }
+
+        /// <summary>
+        /// Преобразует transport-ответ listener API в HTTP-результат.
+        /// </summary>
+        /// <param name="result">Transport-ответ listener API.</param>
+        /// <returns>HTTP-результат listener API.</returns>
+        private static IResult ToEventListenerResult(EntityEventDispatchResponse result)
+        {
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            if (result.Canceled)
+            {
+                return Results.Json(result, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            return Results.Json(result, statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр MapManagerEndpoints.
+        /// </summary>
         private static void MapManagerEndpoints(Microsoft.AspNetCore.Builder.WebApplication app, BaseEntityManager manager)
         {
             var basePath = NormalizeApiPath(manager.Api.Path);
@@ -247,12 +359,8 @@ namespace Titanic.Entity.WebApplication
         #region Operation Execution
 
         /// <summary>
-        /// Выполнить одну операцию Entity API.
+        /// Инициализирует новый экземпляр ExecuteRequest.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> Результат операции. </returns>
         private static EntityApiOperationResult ExecuteRequest(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -309,12 +417,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Выполнить batch-запрос последовательно.
+        /// Инициализирует новый экземпляр ExecuteBatchSequential.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="requests"> Список операций. </param>
-        /// <returns> Результаты операций. </returns>
         private static List<EntityApiOperationResult> ExecuteBatchSequential(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -326,12 +430,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Выполнить batch-запрос параллельно.
+        /// Инициализирует новый экземпляр ExecuteBatchParallel.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="requests"> Список операций. </param>
-        /// <returns> Результаты операций. </returns>
         private static async Task<List<EntityApiOperationResult>> ExecuteBatchParallel(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -345,9 +445,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Заполнить отсутствующие имена batch-операций стабильными для текущего запроса Guid.
+        /// Инициализирует новый экземпляр EnsureBatchRequestNames.
         /// </summary>
-        /// <param name="requests"> Операции batch-запроса. </param>
         private static void EnsureBatchRequestNames(IEnumerable<EntityApiRequest> requests)
         {
             foreach (var request in requests)
@@ -360,12 +459,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Выполнить Select операцию.
+        /// Инициализирует новый экземпляр ExecuteSelect.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> Результат операции. </returns>
         private static EntityApiOperationResult ExecuteSelect(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -392,12 +487,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Выполнить Save операцию.
+        /// Инициализирует новый экземпляр ExecuteSave.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> Результат операции. </returns>
         private static EntityApiOperationResult ExecuteSave(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -406,9 +497,9 @@ namespace Titanic.Entity.WebApplication
             var structure = ResolveEntityStructure(manager, request);
             var values = NormalizeValues(request.Values);
             var primaryColumn = structure.GetPrimaryColumnStructure();
+            var hasPrimaryKey = HasPrimaryKey(values, primaryColumn, out var primaryValue);
 
-            if (HasPrimaryKey(values, primaryColumn, out var primaryValue)
-                && IsEmptyPrimaryKeyValue(primaryValue))
+            if (hasPrimaryKey && IsEmptyPrimaryKeyValue(primaryValue))
             {
                 return EntityApiOperationResult.Fail(
                     request.Operation,
@@ -418,7 +509,20 @@ namespace Titanic.Entity.WebApplication
                     request.Name);
             }
 
-            var entity = manager.Create(structure.TableName, userConnection);
+            var oldValues = hasPrimaryKey
+                ? LoadOldEntityValues(manager, userConnection, structure, primaryColumn, primaryValue)
+                : null;
+            var entity = EntityManager.Create(
+                structure,
+                manager.Provider,
+                userConnection,
+                isNew: !hasPrimaryKey,
+                manager: manager);
+            if (oldValues != null)
+            {
+                entity.SetOldValues(oldValues);
+            }
+
             entity.SetValues(values);
             entity.Save();
 
@@ -426,12 +530,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Выполнить Delete операцию.
+        /// Инициализирует новый экземпляр ExecuteDelete.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> Результат операции. </returns>
         private static EntityApiOperationResult ExecuteDelete(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -463,10 +563,37 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Преобразовать результат операции в HTTP-ответ.
+        /// Загружает старые значения строки перед update-операцией Entity API.
         /// </summary>
-        /// <param name="result"> Результат операции. </param>
-        /// <returns> HTTP-ответ. </returns>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="userConnection">Контекст пользователя.</param>
+        /// <param name="structure">Структура сущности.</param>
+        /// <param name="primaryColumn">Первичная колонка сущности.</param>
+        /// <param name="primaryValue">Значение первичного ключа.</param>
+        /// <returns>Старые значения строки или пустой словарь, если строка не найдена.</returns>
+        private static Dictionary<string, object?> LoadOldEntityValues(
+            BaseEntityManager manager,
+            UserConnection userConnection,
+            EntityStructure structure,
+            ColumnStructure primaryColumn,
+            object? primaryValue)
+        {
+            var query = new EntitySchemaQuery(manager.Provider, structure, manager.StructureScope, userConnection, manager)
+            {
+                RowCount = 1
+            };
+            query.AddAllSchemaColumns();
+            query.AddFilter(EntityComparisonType.Equal, primaryColumn.PropertyName, primaryValue);
+
+            return query.GetEntityCollection()
+                .FirstOrDefault()
+                ?.ToDictionary()
+                ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр ToHttpResult.
+        /// </summary>
         private static IResult ToHttpResult(EntityApiOperationResult result)
         {
             return result.Success
@@ -481,10 +608,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Построить HTTP-модель структуры Entity API менеджера.
+        /// Инициализирует новый экземпляр BuildStructureResponse.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <returns> Структура менеджера. </returns>
         private static EntityApiManagerStructureResponse BuildStructureResponse(BaseEntityManager manager)
         {
             return new EntityApiManagerStructureResponse
@@ -517,11 +642,8 @@ namespace Titanic.Entity.WebApplication
         #region Authorization
 
         /// <summary>
-        /// Выполнить авторизацию Entity API.
+        /// Инициализирует новый экземпляр AuthorizeAsync.
         /// </summary>
-        /// <param name="context"> HTTP-контекст. </param>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <returns> Результат авторизации. </returns>
         private static ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
             var provider = CreateAuthorizationProvider(context.RequestServices, manager);
@@ -529,11 +651,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Создать провайдер авторизации для Entity API.
+        /// Инициализирует новый экземпляр CreateAuthorizationProvider.
         /// </summary>
-        /// <param name="services"> Провайдер сервисов. </param>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <returns> Провайдер авторизации. </returns>
         private static IEntityApiAuthorizationProvider CreateAuthorizationProvider(
             IServiceProvider services,
             BaseEntityManager manager)
@@ -560,12 +679,8 @@ namespace Titanic.Entity.WebApplication
         #region Request Handling
 
         /// <summary>
-        /// Создать Entity из HTTP-модели Save.
+        /// Инициализирует новый экземпляр CreateRequestEntity.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель. </param>
-        /// <returns> ORM-сущность. </returns>
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -575,12 +690,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Создать Entity из HTTP-модели Delete.
+        /// Инициализирует новый экземпляр CreateRequestEntity.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель. </param>
-        /// <returns> ORM-сущность. </returns>
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -590,12 +701,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Создать Entity из единой HTTP-модели операции.
+        /// Инициализирует новый экземпляр CreateRequestEntity.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> ORM-сущность. </returns>
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -605,11 +712,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Получить имя таблицы по HTTP-модели.
+        /// Инициализирует новый экземпляр ResolveTableName.
         /// </summary>
-        /// <param name="tableName"> Имя таблицы. </param>
-        /// <param name="entityTypeName"> Имя CLR-типа сущности. </param>
-        /// <returns> Имя таблицы. </returns>
         private static string ResolveTableName(
             BaseEntityManager manager,
             string? tableName,
@@ -629,10 +733,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Получить структуру сущности по HTTP-модели операции.
+        /// Инициализирует новый экземпляр ResolveEntityStructure.
         /// </summary>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <returns> Структура сущности. </returns>
         private static EntityStructure ResolveEntityStructure(BaseEntityManager manager, EntityApiRequest request)
         {
             if (!string.IsNullOrWhiteSpace(request.TableName))
@@ -662,13 +764,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Построить ESQ с фильтрами для безопасного удаления.
+        /// Инициализирует новый экземпляр BuildDeleteFilterQuery.
         /// </summary>
-        /// <param name="manager"> Entity ORM менеджер. </param>
-        /// <param name="userConnection"> Контекст пользователя. </param>
-        /// <param name="request"> HTTP-модель операции. </param>
-        /// <param name="structure"> Структура удаляемой сущности. </param>
-        /// <returns> ESQ, выбирающий primary key удаляемых строк. </returns>
         private static EntitySchemaQuery BuildDeleteFilterQuery(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -692,10 +789,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Скопировать дерево фильтров между коллекциями ESQ.
+        /// Инициализирует новый экземпляр CopyFilterNodes.
         /// </summary>
-        /// <param name="source"> Источник фильтров. </param>
-        /// <param name="target"> Целевая коллекция фильтров. </param>
         private static void CopyFilterNodes(EntityQueryFilterCollection source, EntityQueryFilterCollection target)
         {
             target.IsEnabled = source.IsEnabled;
@@ -716,10 +811,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Проверить, содержит ли коллекция хотя бы один активный leaf-фильтр.
+        /// Инициализирует новый экземпляр HasActiveFilters.
         /// </summary>
-        /// <param name="collection"> Коллекция фильтров. </param>
-        /// <returns> <c>true</c>, если есть активный фильтр. </returns>
         private static bool HasActiveFilters(EntityQueryFilterCollection collection)
         {
             if (!collection.IsEnabled)
@@ -742,12 +835,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Проверить, передан ли primary key как write-фильтр.
+        /// Инициализирует новый экземпляр HasPrimaryKey.
         /// </summary>
-        /// <param name="values"> Значения операции. </param>
-        /// <param name="primaryColumn"> Первичная колонка сущности. </param>
-        /// <param name="value"> Значение первичного ключа. </param>
-        /// <returns> <c>true</c>, если значение первичного ключа передано. </returns>
         private static bool HasPrimaryKey(
             IReadOnlyDictionary<string, object?> values,
             ColumnStructure primaryColumn,
@@ -758,18 +847,14 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Проверить, является ли значение primary key пустым.
+        /// Инициализирует новый экземпляр IsEmptyPrimaryKeyValue.
         /// </summary>
-        /// <param name="value"> Значение primary key. </param>
-        /// <returns> <c>true</c>, если значение не может использоваться как write-фильтр. </returns>
         private static bool IsEmptyPrimaryKeyValue(object? value)
             => IsEmptyFilterValue(value);
 
         /// <summary>
-        /// Проверить, является ли значение фильтра пустым.
+        /// Инициализирует новый экземпляр IsEmptyFilterValue.
         /// </summary>
-        /// <param name="value"> Значение фильтра. </param>
-        /// <returns> <c>true</c>, если значение не может использоваться как write-фильтр. </returns>
         private static bool IsEmptyFilterValue(object? value)
         {
             if (value == null || value is DBNull)
@@ -788,10 +873,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Преобразовать Entity в HTTP-модель.
+        /// Инициализирует новый экземпляр ToResponse.
         /// </summary>
-        /// <param name="entity"> ORM-сущность. </param>
-        /// <returns> HTTP-модель значений колонок. </returns>
         private static Dictionary<string, EntityApiColumnValueResponse> ToResponse(Orm.Entity entity)
         {
             return entity.Values.ToDictionary(
@@ -809,10 +892,8 @@ namespace Titanic.Entity.WebApplication
         #region Value Normalization
 
         /// <summary>
-        /// Нормализовать значения, прочитанные System.Text.Json как object.
+        /// Инициализирует новый экземпляр NormalizeValues.
         /// </summary>
-        /// <param name="values"> Значения HTTP-модели. </param>
-        /// <returns> Нормализованные значения. </returns>
         private static Dictionary<string, object?> NormalizeValues(IReadOnlyDictionary<string, object?> values)
         {
             return values.ToDictionary(
@@ -822,10 +903,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Нормализовать JSON-значение.
+        /// Инициализирует новый экземпляр NormalizeJsonValue.
         /// </summary>
-        /// <param name="value"> Исходное значение. </param>
-        /// <returns> Нормализованное CLR-значение. </returns>
         private static object? NormalizeJsonValue(object? value)
         {
             return value is System.Text.Json.JsonElement element
@@ -834,10 +913,8 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
-        /// Нормализовать JsonElement.
+        /// Инициализирует новый экземпляр NormalizeJsonElement.
         /// </summary>
-        /// <param name="element"> JSON-элемент. </param>
-        /// <returns> Нормализованное CLR-значение. </returns>
         private static object? NormalizeJsonElement(System.Text.Json.JsonElement element)
         {
             return element.ValueKind switch
@@ -860,10 +937,8 @@ namespace Titanic.Entity.WebApplication
         #region Path Helpers
 
         /// <summary>
-        /// Нормализовать базовый путь API.
+        /// Инициализирует новый экземпляр NormalizeApiPath.
         /// </summary>
-        /// <param name="path"> Путь из конфигурации. </param>
-        /// <returns> Нормализованный путь. </returns>
         private static string NormalizeApiPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -879,6 +954,3 @@ namespace Titanic.Entity.WebApplication
         #endregion Path Helpers
     }
 }
-
-
-

@@ -25,3 +25,6 @@
 **/appsettings*.local.json
 !/ARCHITECTURE.md
 
+
+local-secrets/
+Titanic.Entity/ENTITY_OPENAPI.json

@@ -123,6 +123,104 @@ app.Run();
 - `POST {Api.Path}`
 - `POST {Api.Path}/batch`
 
+## Событийный слой Entity
+
+`Titanic.Entity` поддерживает событийный pipeline вокруг `Save()` и `Delete()`:
+
+- `OnSaving`
+- `OnSaved`
+- `OnInserting`
+- `OnInserted`
+- `OnUpdating`
+- `OnUpdated`
+- `OnDeleting`
+- `OnDeleted`
+
+Событийный слой может работать в двух режимах:
+
+- локально, в том же приложении, где поднят `EntityManager`;
+- внешне, через отдельный listener-сервис.
+
+Режим задаётся настройкой `EventListener` в конфигурации менеджера:
+
+- пустое значение или отсутствие поля — локальный listener;
+- заполненное значение — внешний listener.
+
+Локальный режим означает, что обработчики ищутся по `[EntityEventListener("table_name")]` и вызываются внутри текущего процесса.
+
+Внешний режим означает, что вызов событийного слоя должен идти через transport-слой. Для этого поддерживается единый логический контракт события:
+
+- `managerName`
+- `tableName`
+- `dispatchId`
+- `stage`
+- `isNew`
+- `userConnection`
+- `values`
+
+### HTTP-контракт внешнего listener-а
+
+HTTP listener публикует отдельный endpoint на lifecycle-действие и каждую стадию pipeline:
+
+```text
+POST {EventListenerApi.Path}/create
+POST {EventListenerApi.Path}/on-saving
+POST {EventListenerApi.Path}/on-saved
+POST {EventListenerApi.Path}/on-inserting
+POST {EventListenerApi.Path}/on-inserted
+POST {EventListenerApi.Path}/on-updating
+POST {EventListenerApi.Path}/on-updated
+POST {EventListenerApi.Path}/on-deleting
+POST {EventListenerApi.Path}/on-deleted
+POST {EventListenerApi.Path}/delete
+```
+
+`create` создаёт экземпляр remote listener-а на удалённой стороне, `delete` удаляет его после последней стадии. Один HTTP-вызов `on-*` соответствует одному этапу событийного pipeline.
+
+Минимальный ответ:
+
+```json
+{
+  "success": true,
+  "canceled": false,
+  "cancelReason": null,
+  "errorCode": null,
+  "errorMessage": null
+}
+```
+
+Если listener отменяет операцию, внешний сервис должен вернуть `canceled = true`. Если обработчик падает, он должен вернуть `success = false` и текст ошибки.
+
+### gRPC-контракт внешнего listener-а
+
+Рекомендуемый service:
+
+```text
+EntityEventListenerGrpc.Create(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaving(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaved(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdating(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdated(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.Delete(EntityEventGrpcRequest)
+```
+
+gRPC-контракт повторяет ту же семантику, что и HTTP:
+
+- `Create` создаёт remote listener на время обработки одной сущности;
+- один `On*` вызов = одно событие;
+- `Delete` удаляет remote listener после последней стадии;
+- передаётся `managerName`, `tableName`, `stage`, `isNew`, `userConnection` и типизированные `values`;
+- ответ сообщает, обработано ли событие, было ли оно отменено и есть ли ошибка.
+
+Практический смысл такого разделения:
+
+- локальный listener подходит для лёгкой бизнес-логики рядом с ORM;
+- внешний listener подходит для тяжёлой или изолированной обработки, которую нужно вынести в отдельное приложение.
+
 ## Пример конфигурации
 
 ```json
@@ -143,6 +241,7 @@ app.Run();
           "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
           "DefaultBatchExecutionMode": "Sequential"
         },
+        "EventListener": "",
         "ValidateDatabaseSchemaOnCompile": true,
         "Options": {
           "MaxReadRowCount": 20000
@@ -160,6 +259,7 @@ app.Run();
 - `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
 - `Api.Path` — базовый route для HTTP API конкретного менеджера.
 - `Api.AuthorizationProviderType` — тип провайдера, который авторизует запрос и возвращает `UserConnection`.
+- `EventListener` — способ вызова событийного слоя: пусто для локального режима, непустое значение для внешнего listener-сервиса.
 - `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
 
 ## Что важно знать про слой

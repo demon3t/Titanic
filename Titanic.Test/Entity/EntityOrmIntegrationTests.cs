@@ -11,8 +11,13 @@ namespace Titanic.Test.Entity
 {
     public class EntityOrmIntegrationTests : IClassFixture<IntegrationTestFixture>
     {
+        #region Members
+
         private readonly IntegrationTestFixture _fixture;
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrmIntegrationTests.
+        /// </summary>
         public EntityOrmIntegrationTests(IntegrationTestFixture fixture)
         {
             _fixture = fixture;
@@ -31,6 +36,9 @@ namespace Titanic.Test.Entity
 
         private static Titanic.Common.Session.UserConnection UserConnection => OrmTestUserConnection.Create();
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_01_SaveDepartment_ShouldInsert.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_01_SaveDepartment_ShouldInsert()
         {
@@ -40,16 +48,24 @@ namespace Titanic.Test.Entity
             Assert.True(department.Get<int>("Id") > 0);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_02_SaveDepartment_WithIndexer_ShouldInsert.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_02_SaveDepartment_WithIndexer_ShouldInsert()
         {
             var department = EntityManager.Create<OrmDepartmentEntity>(Db, UserConnection);
             department["Name"] = "EO02";
 
+            Assert.True(department.IsNew);
             Assert.True(department.Save());
+            Assert.False(department.IsNew);
             Assert.Equal("EO02", QueryDepartments("EO02").Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_03_CreateByType_ShouldInsert.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_03_CreateByType_ShouldInsert()
         {
@@ -60,6 +76,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO03", QueryDepartments("EO03").Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_04_CreateByTableName_ShouldInsert.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_04_CreateByTableName_ShouldInsert()
         {
@@ -70,6 +89,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO04", QueryDepartments("EO04").Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_05_Save_ShouldSetPrimaryKey.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_05_Save_ShouldSetPrimaryKey()
         {
@@ -79,6 +101,9 @@ namespace Titanic.Test.Entity
             Assert.True(department.Get<int>("id") > 0);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_06_SaveExistingDepartment_ShouldUpdate.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_06_SaveExistingDepartment_ShouldUpdate()
         {
@@ -89,6 +114,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("after", QueryDepartments("EO06").Single().Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_07_SaveExistingEmployee_ShouldUpdate.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_07_SaveExistingEmployee_ShouldUpdate()
         {
@@ -99,6 +127,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO07_Updated", QueryEmployeesByEmail("eo07@t.com").Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_08_SaveWithExplicitPrimaryKey_ShouldInsert.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_08_SaveWithExplicitPrimaryKey_ShouldInsert()
         {
@@ -110,6 +141,30 @@ namespace Titanic.Test.Entity
             Assert.Equal(50008, QueryDepartments("EO08").Single().Get<int>("Id"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_08A_SaveTwice_ShouldInsertThenUpdateSameEntity.
+        /// </summary>
+        [SkippableFact]
+        public void EntityOrm_08A_SaveTwice_ShouldInsertThenUpdateSameEntity()
+        {
+            var department = EntityManager.Create<OrmDepartmentEntity>(Db, UserConnection)
+                .Set("Name", "EO08A")
+                .Set("Description", "before");
+
+            Assert.True(department.IsNew);
+            Assert.True(department.Save());
+            Assert.False(department.IsNew);
+
+            department.Set("Description", "after");
+
+            Assert.True(department.Save());
+            Assert.False(department.IsNew);
+            Assert.Equal("after", QueryDepartments("EO08A").Single().Get<string>("Description"));
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_09_DeleteDepartment_ShouldRemove.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_09_DeleteDepartment_ShouldRemove()
         {
@@ -119,6 +174,9 @@ namespace Titanic.Test.Entity
             Assert.Empty(QueryDepartments("EO09"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_10_DeleteEmployee_ShouldRemove.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_10_DeleteEmployee_ShouldRemove()
         {
@@ -128,6 +186,9 @@ namespace Titanic.Test.Entity
             Assert.Empty(QueryEmployeesByEmail("eo10@t.com"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_11_DeleteWithoutPrimaryKey_ShouldThrow.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_11_DeleteWithoutPrimaryKey_ShouldThrow()
         {
@@ -136,6 +197,9 @@ namespace Titanic.Test.Entity
             Assert.Throws<InvalidOperationException>(() => department.Delete());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_12_Contains_ShouldCheckSelectedPath.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_12_Contains_ShouldCheckSelectedPath()
         {
@@ -147,6 +211,9 @@ namespace Titanic.Test.Entity
             Assert.False(department.Contains("Missing"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_13_GetByColumnName_ShouldUseColumnAliasMap.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_13_GetByColumnName_ShouldUseColumnAliasMap()
         {
@@ -157,6 +224,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO13", department.Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_14_TryGet_ShouldReturnTypedValue.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_14_TryGet_ShouldReturnTypedValue()
         {
@@ -166,6 +236,9 @@ namespace Titanic.Test.Entity
             Assert.True(id > 0);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_15_TryGetMissing_ShouldReturnFalse.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_15_TryGetMissing_ShouldReturnFalse()
         {
@@ -175,6 +248,9 @@ namespace Titanic.Test.Entity
             Assert.Null(value);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_16_SetValues_ShouldSetMultipleColumns.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_16_SetValues_ShouldSetMultipleColumns()
         {
@@ -189,6 +265,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("bulk", QueryDepartments("EO16").Single().Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_17_ToDictionary_ShouldReturnCopy.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_17_ToDictionary_ShouldReturnCopy()
         {
@@ -200,6 +279,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO17", department.Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_18_ESQ_AddPrimaryColumn_ShouldReadId.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_18_ESQ_AddPrimaryColumn_ShouldReadId()
         {
@@ -210,6 +292,9 @@ namespace Titanic.Test.Entity
             Assert.True(row.Get<int>("Id") > 0);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_19_ESQ_AddDisplayColumn_ShouldReadName.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_19_ESQ_AddDisplayColumn_ShouldReadName()
         {
@@ -218,6 +303,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO19", QueryDepartments("EO19").Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_20_ESQ_AddAllSchemaColumns_ShouldReadDescription.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_20_ESQ_AddAllSchemaColumns_ShouldReadDescription()
         {
@@ -230,6 +318,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("all", esq.GetEntityCollection().Single().Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_21_ESQ_EqualFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_21_ESQ_EqualFilter_ShouldMatch()
         {
@@ -238,6 +329,9 @@ namespace Titanic.Test.Entity
             Assert.Single(QueryDepartments("EO21"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_22_ESQ_ContainsFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_22_ESQ_ContainsFilter_ShouldMatch()
         {
@@ -250,6 +344,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_23_ESQ_NotContainsFilter_ShouldExclude.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_23_ESQ_NotContainsFilter_ShouldExclude()
         {
@@ -262,6 +359,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO23_Good", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_23A_ESQ_StartsWithFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_23A_ESQ_StartsWithFilter_ShouldMatch()
         {
@@ -274,6 +374,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO23A_First", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_23B_ESQ_EndsWithFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_23B_ESQ_EndsWithFilter_ShouldMatch()
         {
@@ -286,6 +389,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO23B_Target", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_24_ESQ_NotEqualFilter_ShouldExclude.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_24_ESQ_NotEqualFilter_ShouldExclude()
         {
@@ -298,6 +404,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO24_B", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_25_ESQ_GreaterThanFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_25_ESQ_GreaterThanFilter_ShouldMatch()
         {
@@ -308,6 +417,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(rows, x => x.Get<int>("Id") == employee.Get<int>("Id"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_26_ESQ_GreaterOrEqualFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_26_ESQ_GreaterOrEqualFilter_ShouldMatch()
         {
@@ -316,6 +428,9 @@ namespace Titanic.Test.Entity
             Assert.Single(EmployeeSalaryQuery(EntityComparisonType.GreaterThanOrEqual, 260m));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_27_ESQ_LessThanFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_27_ESQ_LessThanFilter_ShouldMatch()
         {
@@ -324,6 +439,9 @@ namespace Titanic.Test.Entity
             Assert.Single(EmployeeSalaryQuery(EntityComparisonType.LessThan, 300m));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_28_ESQ_LessOrEqualFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_28_ESQ_LessOrEqualFilter_ShouldMatch()
         {
@@ -332,6 +450,9 @@ namespace Titanic.Test.Entity
             Assert.Single(EmployeeSalaryQuery(EntityComparisonType.LessThanOrEqual, 280m));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_29_ESQ_BetweenFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_29_ESQ_BetweenFilter_ShouldMatch()
         {
@@ -344,6 +465,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO29_B", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_30_ESQ_IsNullFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_30_ESQ_IsNullFilter_ShouldMatch()
         {
@@ -357,6 +481,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO30_Null", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_31_ESQ_IsNotNullFilter_ShouldMatch.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_31_ESQ_IsNotNullFilter_ShouldMatch()
         {
@@ -370,6 +497,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO31_NotNull", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_32_ESQ_OrFilters_ShouldMatchBoth.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_32_ESQ_OrFilters_ShouldMatchBoth()
         {
@@ -385,6 +515,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_33_ESQ_DisabledFilters_ShouldReturnAllSelectedRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_33_ESQ_DisabledFilters_ShouldReturnAllSelectedRows()
         {
@@ -398,6 +531,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(2, esq.GetEntityCollection().Count);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_34_ESQ_Distinct_ShouldReturnDistinctRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_34_ESQ_Distinct_ShouldReturnDistinctRows()
         {
@@ -411,6 +547,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(2, esq.GetEntityCollection().Select(x => x.Get<string>("Name")).Distinct().Count());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_35_ESQ_RowCount_ShouldLimitRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_35_ESQ_RowCount_ShouldLimitRows()
         {
@@ -423,6 +562,9 @@ namespace Titanic.Test.Entity
             Assert.Single(esq.GetEntityCollection());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_36_ESQ_SkipRowCount_ShouldSkipRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_36_ESQ_SkipRowCount_ShouldSkipRows()
         {
@@ -436,6 +578,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO36_B", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_37_ESQ_RowCountAndSkip_ShouldPageRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_37_ESQ_RowCountAndSkip_ShouldPageRows()
         {
@@ -451,6 +596,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO37_B", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_38_ESQ_OrderByAscending_ShouldSortRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_38_ESQ_OrderByAscending_ShouldSortRows()
         {
@@ -463,6 +611,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO38_A", esq.GetEntityCollection().First().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_39_ESQ_OrderByDescending_ShouldSortRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_39_ESQ_OrderByDescending_ShouldSortRows()
         {
@@ -475,6 +626,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO39_B", esq.GetEntityCollection().First().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_40_ESQ_ThenBy_ShouldAddSecondSort.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_40_ESQ_ThenBy_ShouldAddSecondSort()
         {
@@ -488,6 +642,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO40_A", esq.GetEntityCollection().First().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_41_ESQ_ByType_ShouldQuery.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_41_ESQ_ByType_ShouldQuery()
         {
@@ -500,6 +657,9 @@ namespace Titanic.Test.Entity
             Assert.Single(esq.GetEntityCollection());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_42_ESQ_ByTableName_ShouldQuery.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_42_ESQ_ByTableName_ShouldQuery()
         {
@@ -512,6 +672,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO42", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_43_ESQ_ByAbstractType_ShouldQuery.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_43_ESQ_ByAbstractType_ShouldQuery()
         {
@@ -524,6 +687,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO43", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_44_ESQ_LeftJoinPath_ShouldReadRelatedColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_44_ESQ_LeftJoinPath_ShouldReadRelatedColumn()
         {
@@ -535,6 +701,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO44_Department", row.Get<string>("DepartmentName"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_45_ESQ_LeftJoinPathFilter_ShouldFilterByRelatedColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_45_ESQ_LeftJoinPathFilter_ShouldFilterByRelatedColumn()
         {
@@ -548,6 +717,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO45", esq.GetEntityCollection().Single().Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_46_ESQ_RightJoinPath_ShouldReadReverseColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_46_ESQ_RightJoinPath_ShouldReadReverseColumn()
         {
@@ -559,6 +731,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("Moscow", row.Get<string>("City"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_47_ESQ_RightJoinPathFilter_ShouldFilterByReverseColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_47_ESQ_RightJoinPathFilter_ShouldFilterByReverseColumn()
         {
@@ -570,6 +745,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO47", row.Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_48_EntitySelectBuilder_ToRecords_ShouldMaterializeEntities.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_48_EntitySelectBuilder_ToRecords_ShouldMaterializeEntities()
         {
@@ -584,6 +762,9 @@ namespace Titanic.Test.Entity
             Assert.Single(records);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_49_EntitySelectBuilder_FirstOrDefaultRecord_ShouldReturnEntity.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_49_EntitySelectBuilder_FirstOrDefaultRecord_ShouldReturnEntity()
         {
@@ -595,9 +776,26 @@ namespace Titanic.Test.Entity
                 .FirstOrDefaultRecord();
 
             Assert.NotNull(record);
+            Assert.False(record!.IsNew);
             Assert.Equal("EO49", record!.Get<string>("Name"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_49A_QueryResult_ShouldBeMarkedAsExistingRecord.
+        /// </summary>
+        [SkippableFact]
+        public void EntityOrm_49A_QueryResult_ShouldBeMarkedAsExistingRecord()
+        {
+            CreateDepartment("EO49A");
+
+            var row = QueryDepartments("EO49A").Single();
+
+            Assert.False(row.IsNew);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_50_ESQ_ExecuteReader_ShouldMapRows.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_50_ESQ_ExecuteReader_ShouldMapRows()
         {
@@ -611,6 +809,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO50", rows.Single());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_51_SaveEmployee_ShouldPersistBooleanColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_51_SaveEmployee_ShouldPersistBooleanColumn()
         {
@@ -621,6 +822,9 @@ namespace Titanic.Test.Entity
             Assert.False(row.Get<bool>("IsActive"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_52_SaveAddress_ShouldPersistBooleanColumn.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_52_SaveAddress_ShouldPersistBooleanColumn()
         {
@@ -634,6 +838,9 @@ namespace Titanic.Test.Entity
             Assert.False(esq.GetEntityCollection().Single().Get<bool>("IsPrimary"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_53_ESQJsonModel_ShouldRestoreAndExecuteFrontendRequest.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_53_ESQJsonModel_ShouldRestoreAndExecuteFrontendRequest()
         {
@@ -662,6 +869,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("from json", rows[0].Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_54_ReferenceColumn_ShouldReadDisplayValue.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_54_ReferenceColumn_ShouldReadDisplayValue()
         {
@@ -680,6 +890,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("EO54_Department", value.DisplayValue);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_55_LocalizedDepartment_ShouldReadLocalizedValue.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_55_LocalizedDepartment_ShouldReadLocalizedValue()
         {
@@ -703,6 +916,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("localized description", row.Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_56_LocalizedDepartment_ShouldFallbackToBaseValue.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_56_LocalizedDepartment_ShouldFallbackToBaseValue()
         {
@@ -720,6 +936,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("base description", row.Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityOrm_57_ESQ_EmptyColumns_ShouldReadAllColumns.
+        /// </summary>
         [SkippableFact]
         public void EntityOrm_57_ESQ_EmptyColumns_ShouldReadAllColumns()
         {
@@ -735,6 +954,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("all columns", row.Get<string>("Description"));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр DepartmentQuery.
+        /// </summary>
         private static EntitySchemaQuery DepartmentQuery()
         {
             var esq = EntityManager.Query<OrmDepartmentEntity>(Db, UserConnection);
@@ -744,6 +966,9 @@ namespace Titanic.Test.Entity
             return esq;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EmployeeQuery.
+        /// </summary>
         private static EntitySchemaQuery EmployeeQuery()
         {
             var esq = EntityManager.Query<OrmEmployeeEntity>(Db, UserConnection);
@@ -755,6 +980,9 @@ namespace Titanic.Test.Entity
             return esq;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр QueryDepartments.
+        /// </summary>
         private static List<Orm.Entity> QueryDepartments(string name)
         {
             var esq = DepartmentQuery();
@@ -762,6 +990,9 @@ namespace Titanic.Test.Entity
             return esq.GetEntityCollection();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр QueryEmployeesByEmail.
+        /// </summary>
         private static List<Orm.Entity> QueryEmployeesByEmail(string email)
         {
             var esq = EmployeeQuery();
@@ -769,6 +1000,9 @@ namespace Titanic.Test.Entity
             return esq.GetEntityCollection();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EmployeeSalaryQuery.
+        /// </summary>
         private static List<Orm.Entity> EmployeeSalaryQuery(EntityComparisonType op, decimal value)
         {
             var esq = EmployeeQuery();
@@ -776,6 +1010,9 @@ namespace Titanic.Test.Entity
             return esq.GetEntityCollection();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EmployeeWithDepartmentQuery.
+        /// </summary>
         private static List<Orm.Entity> EmployeeWithDepartmentQuery(string email)
         {
             var esq = EmployeeQuery();
@@ -784,6 +1021,9 @@ namespace Titanic.Test.Entity
             return esq.GetEntityCollection();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EmployeeWithAddressQuery.
+        /// </summary>
         private static List<Orm.Entity> EmployeeWithAddressQuery(string city)
         {
             var esq = EmployeeQuery();
@@ -792,6 +1032,9 @@ namespace Titanic.Test.Entity
             return esq.GetEntityCollection();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateDepartment.
+        /// </summary>
         private static Orm.Entity CreateDepartment(string name, string? description = null)
         {
             var entity = EntityManager.Create<OrmDepartmentEntity>(Db, UserConnection)
@@ -802,6 +1045,9 @@ namespace Titanic.Test.Entity
             return entity;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateEmployee.
+        /// </summary>
         private static Orm.Entity CreateEmployee(
             string name,
             string email,
@@ -820,6 +1066,9 @@ namespace Titanic.Test.Entity
             return entity;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAddress.
+        /// </summary>
         private static Orm.Entity CreateAddress(
             int employeeId,
             string city,
@@ -836,6 +1085,9 @@ namespace Titanic.Test.Entity
             return entity;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр InsertDepartmentLocalization.
+        /// </summary>
         private static void InsertDepartmentLocalization(
             int recordId,
             Guid cultureId,
@@ -851,6 +1103,8 @@ namespace Titanic.Test.Entity
                     Column.Parameter(description))
                 .Execute();
         }
+
+        #endregion Members
     }
 
 }

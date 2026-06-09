@@ -29,10 +29,14 @@ namespace Titanic.Test.Entity
     /// </summary>
     public sealed class EntityApiTests
     {
+        #region Members
         private const string ApiPath = "/entity-api/test";
         private const string StructurePath = $"{ApiPath}/structure";
         private const string AuthHeader = "X-Test-Entity-Auth";
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically.
+        /// </summary>
         [Fact]
         public async Task EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically()
         {
@@ -48,6 +52,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(HttpStatusCode.Forbidden, structureResponse.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_LegacyActionEndpoints_ShouldNotBeMappedAutomatically.
+        /// </summary>
         [Fact]
         public async Task EntityApi_LegacyActionEndpoints_ShouldNotBeMappedAutomatically()
         {
@@ -69,6 +76,9 @@ namespace Titanic.Test.Entity
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnForbiddenWithoutMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnForbiddenWithoutMockAuthorization()
         {
@@ -80,6 +90,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnRowsWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnRowsWithMockAuthorization()
         {
@@ -100,6 +113,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("LIMIT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnBadRequestForUnknownColumn.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnBadRequestForUnknownColumn()
         {
@@ -135,6 +151,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", json);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_UpdateOperation_ShouldReturnBadRequestInsteadOfJsonBindingError.
+        /// </summary>
         [Fact]
         public async Task EntityApi_UpdateOperation_ShouldReturnBadRequestInsteadOfJsonBindingError()
         {
@@ -164,6 +183,9 @@ namespace Titanic.Test.Entity
             Assert.DoesNotContain("BadHttpRequestException", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnNotFoundWhenAutoRegistrationDisabled.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnNotFoundWhenAutoRegistrationDisabled()
         {
@@ -179,6 +201,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(HttpStatusCode.NotFound, structureResponse.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldReturnForbiddenWithoutMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Structure_ShouldReturnForbiddenWithoutMockAuthorization()
         {
@@ -190,6 +215,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldReturnManagerMetadataWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Structure_ShouldReturnManagerMetadataWithMockAuthorization()
         {
@@ -220,6 +248,9 @@ namespace Titanic.Test.Entity
             Assert.Equal("departments", departmentId.GetProperty("referenceTableName").GetString());
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldRespectManagerScope.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Structure_ShouldRespectManagerScope()
         {
@@ -237,6 +268,9 @@ namespace Titanic.Test.Entity
                 x.GetProperty("entityTypeName").GetString() == typeof(Hidden.OrmHiddenScopedEntity).FullName);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmSaveWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmSaveWithMockAuthorization()
         {
@@ -250,6 +284,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmUpdateWhenPrimaryKeyProvided.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmUpdateWhenPrimaryKeyProvided()
         {
@@ -263,6 +300,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmInsertWhenPrimaryKeyMissing.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmInsertWhenPrimaryKeyMissing()
         {
@@ -276,6 +316,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Delete_ShouldExecuteOrmDeleteWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Delete_ShouldExecuteOrmDeleteWithMockAuthorization()
         {
@@ -293,6 +336,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithNonPrimaryFilter_ShouldExecuteOrmDelete.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithNonPrimaryFilter_ShouldExecuteOrmDelete()
         {
@@ -320,6 +366,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("Name", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithoutFilter_ShouldReturnBadRequest.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithoutFilter_ShouldReturnBadRequest()
         {
@@ -339,6 +388,9 @@ namespace Titanic.Test.Entity
             Assert.DoesNotContain("DELETE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithQueryFilter_ShouldExecuteOrmDelete.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithQueryFilter_ShouldExecuteOrmDelete()
         {
@@ -373,6 +425,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("departments", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_SaveWithEmptyPrimaryKey_ShouldReturnBadRequest.
+        /// </summary>
         [Fact]
         public async Task EntityApi_SaveWithEmptyPrimaryKey_ShouldReturnBadRequest()
         {
@@ -397,6 +452,9 @@ namespace Titanic.Test.Entity
             Assert.DoesNotContain("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldUseConfiguredDefaultExecutionMode.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldUseConfiguredDefaultExecutionMode()
         {
@@ -419,6 +477,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("DELETE", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldReturnRequestNames.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldReturnRequestNames()
         {
@@ -439,6 +500,9 @@ namespace Titanic.Test.Entity
             Assert.NotEqual("loadEmployees", result.Results[1].Name);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldUseRequestExecutionModeOverride.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldUseRequestExecutionModeOverride()
         {
@@ -460,6 +524,9 @@ namespace Titanic.Test.Entity
             Assert.All(result.Results, item => Assert.True(item.Success));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSelectRequest.
+        /// </summary>
         private static ESQJsonModel CreateSelectRequest()
         {
             return new ESQJsonModel
@@ -476,6 +543,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSelectOperationRequest.
+        /// </summary>
         private static EntityApiRequest CreateSelectOperationRequest()
         {
             return new EntityApiRequest
@@ -485,6 +555,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSaveOperationRequest.
+        /// </summary>
         private static EntityApiRequest CreateSaveOperationRequest()
         {
             var request = CreateSaveRequest();
@@ -497,6 +570,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSaveExistingOperationRequest.
+        /// </summary>
         private static EntityApiRequest CreateSaveExistingOperationRequest()
         {
             var request = CreateUpdateRequest();
@@ -509,6 +585,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateDeleteOperationRequest.
+        /// </summary>
         private static EntityApiRequest CreateDeleteOperationRequest()
         {
             var request = CreateDeleteRequest();
@@ -521,6 +600,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateBatchRequest.
+        /// </summary>
         private static EntityApiBatchRequest CreateBatchRequest(EntityApiBatchExecutionMode? executionMode = null)
         {
             return new EntityApiBatchRequest
@@ -535,6 +617,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSaveRequest.
+        /// </summary>
         private static EntityApiSaveRequest CreateSaveRequest()
         {
             return new EntityApiSaveRequest
@@ -548,6 +633,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateUpdateRequest.
+        /// </summary>
         private static EntityApiSaveRequest CreateUpdateRequest()
         {
             return new EntityApiSaveRequest
@@ -562,6 +650,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateDeleteRequest.
+        /// </summary>
         private static EntityApiDeleteRequest CreateDeleteRequest()
         {
             return new EntityApiDeleteRequest
@@ -574,6 +665,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAuthorizedClient.
+        /// </summary>
         private static HttpClient CreateAuthorizedClient(WebApplication app)
         {
             var client = app.GetTestClient();
@@ -581,6 +675,9 @@ namespace Titanic.Test.Entity
             return client;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAppAsync.
+        /// </summary>
         private static async Task<WebApplication> CreateAppAsync(
             bool autoRegisterApiEndpoint,
             EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential)
@@ -643,6 +740,8 @@ namespace Titanic.Test.Entity
             await app.StartAsync();
             return app;
         }
+
+        #endregion Members
     }
 
     /// <summary>
@@ -708,7 +807,7 @@ namespace Titanic.Test.Entity
         /// Создать mock provider через reflection-фабрику DbManager.
         /// </summary>
         /// <param name="connectionString"> Строка подключения. </param>
-        /// <param name="engine"> SQL engine. </param>
+            /// <param name="engine"> SQL-движок. </param>
         public EntityApiMockDbProvider(string connectionString, BaseDbEngine engine)
             : base(connectionString, engine)
         {
@@ -737,8 +836,11 @@ namespace Titanic.Test.Entity
         /// <inheritdoc />
         public override T ExecuteScalar<T>(IQuery query)
         {
-            Capture(query);
-            object value = Guid.Parse("33333333-3333-3333-3333-333333333333");
+            var build = Capture(query);
+            object value = typeof(T) == typeof(int)
+                           && build.Sql.Contains("COUNT", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : Guid.Parse("33333333-3333-3333-3333-333333333333");
             return (T)value;
         }
 
@@ -770,6 +872,9 @@ namespace Titanic.Test.Entity
             throw new NotSupportedException("EntityApiMockDbProvider does not create database parameters.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Capture.
+        /// </summary>
         private QueryBuildResult Capture(IQuery query)
         {
             var build = Build(query);
@@ -783,6 +888,9 @@ namespace Titanic.Test.Entity
             return build;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateReader.
+        /// </summary>
         private static DbDataReader CreateReader(string sql)
         {
             var table = new DataTable();

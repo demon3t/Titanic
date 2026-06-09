@@ -44,6 +44,8 @@ jobs:
 
     env:
       TITANIC_TEST_CONNECTION_STRING: Host=localhost;Port=5432;Database=titanic_test_db;Username=postgres;Password=postgres
+      ASPNETCORE_ENVIRONMENT: Testing
+      DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP2UNENCRYPTEDSUPPORT: "true"
 
     steps:
       - name: Checkout repository
@@ -59,6 +61,9 @@ jobs:
 
       - name: Build solution
         run: dotnet build Titanic.sln --configuration Release --no-restore --nologo
+
+      - name: Run event listener app tests
+        run: dotnet test Titanic.Test/Titanic.Test.csproj --configuration Release --no-build --nologo --filter "FullyQualifiedName~EntityEventTransportTests|FullyQualifiedName~EntityEventRemoteListenerLifetimeTests"
 
       - name: Run tests
         run: dotnet test Titanic.Test/Titanic.Test.csproj --configuration Release --no-build --nologo
