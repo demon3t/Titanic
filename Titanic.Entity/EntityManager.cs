@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
 using Titanic.Db;
@@ -90,6 +90,15 @@ namespace Titanic.Entity
         {
             return _serviceProvider
                 ?? throw new InvalidOperationException("EntityManager service provider is not configured.");
+        }
+
+        /// <summary>
+        /// Получить корневой провайдер сервисов, если он уже привязан к Entity ORM.
+        /// </summary>
+        /// <returns>Провайдер сервисов приложения или <see langword="null" />.</returns>
+        internal static IServiceProvider? TryGetServiceProvider()
+        {
+            return _serviceProvider;
         }
 
         /// <summary>

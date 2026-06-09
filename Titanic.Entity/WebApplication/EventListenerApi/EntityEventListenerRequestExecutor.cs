@@ -46,6 +46,71 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
+        /// Создаёт экземпляр remote listener-а по имени менеджера из запроса.
+        /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат создания экземпляра listener-а.</returns>
+        internal static EntityEventDispatchResponse Create(EntityEventDispatchRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
+                return Create(manager, request);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Удаляет экземпляр remote listener-а по имени менеджера из запроса.
+        /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат удаления экземпляра listener-а.</returns>
+        internal static EntityEventDispatchResponse Delete(EntityEventDispatchRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
+                return Delete(manager, request);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Выполняет конкретную стадию событийного pipeline по имени менеджера из запроса.
+        /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns>Результат обработки события.</returns>
+        internal static EntityEventDispatchResponse ExecuteStage(EntityEventDispatchRequest request, EntityEventStage stage)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                var manager = global::Titanic.Entity.EntityManager.GetManager(request.ManagerName);
+                return ExecuteStage(manager, request, stage);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Canceled(ex);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
+            }
+        }
+
+        /// <summary>
         /// Выполняет dispatch-запрос для указанного менеджера.
         /// </summary>
         /// <param name="manager">Менеджер Entity ORM.</param>
@@ -56,11 +121,86 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(request);
 
+            return ExecuteStage(manager, request, ParseStage(request.Stage), releaseOnFinalStage: true);
+        }
+
+        /// <summary>
+        /// Создаёт экземпляр remote listener-а для указанного менеджера.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат создания экземпляра listener-а.</returns>
+        internal static EntityEventDispatchResponse Create(BaseEntityManager manager, EntityEventDispatchRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(manager);
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                EntityEventRemoteListenerCache.Create(manager, request);
+                return Success(request.Values);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Удаляет экземпляр remote listener-а для указанного менеджера.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Результат удаления экземпляра listener-а.</returns>
+        internal static EntityEventDispatchResponse Delete(BaseEntityManager manager, EntityEventDispatchRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(manager);
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                EntityEventRemoteListenerCache.Release(manager, request);
+                return Success(request.Values);
+            }
+            catch (Exception ex)
+            {
+                return Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Выполняет конкретную стадию событийного pipeline для указанного менеджера.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns>Результат обработки события.</returns>
+        internal static EntityEventDispatchResponse ExecuteStage(
+            BaseEntityManager manager,
+            EntityEventDispatchRequest request,
+            EntityEventStage stage)
+        {
+            return ExecuteStage(manager, request, stage, releaseOnFinalStage: false);
+        }
+
+        /// <summary>
+        /// Выполняет конкретную стадию событийного pipeline.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <param name="releaseOnFinalStage">Удалять listener после финальной стадии legacy dispatch-вызова.</param>
+        /// <returns>Результат обработки события.</returns>
+        private static EntityEventDispatchResponse ExecuteStage(
+            BaseEntityManager manager,
+            EntityEventDispatchRequest request,
+            EntityEventStage stage,
+            bool releaseOnFinalStage)
+        {
             var releaseListeners = false;
             try
             {
-                var stage = ParseStage(request.Stage);
-                releaseListeners = IsFinalStage(stage);
+                request.Stage = stage.ToString();
 
                 var entity = manager.Create(request.TableName, request.UserConnection, request.IsNew);
                 entity.SetValues(request.Values);
@@ -68,30 +208,18 @@ namespace Titanic.Entity.Events
                 var listeners = EntityEventRemoteListenerCache.GetListeners(manager, request);
                 EntityEventLocalExecutor.Dispatch(entity, manager, stage, listeners);
 
-                return new EntityEventDispatchResponse
-                {
-                    Success = true,
-                    Values = entity.ToDictionary()
-                };
+                releaseListeners = releaseOnFinalStage && EntityEventListenerApiDefaults.IsFinalStage(stage);
+                return Success(entity.ToDictionary());
             }
             catch (InvalidOperationException ex)
             {
                 releaseListeners = true;
-                return new EntityEventDispatchResponse
-                {
-                    Success = false,
-                    Canceled = true,
-                    CancelReason = ex.Message
-                };
+                return Canceled(ex);
             }
             catch (Exception ex)
             {
                 releaseListeners = true;
-                return new EntityEventDispatchResponse
-                {
-                    Success = false,
-                    ErrorMessage = ex.Message
-                };
+                return Error(ex);
             }
             finally
             {
@@ -148,16 +276,6 @@ namespace Titanic.Entity.Events
         }
 
         /// <summary>
-        /// Проверяет, завершает ли стадия текущий событийный pipeline.
-        /// </summary>
-        /// <param name="stage">Стадия событийного pipeline.</param>
-        /// <returns><see langword="true" />, если listener-ы нужно удалить сразу.</returns>
-        private static bool IsFinalStage(EntityEventStage stage)
-        {
-            return stage is EntityEventStage.Saved or EntityEventStage.Deleted;
-        }
-
-        /// <summary>
         /// Преобразует protobuf-значение в CLR-значение.
         /// </summary>
         /// <param name="value">Protobuf-значение.</param>
@@ -197,6 +315,52 @@ namespace Titanic.Entity.Events
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// Создаёт успешный transport-ответ.
+        /// </summary>
+        /// <param name="values">Значения сущности.</param>
+        /// <returns>Успешный ответ.</returns>
+        private static EntityEventDispatchResponse Success(IReadOnlyDictionary<string, object?> values)
+        {
+            return new EntityEventDispatchResponse
+            {
+                Success = true,
+                Values = values.ToDictionary(
+                    x => x.Key,
+                    x => x.Value,
+                    StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        /// <summary>
+        /// Создаёт transport-ответ отмены pipeline.
+        /// </summary>
+        /// <param name="ex">Исключение с причиной отмены.</param>
+        /// <returns>Ответ отмены pipeline.</returns>
+        private static EntityEventDispatchResponse Canceled(Exception ex)
+        {
+            return new EntityEventDispatchResponse
+            {
+                Success = false,
+                Canceled = true,
+                CancelReason = ex.Message
+            };
+        }
+
+        /// <summary>
+        /// Создаёт transport-ответ ошибки.
+        /// </summary>
+        /// <param name="ex">Исключение, возникшее при обработке.</param>
+        /// <returns>Ответ ошибки.</returns>
+        private static EntityEventDispatchResponse Error(Exception ex)
+        {
+            return new EntityEventDispatchResponse
+            {
+                Success = false,
+                ErrorMessage = ex.Message
+            };
         }
 
         #endregion Members

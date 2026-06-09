@@ -7,6 +7,16 @@ package titanic.entity.events;
 import "google/protobuf/struct.proto";
 
 service EntityEventListenerGrpc {
+  rpc Create (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnSaving (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnSaved (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnInserting (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnInserted (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnUpdating (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnUpdated (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnDeleting (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnDeleted (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc Delete (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
   rpc Dispatch (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
 }
 

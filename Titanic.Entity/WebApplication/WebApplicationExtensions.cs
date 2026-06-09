@@ -178,23 +178,7 @@ namespace Titanic.Entity.WebApplication
 
             foreach (var manager in EntityManager.GetManagers().Where(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Http))
             {
-                var path = NormalizeApiPath(manager.EventListenerApi.Path);
-                app.MapPost(path, (EntityEventDispatchRequest request) =>
-                {
-                    request.ManagerName = manager.Name;
-                    var result = EntityEventListenerRequestExecutor.Execute(manager, request);
-                    if (result.Success)
-                    {
-                        return Results.Ok(result);
-                    }
-
-                    if (result.Canceled)
-                    {
-                        return Results.Json(result, statusCode: StatusCodes.Status409Conflict);
-                    }
-
-                    return Results.Json(result, statusCode: StatusCodes.Status500InternalServerError);
-                });
+                MapEventListenerEndpoints(app, manager);
             }
 
             if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Grpc))
@@ -234,6 +218,86 @@ namespace Titanic.Entity.WebApplication
         #endregion Registration Helpers
 
         #region Endpoint Mapping
+
+        /// <summary>
+        /// Регистрирует HTTP endpoint-ы событийного listener API для менеджера.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        private static void MapEventListenerEndpoints(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            BaseEntityManager manager)
+        {
+            var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
+
+            app.MapPost($"{basePath}/{EntityEventListenerApiDefaults.HttpCreateActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Create(manager, request));
+            });
+
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saving);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saved);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserted);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updating);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updated);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleted);
+
+            app.MapPost($"{basePath}/{EntityEventListenerApiDefaults.HttpDeleteActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Delete(manager, request));
+            });
+
+            app.MapPost(basePath, (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Execute(manager, request));
+            });
+        }
+
+        /// <summary>
+        /// Регистрирует HTTP endpoint конкретной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="basePath">Базовый путь listener API.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        private static void MapEventListenerStageEndpoint(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            string basePath,
+            BaseEntityManager manager,
+            EntityEventStage stage)
+        {
+            var actionPath = EntityEventListenerApiDefaults.GetHttpActionPath(stage);
+            app.MapPost($"{basePath}/{actionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.ExecuteStage(manager, request, stage));
+            });
+        }
+
+        /// <summary>
+        /// Преобразует transport-ответ listener API в HTTP-результат.
+        /// </summary>
+        /// <param name="result">Transport-ответ listener API.</param>
+        /// <returns>HTTP-результат listener API.</returns>
+        private static IResult ToEventListenerResult(EntityEventDispatchResponse result)
+        {
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            if (result.Canceled)
+            {
+                return Results.Json(result, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            return Results.Json(result, statusCode: StatusCodes.Status500InternalServerError);
+        }
 
         /// <summary>
         /// Инициализирует новый экземпляр MapManagerEndpoints.

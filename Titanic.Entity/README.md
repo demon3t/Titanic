@@ -152,23 +152,30 @@ app.Run();
 
 - `managerName`
 - `tableName`
+- `dispatchId`
 - `stage`
 - `isNew`
 - `userConnection`
 - `values`
-- `requestId`
-- `correlationId`
-- `occurredAtUtc`
 
 ### HTTP-контракт внешнего listener-а
 
-Рекомендуемый endpoint:
+HTTP listener публикует отдельный endpoint на lifecycle-действие и каждую стадию pipeline:
 
 ```text
-POST /entity-event-listener/dispatch
+POST {EventListenerApi.Path}/create
+POST {EventListenerApi.Path}/on-saving
+POST {EventListenerApi.Path}/on-saved
+POST {EventListenerApi.Path}/on-inserting
+POST {EventListenerApi.Path}/on-inserted
+POST {EventListenerApi.Path}/on-updating
+POST {EventListenerApi.Path}/on-updated
+POST {EventListenerApi.Path}/on-deleting
+POST {EventListenerApi.Path}/on-deleted
+POST {EventListenerApi.Path}/delete
 ```
 
-Один HTTP-вызов соответствует одному этапу событийного pipeline.
+`create` создаёт экземпляр remote listener-а на удалённой стороне, `delete` удаляет его после последней стадии. Один HTTP-вызов `on-*` соответствует одному этапу событийного pipeline.
 
 Минимальный ответ:
 
@@ -189,12 +196,23 @@ POST /entity-event-listener/dispatch
 Рекомендуемый service:
 
 ```text
-EntityEventListenerGrpc.Dispatch(EntityEventDispatchRequest)
+EntityEventListenerGrpc.Create(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaving(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaved(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdating(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdated(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.Delete(EntityEventGrpcRequest)
 ```
 
 gRPC-контракт повторяет ту же семантику, что и HTTP:
 
-- один вызов = одно событие;
+- `Create` создаёт remote listener на время обработки одной сущности;
+- один `On*` вызов = одно событие;
+- `Delete` удаляет remote listener после последней стадии;
 - передаётся `managerName`, `tableName`, `stage`, `isNew`, `userConnection` и типизированные `values`;
 - ответ сообщает, обработано ли событие, было ли оно отменено и есть ли ошибка.
 

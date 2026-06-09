@@ -15,7 +15,7 @@ namespace Titanic.Test.Entity
     {
         #region Members
 
-        private readonly EntityApiMockDbProvider _provider;
+        private readonly EntityEventInMemoryDbProvider _provider;
         private static TestEventSink? _currentSink;
 
         /// <summary>
@@ -23,8 +23,8 @@ namespace Titanic.Test.Entity
         /// </summary>
         public EntityEventListenerContractTests()
         {
-            EntityApiMockDbProvider.ResetState();
-            _provider = new EntityApiMockDbProvider("mock", new PostgresEngine());
+            EntityEventInMemoryDbProvider.ResetState();
+            _provider = new EntityEventInMemoryDbProvider("in-memory", new PostgresEngine());
             global::Titanic.Entity.EntityManager.ResetServices();
             EmployeeEventListener.IsEnabled = false;
             DepartmentCancelEventListener.IsEnabled = false;

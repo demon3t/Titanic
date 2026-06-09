@@ -1,14 +1,7 @@
-using System.Data.Common;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
 using Titanic.Db;
-using Titanic.Db.Abstractions;
 using Titanic.Db.Configuration;
-using Titanic.Db.Interfaces;
 using Titanic.Db.PosgreSql;
 using Titanic.Db.WebApplication;
 using Titanic.Entity.Attributes;
@@ -28,7 +21,6 @@ namespace Titanic.Test.Entity
 
         private const string ManagerName = "RemoteLifetimeManager";
         private const string ListenerPath = "/entity-event-listener/lifetime";
-        private const string ListenerUri = "http://listener.test/entity-event-listener/lifetime";
 
         /// <summary>
         /// Освобождает статическое состояние тестовых listener-ов.
@@ -46,12 +38,15 @@ namespace Titanic.Test.Entity
         {
             ResetRuntimeState();
             await using var listenerApp = await CreateListenerAppAsync();
-            var client = listenerApp.GetTestClient();
+            using var client = listenerApp.CreateHttpClient();
             var dispatchId = Guid.NewGuid().ToString("N");
 
+            await CreateAsync(client, dispatchId);
             await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
             await DispatchAsync(client, EntityEventStage.Inserting, dispatchId);
             await DispatchAsync(client, EntityEventStage.Saved, dispatchId);
+            await DeleteAsync(client, dispatchId);
+            await CreateAsync(client, dispatchId);
             await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
 
             var instanceIds = LifetimeEventSink.InstanceIds;
@@ -69,9 +64,10 @@ namespace Titanic.Test.Entity
         {
             ResetRuntimeState();
             await using var listenerApp = await CreateListenerAppAsync(TimeSpan.FromMilliseconds(50));
-            var client = listenerApp.GetTestClient();
+            using var client = listenerApp.CreateHttpClient();
             var dispatchId = Guid.NewGuid().ToString("N");
 
+            await CreateAsync(client, dispatchId);
             await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
             await Task.Delay(150);
             await DispatchAsync(client, EntityEventStage.Inserting, dispatchId);
@@ -89,12 +85,8 @@ namespace Titanic.Test.Entity
         {
             ResetRuntimeState();
             await using var listenerApp = await CreateListenerAppAsync();
-            ConfigureEntityServices(services =>
-            {
-                services.AddSingleton<IEntityEventHttpClientFactory>(new LifetimeHttpClientFactory(listenerApp));
-            });
 
-            var manager = CreateRemoteManager();
+            var manager = CreateRemoteManager(listenerApp.GetHttpListenerUri(ListenerPath));
             var entity = manager.Create<OrmDepartmentEntity>(CreateUserConnection())
                 .Set(nameof(OrmDepartmentEntity.Name), $"lifetime-{Guid.NewGuid():N}");
 
@@ -106,14 +98,42 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Выполняет HTTP dispatch-запрос к listener API.
+        /// Выполняет HTTP-запрос создания remote listener-а.
+        /// </summary>
+        /// <param name="client">HTTP-клиент тестового приложения.</param>
+        /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
+        private static async Task CreateAsync(HttpClient client, string dispatchId)
+        {
+            var response = await client.PostAsJsonAsync(
+                BuildActionPath(EntityEventListenerApiDefaults.HttpCreateActionPath),
+                CreateDispatchRequest(EntityEventStage.Saving, dispatchId));
+            response.EnsureSuccessStatusCode();
+        }
+
+        /// <summary>
+        /// Выполняет HTTP-запрос конкретной стадии к listener API.
         /// </summary>
         /// <param name="client">HTTP-клиент тестового приложения.</param>
         /// <param name="stage">Стадия событийного pipeline.</param>
         /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
         private static async Task DispatchAsync(HttpClient client, EntityEventStage stage, string dispatchId)
         {
-            var response = await client.PostAsJsonAsync(ListenerPath, CreateDispatchRequest(stage, dispatchId));
+            var response = await client.PostAsJsonAsync(
+                BuildStagePath(stage),
+                CreateDispatchRequest(stage, dispatchId));
+            response.EnsureSuccessStatusCode();
+        }
+
+        /// <summary>
+        /// Выполняет HTTP-запрос удаления remote listener-а.
+        /// </summary>
+        /// <param name="client">HTTP-клиент тестового приложения.</param>
+        /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
+        private static async Task DeleteAsync(HttpClient client, string dispatchId)
+        {
+            var response = await client.PostAsJsonAsync(
+                BuildActionPath(EntityEventListenerApiDefaults.HttpDeleteActionPath),
+                CreateDispatchRequest(EntityEventStage.Saved, dispatchId));
             response.EnsureSuccessStatusCode();
         }
 
@@ -122,73 +142,64 @@ namespace Titanic.Test.Entity
         /// </summary>
         /// <param name="listenerIdleTimeout">Idle timeout экземпляра remote listener-а.</param>
         /// <returns>Запущенное тестовое приложение.</returns>
-        private static async Task<WebApplication> CreateListenerAppAsync(TimeSpan? listenerIdleTimeout = null)
+        private static Task<EntityEventListenerTestApplication> CreateListenerAppAsync(TimeSpan? listenerIdleTimeout = null)
         {
             ResetRuntimeState();
-
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            return EntityEventListenerTestApplication.StartAsync(builder =>
             {
-                EnvironmentName = "Testing"
-            });
-            builder.WebHost.UseTestServer();
-
-            builder.AddTitanicDb(config =>
-            {
-                config.DefaultProviderName = "RemoteLifetimeMock";
-                config.Providers =
-                [
-                    new DbProviderConfig
-                    {
-                        Name = "RemoteLifetimeMock",
-                        ConnectionString = "mock",
-                        Types = new ProviderTypeConfig
+                builder.AddTitanicDb(config =>
+                {
+                    config.DefaultProviderName = "RemoteLifetimeInMemory";
+                    config.Providers =
+                    [
+                        new DbProviderConfig
                         {
-                            ProviderType = typeof(LifetimeMockDbProvider).AssemblyQualifiedName!,
-                            EngineType = typeof(PostgresEngine).AssemblyQualifiedName!
+                            Name = "RemoteLifetimeInMemory",
+                            ConnectionString = "in-memory",
+                            Types = new ProviderTypeConfig
+                            {
+                                ProviderType = typeof(EntityEventInMemoryDbProvider).AssemblyQualifiedName!,
+                                EngineType = typeof(PostgresEngine).AssemblyQualifiedName!
+                            }
                         }
-                    }
-                ];
-            });
+                    ];
+                });
 
-            builder.AddTitanicEntityEventListenerApi(config =>
-            {
-                config.Managers =
-                [
-                    new EntityManagerSettings
-                    {
-                        Name = ManagerName,
-                        DbProviderName = "RemoteLifetimeMock",
-                        EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
-                        EventListenerApi = new EntityManagerEventListenerApiSettings
+                builder.AddTitanicEntityEventListenerApi(config =>
+                {
+                    config.Managers =
+                    [
+                        new EntityManagerSettings
                         {
-                            Mode = EntityEventListenerApiMode.Http,
-                            Path = ListenerPath,
-                            ListenerInstanceIdleTimeout = listenerIdleTimeout ?? TimeSpan.FromMinutes(5)
+                            Name = ManagerName,
+                            DbProviderName = "RemoteLifetimeInMemory",
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.Http,
+                                Path = ListenerPath,
+                                ListenerInstanceIdleTimeout = listenerIdleTimeout ?? TimeSpan.FromMinutes(5)
+                            }
                         }
-                    }
-                ];
+                    ];
+                });
             });
-
-            var app = builder.Build();
-            app.MapTitanicEntityEventListenerApi();
-            await app.StartAsync();
-            return app;
         }
 
         /// <summary>
         /// Создаёт менеджер, который вызывает внешний HTTP listener.
         /// </summary>
         /// <returns>Менеджер Entity ORM.</returns>
-        private static BaseEntityManager CreateRemoteManager()
+        private static BaseEntityManager CreateRemoteManager(string listenerUri)
         {
             var manager = new EntityDbManager();
             manager.Initialize(
                 ManagerName,
-                new LifetimeMockDbProvider("mock", new PostgresEngine()),
+                new EntityEventInMemoryDbProvider("in-memory", new PostgresEngine()),
                 new EntityManagerSettings
                 {
                     EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
-                    EventListener = ListenerUri
+                    EventListener = listenerUri
                 });
 
             return manager;
@@ -218,6 +229,26 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Создаёт путь HTTP-действия listener API.
+        /// </summary>
+        /// <param name="actionPath">Относительный путь действия.</param>
+        /// <returns>Полный путь HTTP-действия.</returns>
+        private static string BuildActionPath(string actionPath)
+        {
+            return $"{ListenerPath.TrimEnd('/')}/{actionPath}";
+        }
+
+        /// <summary>
+        /// Создаёт путь HTTP endpoint-а конкретной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        /// <returns>Полный путь HTTP endpoint-а стадии.</returns>
+        private static string BuildStagePath(EntityEventStage stage)
+        {
+            return BuildActionPath(EntityEventListenerApiDefaults.GetHttpActionPath(stage));
+        }
+
+        /// <summary>
         /// Создаёт тестовый пользовательский контекст.
         /// </summary>
         /// <returns>Пользовательский контекст.</returns>
@@ -232,18 +263,6 @@ namespace Titanic.Test.Entity
                     Name = "Test"
                 }
             };
-        }
-
-        /// <summary>
-        /// Настраивает сервисы Entity ORM для client-side remote dispatch.
-        /// </summary>
-        /// <param name="configure">Делегат настройки DI.</param>
-        private static void ConfigureEntityServices(Action<IServiceCollection> configure)
-        {
-            global::Titanic.Entity.EntityManager.ResetServices();
-            var services = new ServiceCollection();
-            configure(services);
-            global::Titanic.Entity.EntityManager.ConfigureServices(services.BuildServiceProvider());
         }
 
         /// <summary>
@@ -380,86 +399,6 @@ namespace Titanic.Test.Entity
                     InternalEvents.Clear();
                     _nextInstanceId = 0;
                 }
-            }
-        }
-
-        /// <summary>
-        /// HTTP factory, который направляет remote dispatch в TestServer.
-        /// </summary>
-        private sealed class LifetimeHttpClientFactory : IEntityEventHttpClientFactory
-        {
-            private readonly WebApplication _app;
-
-            /// <summary>
-            /// Создаёт factory для указанного тестового приложения.
-            /// </summary>
-            /// <param name="app">Тестовое приложение listener API.</param>
-            public LifetimeHttpClientFactory(WebApplication app)
-            {
-                _app = app;
-            }
-
-            /// <inheritdoc />
-            public HttpClient CreateClient(Uri listenerUri)
-            {
-                var client = _app.GetTestClient();
-                client.BaseAddress = new Uri(listenerUri.GetLeftPart(UriPartial.Authority));
-                return client;
-            }
-        }
-
-        /// <summary>
-        /// Mock DB provider для тестов remote listener lifetime без реальной БД.
-        /// </summary>
-        private sealed class LifetimeMockDbProvider : BaseDbProvider
-        {
-            /// <summary>
-            /// Создаёт mock provider.
-            /// </summary>
-            /// <param name="connectionString">Строка подключения.</param>
-            /// <param name="engine">SQL-движок.</param>
-            public LifetimeMockDbProvider(string connectionString, BaseDbEngine engine)
-                : base(connectionString, engine)
-            {
-            }
-
-            /// <inheritdoc />
-            public override int Execute(IQuery query)
-            {
-                return 1;
-            }
-
-            /// <inheritdoc />
-            public override T ExecuteScalar<T>(IQuery query)
-            {
-                object result = typeof(T) switch
-                {
-                    var type when type == typeof(Guid) => Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                    var type when type == typeof(int) => 1,
-                    var type when type == typeof(long) => 1L,
-                    var type when type == typeof(object) => 1,
-                    _ => Activator.CreateInstance<T>()!
-                };
-
-                return (T)result;
-            }
-
-            /// <inheritdoc />
-            public override List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
-            {
-                return [];
-            }
-
-            /// <inheritdoc />
-            protected override DbConnection CreateConnection()
-            {
-                throw new NotSupportedException();
-            }
-
-            /// <inheritdoc />
-            protected override DbParameter CreateParameter(QueryParameter parameter)
-            {
-                throw new NotSupportedException();
             }
         }
 

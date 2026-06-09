@@ -13,12 +13,12 @@ namespace Titanic.Entity.Events
         private static readonly Dictionary<CacheKey, CacheEntry> Entries = new();
 
         /// <summary>
-        /// Возвращает cached listener-ы для dispatch-запроса или создаёт новые.
+        /// Создаёт cached listener-ы для dispatch-запроса или продлевает срок жизни существующих.
         /// </summary>
         /// <param name="manager">Менеджер Entity ORM.</param>
         /// <param name="request">Dispatch-запрос события.</param>
         /// <returns>Экземпляры listener-ов.</returns>
-        internal static IReadOnlyCollection<BaseEntityEventListener> GetListeners(
+        internal static IReadOnlyCollection<BaseEntityEventListener> Create(
             BaseEntityManager manager,
             EntityEventDispatchRequest request)
         {
@@ -52,6 +52,19 @@ namespace Titanic.Entity.Events
 
                 return listeners;
             }
+        }
+
+        /// <summary>
+        /// Возвращает cached listener-ы для dispatch-запроса или создаёт новые.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Экземпляры listener-ов.</returns>
+        internal static IReadOnlyCollection<BaseEntityEventListener> GetListeners(
+            BaseEntityManager manager,
+            EntityEventDispatchRequest request)
+        {
+            return Create(manager, request);
         }
 
         /// <summary>
