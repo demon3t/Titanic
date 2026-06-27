@@ -14,7 +14,8 @@ namespace Titanic.Entity.Events
         [
             new LocalEntityEventProvider(),
             new HttpEntityEventProvider(),
-            new GrpcEntityEventProvider()
+            new GrpcEntityEventProvider(),
+            new WebSocketEntityEventProvider()
         ];
 
         private static IServiceProvider? _services;
@@ -103,7 +104,7 @@ namespace Titanic.Entity.Events
             }
 
             throw new InvalidOperationException(
-                $"Unsupported event listener scheme '{uri.Scheme}'. Use http, https, grpc or grpcs.");
+                $"Unsupported event listener scheme '{uri.Scheme}'. Use http, https, grpc, grpcs, ws or wss.");
         }
 
         /// <summary>

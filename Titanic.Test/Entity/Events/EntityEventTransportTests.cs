@@ -1,5 +1,9 @@
 using System.Net.Http.Json;
-using Google.Protobuf.WellKnownTypes;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using System.Globalization;
+using Google.Protobuf;
 using Grpc.Net.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
@@ -27,9 +31,17 @@ namespace Titanic.Test.Entity
         private const string LocalManagerName = "TransportManagerLocal";
         private const string HttpManagerName = "TransportManagerHttp";
         private const string GrpcManagerName = "TransportManagerGrpc";
+        private const string WebSocketManagerName = "TransportManagerWebSocket";
         private const string HttpListenerPath = "/entity-event-listener/transport-http";
+        private const string WebSocketListenerPath = "/entity-event-listener/transport-ws";
         private const string FilledDescription = "filled-by-event-listener";
         private const string OldDescription = "old-description";
+        private const string EmployeeDepartmentAlias = "DepartmentLookup";
+        private const string EmployeeDepartmentDisplayValue = "Finance";
+        private static readonly JsonSerializerOptions WebSocketJsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         /// <summary>
         /// Инициализирует новый экземпляр Entity_Save_WithLocalEventListener_ShouldFillFieldAndPersistIt.
@@ -97,6 +109,28 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Инициализирует новый экземпляр Entity_Save_WithRemoteWebSocketEventListener_ShouldFillFieldAndPersistIt.
+        /// </summary>
+        [SkippableFact]
+        public async Task Entity_Save_WithRemoteWebSocketEventListener_ShouldFillFieldAndPersistIt()
+        {
+            EnsureIntegrationDatabase();
+            ResetRuntimeState();
+            await using var listenerApp = await CreateDbBackedListenerAppAsync();
+
+            var manager = CreateDbBackedManager(WebSocketManagerName, listenerApp.GetWebSocketListenerUri(WebSocketListenerPath));
+            var entity = CreateDepartmentEntity(manager, "transport-websocket");
+
+            entity.Save();
+
+            Assert.Equal(FilledDescription, entity.Get<string>(nameof(OrmDepartmentEntity.Description)));
+            Assert.Equal(
+                new[] { "saving:departments", "inserting:departments", "inserted:departments", "saved:departments" },
+                TransportEventSink.Events);
+            AssertPersistedDescription(manager, entity.Get<string>(nameof(OrmDepartmentEntity.Name))!, FilledDescription);
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр Entity_Save_WithRemoteHttpEventListener_ShouldPassUserConnectionToListener.
         /// </summary>
         [Fact]
@@ -131,6 +165,23 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Инициализирует новый экземпляр Entity_Save_WithRemoteWebSocketEventListener_ShouldPassUserConnectionToListener.
+        /// </summary>
+        [Fact]
+        public async Task Entity_Save_WithRemoteWebSocketEventListener_ShouldPassUserConnectionToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+
+            var manager = CreateInMemoryManager(WebSocketManagerName, listenerApp.GetWebSocketListenerUri(WebSocketListenerPath));
+            var entity = CreateDepartmentEntity(manager, "transport-websocket-user");
+
+            entity.Save();
+
+            AssertCapturedUserConnection();
+        }
+
+        /// <summary>
         /// Проверяет, что remote gRPC provider передаёт старые значения существующей сущности.
         /// </summary>
         [Fact]
@@ -141,6 +192,24 @@ namespace Titanic.Test.Entity
 
             var manager = CreateInMemoryManager(GrpcManagerName, listenerApp.GrpcListenerUri);
             var entity = CreateExistingDepartmentEntity(manager, "transport-grpc-old", OldDescription);
+            entity.Set(nameof(OrmDepartmentEntity.Description), "updated-description");
+
+            entity.Save();
+
+            Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
+        }
+
+        /// <summary>
+        /// Проверяет, что remote WebSocket provider передаёт старые значения существующей сущности.
+        /// </summary>
+        [Fact]
+        public async Task Entity_Save_WithRemoteWebSocketEventListener_ShouldPassOldValuesToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+
+            var manager = CreateInMemoryManager(WebSocketManagerName, listenerApp.GetWebSocketListenerUri(WebSocketListenerPath));
+            var entity = CreateExistingDepartmentEntity(manager, "transport-websocket-old", OldDescription);
             entity.Set(nameof(OrmDepartmentEntity.Description), "updated-description");
 
             entity.Save();
@@ -220,8 +289,14 @@ namespace Titanic.Test.Entity
             using var channel = GrpcChannel.ForAddress(listenerApp.GrpcBaseAddress);
             var client = new EntityEventListenerGrpc.EntityEventListenerGrpcClient(channel);
             var request = CreateGrpcDispatchRequest(EntityEventStage.Updating);
-            request.Values[nameof(OrmDepartmentEntity.Description)] = Value.ForString("updated-description");
-            request.OldValues[nameof(OrmDepartmentEntity.Description)] = Value.ForString(OldDescription);
+            request.Values[nameof(OrmDepartmentEntity.Description)] = new EntityEventGrpcValue
+            {
+                StringValue = "updated-description"
+            };
+            request.OldValues[nameof(OrmDepartmentEntity.Description)] = new EntityEventGrpcValue
+            {
+                StringValue = OldDescription
+            };
 
             client.Create(request);
             var response = client.OnUpdating(request);
@@ -229,6 +304,196 @@ namespace Titanic.Test.Entity
 
             Assert.True(response.Success);
             Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityEventListenerApi_WebSocketEndpoint_ShouldReturnSuccessAndMutatedValues.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_WebSocketEndpoint_ShouldReturnSuccessAndMutatedValues()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var socket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+            var request = CreateDispatchRequest(EntityEventStage.Saving, WebSocketManagerName);
+
+            var createResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Create, request);
+            var response = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.ExecuteStage, request);
+            var deleteResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Delete, request);
+
+            Assert.True(createResponse.Response.Success);
+            Assert.True(response.Response.Success);
+            Assert.True(deleteResponse.Response.Success);
+            Assert.Equal(new[] { "saving:departments" }, TransportEventSink.Events);
+            Assert.Equal(FilledDescription, GetStringValue(response.Response.Values, nameof(OrmDepartmentEntity.Description)));
+        }
+
+        /// <summary>
+        /// Проверяет, что WebSocket listener API передаёт старые значения в локальный listener.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_WebSocketEndpoint_ShouldPassOldValuesToListener()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var socket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+            var request = CreateDispatchRequest(EntityEventStage.Updating, WebSocketManagerName);
+            request.Values[nameof(OrmDepartmentEntity.Description)] = "updated-description";
+            request.OldValues[nameof(OrmDepartmentEntity.Description)] = OldDescription;
+
+            var createResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Create, request);
+            var response = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.ExecuteStage, request);
+            var deleteResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Delete, request);
+
+            Assert.True(createResponse.Response.Success);
+            Assert.True(response.Response.Success);
+            Assert.True(deleteResponse.Response.Success);
+            Assert.Equal(OldDescription, TransportEventSink.LastOldDescription);
+        }
+
+        /// <summary>
+        /// Проверяет, что HTTP listener API передаёт полный снимок Entity с custom alias и display-значением ссылочной колонки.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_HttpEndpoint_ShouldPreserveEntitySnapshotWithCustomAlias()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var client = listenerApp.CreateHttpClient();
+            var manager = CreateInMemoryManager(HttpManagerName, null);
+            var entity = CreateExistingEmployeeEntityWithReferenceAlias(manager);
+            var request = CreateEmployeeDispatchRequest(entity);
+
+            var createResponse = await client.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.CreateActionPath),
+                request);
+            var response = await client.PostAsJsonAsync(
+                BuildStagePath(HttpListenerPath, EntityEventStage.Saving),
+                request);
+            var deleteResponse = await client.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.DeleteActionPath),
+                request);
+
+            createResponse.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
+            deleteResponse.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<EntityEventDispatchResponse>();
+
+            Assert.NotNull(body);
+            Assert.True(body.Success);
+            Assert.True(TransportEventSink.LastEmployeeDepartmentPathResolved);
+            Assert.Equal(EmployeeDepartmentAlias, TransportEventSink.LastEmployeeDepartmentAlias);
+            Assert.Equal(42, TransportEventSink.LastEmployeeDepartmentValue);
+            Assert.Equal(EmployeeDepartmentDisplayValue, TransportEventSink.LastEmployeeDepartmentDisplayValue);
+            Assert.NotNull(body.Entity);
+            Assert.Equal(EmployeeDepartmentAlias, body.Entity!.Paths[nameof(OrmEmployeeEntity.DepartmentId)]);
+        }
+
+        /// <summary>
+        /// Проверяет, что gRPC listener API передаёт полный снимок Entity с custom alias и display-значением ссылочной колонки.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_GrpcEndpoint_ShouldPreserveEntitySnapshotWithCustomAlias()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var channel = GrpcChannel.ForAddress(listenerApp.GrpcBaseAddress);
+            var client = new EntityEventListenerGrpc.EntityEventListenerGrpcClient(channel);
+            var manager = CreateInMemoryManager(GrpcManagerName, null);
+            var entity = CreateExistingEmployeeEntityWithReferenceAlias(manager);
+            var request = CreateGrpcDispatchRequest(CreateEmployeeDispatchRequest(entity, GrpcManagerName));
+
+            client.Create(request);
+            var response = client.OnSaving(request);
+            client.Delete(request);
+
+            Assert.True(response.Success);
+            Assert.True(TransportEventSink.LastEmployeeDepartmentPathResolved);
+            Assert.Equal(EmployeeDepartmentAlias, TransportEventSink.LastEmployeeDepartmentAlias);
+            Assert.Equal(42, TransportEventSink.LastEmployeeDepartmentValue);
+            Assert.Equal(EmployeeDepartmentDisplayValue, TransportEventSink.LastEmployeeDepartmentDisplayValue);
+            Assert.False(string.IsNullOrWhiteSpace(response.Entity.TableName));
+        }
+
+        /// <summary>
+        /// Проверяет, что WebSocket listener API передаёт полный снимок Entity с custom alias и display-значением ссылочной колонки.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_WebSocketEndpoint_ShouldPreserveEntitySnapshotWithCustomAlias()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var socket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+            var manager = CreateInMemoryManager(WebSocketManagerName, null);
+            var entity = CreateExistingEmployeeEntityWithReferenceAlias(manager);
+            var request = CreateEmployeeDispatchRequest(entity, WebSocketManagerName);
+
+            var createResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Create, request);
+            var response = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.ExecuteStage, request);
+            var deleteResponse = await SendWebSocketRequestAsync(socket, EntityEventWebSocketAction.Delete, request);
+
+            Assert.True(createResponse.Response.Success);
+            Assert.True(response.Response.Success);
+            Assert.True(deleteResponse.Response.Success);
+            Assert.True(TransportEventSink.LastEmployeeDepartmentPathResolved);
+            Assert.Equal(EmployeeDepartmentAlias, TransportEventSink.LastEmployeeDepartmentAlias);
+            Assert.Equal(42, TransportEventSink.LastEmployeeDepartmentValue);
+            Assert.Equal(EmployeeDepartmentDisplayValue, TransportEventSink.LastEmployeeDepartmentDisplayValue);
+            Assert.NotNull(response.Response.Entity);
+            Assert.Equal(EmployeeDepartmentAlias, response.Response.Entity!.Paths[nameof(OrmEmployeeEntity.DepartmentId)]);
+        }
+
+        /// <summary>
+        /// Проверяет, что HTTP и gRPC возвращают эквивалентный snapshot одной и той же Entity.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_HttpGrpcAndWebSocketContracts_ShouldReturnEquivalentEntitySnapshots()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateInMemoryListenerAppAsync();
+            using var httpClient = listenerApp.CreateHttpClient();
+            using var channel = GrpcChannel.ForAddress(listenerApp.GrpcBaseAddress);
+            var grpcClient = new EntityEventListenerGrpc.EntityEventListenerGrpcClient(channel);
+            using var webSocket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+
+            var sourceManager = CreateInMemoryManager(HttpManagerName, null);
+            var sourceEntity = CreateExistingEmployeeEntityWithReferenceAlias(sourceManager);
+            var httpRequest = CreateEmployeeDispatchRequest(sourceEntity, HttpManagerName);
+            var grpcRequest = CreateGrpcDispatchRequest(CreateEmployeeDispatchRequest(sourceEntity, GrpcManagerName));
+            var webSocketRequest = CreateEmployeeDispatchRequest(sourceEntity, WebSocketManagerName);
+
+            await httpClient.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.CreateActionPath),
+                httpRequest);
+            var httpResponse = await httpClient.PostAsJsonAsync(
+                BuildStagePath(HttpListenerPath, EntityEventStage.Saving),
+                httpRequest);
+            await httpClient.PostAsJsonAsync(
+                BuildActionPath(HttpListenerPath, HttpEntityEventProvider.DeleteActionPath),
+                httpRequest);
+
+            grpcClient.Create(grpcRequest);
+            var grpcResponse = grpcClient.OnSaving(grpcRequest);
+            grpcClient.Delete(grpcRequest);
+
+            var webSocketCreateResponse = await SendWebSocketRequestAsync(webSocket, EntityEventWebSocketAction.Create, webSocketRequest);
+            var webSocketResponse = await SendWebSocketRequestAsync(webSocket, EntityEventWebSocketAction.ExecuteStage, webSocketRequest);
+            var webSocketDeleteResponse = await SendWebSocketRequestAsync(webSocket, EntityEventWebSocketAction.Delete, webSocketRequest);
+
+            httpResponse.EnsureSuccessStatusCode();
+            var httpBody = await httpResponse.Content.ReadFromJsonAsync<EntityEventDispatchResponse>();
+
+            Assert.NotNull(httpBody);
+            Assert.NotNull(httpBody!.Entity);
+            Assert.True(grpcResponse.Success);
+            Assert.NotNull(grpcResponse.Entity);
+            Assert.True(webSocketCreateResponse.Response.Success);
+            Assert.True(webSocketResponse.Response.Success);
+            Assert.True(webSocketDeleteResponse.Response.Success);
+            Assert.NotNull(webSocketResponse.Response.Entity);
+
+            AssertEquivalentSnapshots(httpBody.Entity!, grpcResponse.Entity);
+            AssertEquivalentSnapshots(httpBody.Entity!, ToGrpcSnapshot(webSocketResponse.Response.Entity!));
         }
 
         /// <summary>
@@ -274,6 +539,35 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Проверяет, что listener API мапит несколько WebSocket endpoint-ов из конфигурации менеджеров.
+        /// </summary>
+        [Fact]
+        public async Task EntityEventListenerApi_ShouldMapMultipleWebSocketEndpointsFromManagerConfiguration()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateMultiManagerListenerAppAsync();
+            using var firstSocket = await ConnectWebSocketAsync(listenerApp, "/entity-event-listener/transport-ws-a");
+            using var secondSocket = await ConnectWebSocketAsync(listenerApp, "/entity-event-listener/transport-ws-b");
+            var firstRequest = CreateDispatchRequest(EntityEventStage.Saving, "TransportManagerWsA");
+            var secondRequest = CreateDispatchRequest(EntityEventStage.Saving, "TransportManagerWsB");
+
+            var firstCreateResponse = await SendWebSocketRequestAsync(firstSocket, EntityEventWebSocketAction.Create, firstRequest);
+            var firstResponse = await SendWebSocketRequestAsync(firstSocket, EntityEventWebSocketAction.ExecuteStage, firstRequest);
+            var firstDeleteResponse = await SendWebSocketRequestAsync(firstSocket, EntityEventWebSocketAction.Delete, firstRequest);
+            var secondCreateResponse = await SendWebSocketRequestAsync(secondSocket, EntityEventWebSocketAction.Create, secondRequest);
+            var secondResponse = await SendWebSocketRequestAsync(secondSocket, EntityEventWebSocketAction.ExecuteStage, secondRequest);
+            var secondDeleteResponse = await SendWebSocketRequestAsync(secondSocket, EntityEventWebSocketAction.Delete, secondRequest);
+
+            Assert.True(firstCreateResponse.Response.Success);
+            Assert.True(firstResponse.Response.Success);
+            Assert.True(firstDeleteResponse.Response.Success);
+            Assert.True(secondCreateResponse.Response.Success);
+            Assert.True(secondResponse.Response.Success);
+            Assert.True(secondDeleteResponse.Response.Success);
+            Assert.Equal(new[] { "saving:departments", "saving:departments" }, TransportEventSink.Events);
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр CreateDbBackedListenerAppAsync.
         /// </summary>
         private static Task<EntityEventListenerTestApplication> CreateDbBackedListenerAppAsync()
@@ -311,6 +605,17 @@ namespace Titanic.Test.Entity
                             EventListenerApi = new EntityManagerEventListenerApiSettings
                             {
                                 Mode = EntityEventListenerApiMode.Grpc
+                            }
+                        },
+                        new EntityManagerSettings
+                        {
+                            Name = WebSocketManagerName,
+                            DbProviderName = IntegrationTestFixture.ProviderName,
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.WebSocket,
+                                Path = WebSocketListenerPath
                             }
                         }
                     ];
@@ -368,6 +673,17 @@ namespace Titanic.Test.Entity
                             {
                                 Mode = EntityEventListenerApiMode.Grpc
                             }
+                        },
+                        new EntityManagerSettings
+                        {
+                            Name = WebSocketManagerName,
+                            DbProviderName = "EventListenerInMemory",
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.WebSocket,
+                                Path = WebSocketListenerPath
+                            }
                         }
                     ];
                 });
@@ -424,6 +740,28 @@ namespace Titanic.Test.Entity
                             {
                                 Mode = EntityEventListenerApiMode.Http,
                                 Path = "/entity-event-listener/transport-b"
+                            }
+                        },
+                        new EntityManagerSettings
+                        {
+                            Name = "TransportManagerWsA",
+                            DbProviderName = "EventListenerInMemory",
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.WebSocket,
+                                Path = "/entity-event-listener/transport-ws-a"
+                            }
+                        },
+                        new EntityManagerSettings
+                        {
+                            Name = "TransportManagerWsB",
+                            DbProviderName = "EventListenerInMemory",
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.WebSocket,
+                                Path = "/entity-event-listener/transport-ws-b"
                             }
                         }
                     ];
@@ -503,6 +841,27 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Создаёт существующую сущность сотрудника со ссылочной колонкой, выбранной через custom alias.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <returns>Существующая ORM-сущность сотрудника.</returns>
+        private static global::Titanic.Entity.Orm.Entity CreateExistingEmployeeEntityWithReferenceAlias(BaseEntityManager manager)
+        {
+            var builder = manager.Select<OrmEmployeeEntity>(CreateUserConnection());
+            builder.AddColumn(nameof(OrmEmployeeEntity.Id));
+            builder.AddColumn(nameof(OrmEmployeeEntity.Name));
+            builder.AddColumn(nameof(OrmEmployeeEntity.DepartmentId), EmployeeDepartmentAlias);
+
+            return builder.CreateRecord(new Dictionary<string, object?>
+            {
+                [nameof(OrmEmployeeEntity.Id)] = 1,
+                [nameof(OrmEmployeeEntity.Name)] = $"employee-{Guid.NewGuid():N}",
+                [EmployeeDepartmentAlias] = 42,
+                [$"{EmployeeDepartmentAlias}_DisplayValue"] = EmployeeDepartmentDisplayValue
+            });
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр CreateDispatchRequest.
         /// </summary>
         private static EntityEventDispatchRequest CreateDispatchRequest(EntityEventStage stage, string managerName = HttpManagerName)
@@ -512,7 +871,7 @@ namespace Titanic.Test.Entity
                 ManagerName = managerName,
                 TableName = "departments",
                 DispatchId = Guid.NewGuid().ToString("N"),
-                Stage = stage.ToString(),
+                Stage = stage,
                 IsNew = true,
                 UserConnection = CreateUserConnection(),
                 Values = new Dictionary<string, object?>
@@ -523,31 +882,81 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Создаёт HTTP dispatch-запрос для сущности сотрудника с полным snapshot-снимком.
+        /// </summary>
+        /// <param name="entity">Исходная ORM-сущность.</param>
+        /// <param name="managerName">Имя Entity manager-а.</param>
+        /// <returns>Dispatch-запрос событийного listener-а.</returns>
+        private static EntityEventDispatchRequest CreateEmployeeDispatchRequest(
+            global::Titanic.Entity.Orm.Entity entity,
+            string managerName = HttpManagerName)
+        {
+            return new EntityEventDispatchRequest
+            {
+                ManagerName = managerName,
+                TableName = "employees",
+                DispatchId = Guid.NewGuid().ToString("N"),
+                Stage = EntityEventStage.Saving,
+                IsNew = entity.IsNew,
+                UserConnection = CreateUserConnection(),
+                Values = entity.ToDictionary(),
+                OldValues = entity.OldValues.ToDictionary(
+                    x => x.Key,
+                    x => x.Value,
+                    StringComparer.OrdinalIgnoreCase),
+                Entity = CreateSnapshot(entity, "employees")
+            };
+        }
+
+        /// <summary>
         /// Создаёт gRPC dispatch-запрос с указанной стадией.
         /// </summary>
         /// <param name="stage">Стадия событийного pipeline.</param>
         /// <returns>gRPC dispatch-запрос.</returns>
         private static EntityEventGrpcRequest CreateGrpcDispatchRequest(EntityEventStage stage)
         {
-            var request = new EntityEventGrpcRequest
+            return CreateGrpcDispatchRequest(CreateDispatchRequest(stage, GrpcManagerName));
+        }
+
+        /// <summary>
+        /// Преобразует transport-запрос в gRPC dispatch-запрос.
+        /// </summary>
+        /// <param name="request">Transport-запрос.</param>
+        /// <returns>gRPC dispatch-запрос.</returns>
+        private static EntityEventGrpcRequest CreateGrpcDispatchRequest(EntityEventDispatchRequest request)
+        {
+            var grpcRequest = new EntityEventGrpcRequest
             {
-                ManagerName = GrpcManagerName,
-                TableName = "departments",
-                DispatchId = Guid.NewGuid().ToString("N"),
-                Stage = stage.ToString(),
-                IsNew = true,
+                ManagerName = request.ManagerName,
+                TableName = request.TableName,
+                DispatchId = request.DispatchId,
+                Stage = ToGrpcStage(request.Stage),
+                IsNew = request.IsNew,
+                Entity = request.Entity == null
+                    ? new EntityEventGrpcEntitySnapshot()
+                    : ToGrpcSnapshot(request.Entity),
                 UserConnection = new EntityEventGrpcUserConnection
                 {
-                    UserId = "11111111-1111-1111-1111-111111111111",
+                    UserId = request.UserConnection.UserId.ToString(),
                     Culture = new EntityEventGrpcUserCulture
                     {
-                        Id = "22222222-2222-2222-2222-222222222222",
-                        Name = "Test"
+                        Id = request.UserConnection.Culture.Id.ToString(),
+                        Name = request.UserConnection.Culture.Name
                     }
                 }
             };
-            request.Values[nameof(OrmDepartmentEntity.Name)] = Value.ForString("manual-grpc-dispatch");
-            return request;
+
+            foreach (var value in request.Values)
+            {
+                grpcRequest.Values[value.Key] = ToGrpcValue(value.Value);
+            }
+
+            foreach (var value in request.OldValues)
+            {
+                grpcRequest.OldValues[value.Key] = ToGrpcValue(value.Value);
+            }
+
+            return grpcRequest;
         }
 
         /// <summary>
@@ -570,6 +979,92 @@ namespace Titanic.Test.Entity
         private static string BuildStagePath(string basePath, EntityEventStage stage)
         {
             return BuildActionPath(basePath, HttpEntityEventProvider.GetActionPath(stage));
+        }
+
+        /// <summary>
+        /// Открывает WebSocket-соединение с тестовым listener API.
+        /// </summary>
+        /// <param name="listenerApp">Тестовое приложение listener API.</param>
+        /// <param name="path">Путь WebSocket endpoint-а.</param>
+        /// <returns>Подключённый WebSocket-клиент.</returns>
+        private static async Task<ClientWebSocket> ConnectWebSocketAsync(EntityEventListenerTestApplication listenerApp, string path)
+        {
+            var socket = new ClientWebSocket();
+            await socket.ConnectAsync(new Uri(listenerApp.GetWebSocketListenerUri(path)), CancellationToken.None);
+            return socket;
+        }
+
+        /// <summary>
+        /// Отправляет transport-запрос по WebSocket и читает transport-ответ.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <param name="action">Команда listener API.</param>
+        /// <param name="request">Transport-запрос.</param>
+        /// <returns>Transport-ответ listener API.</returns>
+        private static async Task<EntityEventWebSocketResponse> SendWebSocketRequestAsync(
+            ClientWebSocket socket,
+            EntityEventWebSocketAction action,
+            EntityEventDispatchRequest request)
+        {
+            var payload = JsonSerializer.Serialize(
+                new EntityEventWebSocketRequest
+                {
+                    Action = action,
+                    Request = request
+                },
+                WebSocketJsonOptions);
+
+            await SendWebSocketTextAsync(socket, payload);
+            var responsePayload = await ReceiveWebSocketTextAsync(socket);
+            return JsonSerializer.Deserialize<EntityEventWebSocketResponse>(
+                responsePayload,
+                WebSocketJsonOptions)
+                ?? throw new InvalidOperationException("WebSocket listener вернул пустой transport-ответ.");
+        }
+
+        /// <summary>
+        /// Отправляет одно текстовое сообщение по WebSocket.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        private static Task SendWebSocketTextAsync(ClientWebSocket socket, string payload)
+        {
+            var bytes = Encoding.UTF8.GetBytes(payload);
+            return socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Читает одно текстовое сообщение из WebSocket.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <returns>Текст transport-сообщения.</returns>
+        private static async Task<string> ReceiveWebSocketTextAsync(ClientWebSocket socket)
+        {
+            var buffer = new byte[4096];
+            using var stream = new MemoryStream();
+
+            while (true)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    throw new WebSocketException("Listener закрыл WebSocket до чтения transport-ответа.");
+                }
+
+                if (result.Count > 0)
+                {
+                    stream.Write(buffer, 0, result.Count);
+                }
+
+                if (result.EndOfMessage)
+                {
+                    return Encoding.UTF8.GetString(stream.ToArray());
+                }
+            }
         }
 
         /// <summary>
@@ -606,6 +1101,7 @@ namespace Titanic.Test.Entity
         {
             TransportEventSink.Reset();
             TransportEventListener.IsEnabled = true;
+            TransportEmployeeEventListener.IsEnabled = true;
             global::Titanic.Entity.EntityManager.Reset();
             global::Titanic.Entity.EntityManager.ResetServices();
         }
@@ -707,6 +1203,266 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Создаёт transport-снимок сущности из публичного состояния ORM-сущности.
+        /// </summary>
+        /// <param name="entity">Исходная ORM-сущность.</param>
+        /// <param name="tableName">Имя таблицы сущности.</param>
+        /// <returns>Снимок сущности.</returns>
+        private static EntityEventEntitySnapshot CreateSnapshot(global::Titanic.Entity.Orm.Entity entity, string tableName)
+        {
+            return new EntityEventEntitySnapshot
+            {
+                TableName = tableName,
+                IsNew = entity.IsNew,
+                Paths = entity.Paths.ToDictionary(
+                    x => x.Key,
+                    x => x.Value,
+                    StringComparer.OrdinalIgnoreCase),
+                Columns = entity.Values.ToDictionary(
+                    x => x.Key,
+                    x => new EntityEventColumnSnapshot
+                    {
+                        Alias = x.Key,
+                        DataValueType = (int)x.Value.DataValueType,
+                        IsReference = x.Value is global::Titanic.Entity.Orm.ReferenceColumnValue,
+                        Value = x.Value.Value,
+                        DisplayValue = x.Value.DisplayValue
+                    },
+                    StringComparer.OrdinalIgnoreCase),
+                OldValues = entity.OldValues.ToDictionary(
+                    x => x.Key,
+                    x => x.Value,
+                    StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        /// <summary>
+        /// Преобразует CLR-значение в типизированное protobuf-значение для тестового gRPC dispatch-а.
+        /// </summary>
+        /// <param name="value">CLR-значение.</param>
+        /// <returns>Типизированное protobuf-значение.</returns>
+        private static EntityEventGrpcValue ToGrpcValue(object? value)
+        {
+            return value switch
+            {
+                null => new EntityEventGrpcValue { NullValue = true },
+                bool boolValue => new EntityEventGrpcValue { BoolValue = boolValue },
+                string stringValue => new EntityEventGrpcValue { StringValue = stringValue },
+                char charValue => new EntityEventGrpcValue { StringValue = charValue.ToString() },
+                byte byteValue => new EntityEventGrpcValue { Int32Value = byteValue },
+                sbyte sbyteValue => new EntityEventGrpcValue { Int32Value = sbyteValue },
+                short shortValue => new EntityEventGrpcValue { Int32Value = shortValue },
+                ushort ushortValue => new EntityEventGrpcValue { Int32Value = ushortValue },
+                int intValue => new EntityEventGrpcValue { Int32Value = intValue },
+                uint uintValue when uintValue <= int.MaxValue => new EntityEventGrpcValue { Int32Value = (int)uintValue },
+                uint uintValue => new EntityEventGrpcValue { Int64Value = uintValue },
+                long longValue => new EntityEventGrpcValue { Int64Value = longValue },
+                ulong ulongValue when ulongValue <= long.MaxValue => new EntityEventGrpcValue { Int64Value = (long)ulongValue },
+                ulong ulongValue => new EntityEventGrpcValue { StringValue = ulongValue.ToString(CultureInfo.InvariantCulture) },
+                float floatValue => new EntityEventGrpcValue { DoubleValue = floatValue },
+                double doubleValue => new EntityEventGrpcValue { DoubleValue = doubleValue },
+                decimal decimalValue => new EntityEventGrpcValue { DecimalValue = decimalValue.ToString(CultureInfo.InvariantCulture) },
+                Guid guidValue => new EntityEventGrpcValue { GuidValue = guidValue.ToString() },
+                DateTime dateTimeValue => new EntityEventGrpcValue { DateTimeValue = dateTimeValue.ToString("O", CultureInfo.InvariantCulture) },
+                DateTimeOffset dateTimeOffsetValue => new EntityEventGrpcValue { DateTimeOffsetValue = dateTimeOffsetValue.ToString("O", CultureInfo.InvariantCulture) },
+                byte[] bytesValue => new EntityEventGrpcValue { BytesValue = ByteString.CopyFrom(bytesValue) },
+                _ => new EntityEventGrpcValue { StringValue = value.ToString() ?? string.Empty }
+            };
+        }
+
+        /// <summary>
+        /// Преобразует стадию transport-контракта в gRPC enum для тестового запроса.
+        /// </summary>
+        /// <param name="stage">Стадия transport-контракта.</param>
+        /// <returns>Стадия gRPC-контракта.</returns>
+        private static EntityEventGrpcStage ToGrpcStage(EntityEventStage stage)
+        {
+            return stage switch
+            {
+                EntityEventStage.Saving => EntityEventGrpcStage.Saving,
+                EntityEventStage.Saved => EntityEventGrpcStage.Saved,
+                EntityEventStage.Inserting => EntityEventGrpcStage.Inserting,
+                EntityEventStage.Inserted => EntityEventGrpcStage.Inserted,
+                EntityEventStage.Updating => EntityEventGrpcStage.Updating,
+                EntityEventStage.Updated => EntityEventGrpcStage.Updated,
+                EntityEventStage.Deleting => EntityEventGrpcStage.Deleting,
+                EntityEventStage.Deleted => EntityEventGrpcStage.Deleted,
+                _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "Unsupported entity event stage.")
+            };
+        }
+
+        /// <summary>
+        /// Преобразует snapshot Entity в gRPC-модель для тестового запроса.
+        /// </summary>
+        /// <param name="snapshot">Transport-snapshot Entity.</param>
+        /// <returns>gRPC-snapshot Entity.</returns>
+        private static EntityEventGrpcEntitySnapshot ToGrpcSnapshot(EntityEventEntitySnapshot snapshot)
+        {
+            var grpcSnapshot = new EntityEventGrpcEntitySnapshot
+            {
+                TableName = snapshot.TableName,
+                IsNew = snapshot.IsNew
+            };
+
+            foreach (var path in snapshot.Paths)
+            {
+                grpcSnapshot.Paths[path.Key] = path.Value;
+            }
+
+            foreach (var column in snapshot.Columns)
+            {
+                grpcSnapshot.Columns[column.Key] = new EntityEventGrpcColumnSnapshot
+                {
+                    Alias = column.Value.Alias,
+                    DataValueType = column.Value.DataValueType,
+                    IsReference = column.Value.IsReference,
+                    Value = ToGrpcValue(column.Value.Value),
+                    DisplayValue = ToGrpcValue(column.Value.DisplayValue)
+                };
+            }
+
+            foreach (var oldValue in snapshot.OldValues)
+            {
+                grpcSnapshot.OldValues[oldValue.Key] = ToGrpcValue(oldValue.Value);
+            }
+
+            return grpcSnapshot;
+        }
+
+        /// <summary>
+        /// Сверяет эквивалентность HTTP и gRPC snapshot одной и той же Entity.
+        /// </summary>
+        /// <param name="httpSnapshot">Snapshot из HTTP-контракта.</param>
+        /// <param name="grpcSnapshot">Snapshot из gRPC-контракта.</param>
+        private static void AssertEquivalentSnapshots(
+            EntityEventEntitySnapshot httpSnapshot,
+            EntityEventGrpcEntitySnapshot grpcSnapshot)
+        {
+            Assert.Equal(httpSnapshot.TableName, grpcSnapshot.TableName);
+            Assert.Equal(httpSnapshot.IsNew, grpcSnapshot.IsNew);
+            Assert.Equal(httpSnapshot.Paths.Count, grpcSnapshot.Paths.Count);
+            Assert.Equal(httpSnapshot.Columns.Count, grpcSnapshot.Columns.Count);
+            Assert.Equal(httpSnapshot.OldValues.Count, grpcSnapshot.OldValues.Count);
+
+            foreach (var path in httpSnapshot.Paths)
+            {
+                Assert.True(grpcSnapshot.Paths.ContainsKey(path.Key));
+                Assert.Equal(path.Value, grpcSnapshot.Paths[path.Key]);
+            }
+
+            foreach (var column in httpSnapshot.Columns)
+            {
+                Assert.True(grpcSnapshot.Columns.ContainsKey(column.Key));
+                var grpcColumn = grpcSnapshot.Columns[column.Key];
+
+                Assert.Equal(column.Value.Alias, grpcColumn.Alias);
+                Assert.Equal(column.Value.DataValueType, grpcColumn.DataValueType);
+                Assert.Equal(column.Value.IsReference, grpcColumn.IsReference);
+                AssertEquivalentGrpcValue(column.Value.Value, grpcColumn.Value);
+                AssertEquivalentGrpcValue(column.Value.DisplayValue, grpcColumn.DisplayValue);
+            }
+        }
+
+        /// <summary>
+        /// Проверяет, что gRPC-значение эквивалентно CLR-значению из HTTP-контракта.
+        /// </summary>
+        /// <param name="expected">Ожидаемое CLR-значение.</param>
+        /// <param name="actual">Фактическое gRPC-значение.</param>
+        private static void AssertEquivalentGrpcValue(object? expected, EntityEventGrpcValue actual)
+        {
+            switch (expected)
+            {
+                case null:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.NullValue, actual.KindCase);
+                    break;
+                case bool boolValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.BoolValue, actual.KindCase);
+                    Assert.Equal(boolValue, actual.BoolValue);
+                    break;
+                case string stringValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.StringValue, actual.KindCase);
+                    Assert.Equal(stringValue, actual.StringValue);
+                    break;
+                case char charValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.StringValue, actual.KindCase);
+                    Assert.Equal(charValue.ToString(), actual.StringValue);
+                    break;
+                case byte byteValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal(byteValue, actual.Int32Value);
+                    break;
+                case sbyte sbyteValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal(sbyteValue, actual.Int32Value);
+                    break;
+                case short shortValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal(shortValue, actual.Int32Value);
+                    break;
+                case ushort ushortValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal(ushortValue, actual.Int32Value);
+                    break;
+                case int intValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal(intValue, actual.Int32Value);
+                    break;
+                case uint uintValue when uintValue <= int.MaxValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int32Value, actual.KindCase);
+                    Assert.Equal((int)uintValue, actual.Int32Value);
+                    break;
+                case uint uintValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int64Value, actual.KindCase);
+                    Assert.Equal((long)uintValue, actual.Int64Value);
+                    break;
+                case long longValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int64Value, actual.KindCase);
+                    Assert.Equal(longValue, actual.Int64Value);
+                    break;
+                case ulong ulongValue when ulongValue <= long.MaxValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.Int64Value, actual.KindCase);
+                    Assert.Equal((long)ulongValue, actual.Int64Value);
+                    break;
+                case ulong ulongValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.StringValue, actual.KindCase);
+                    Assert.Equal(ulongValue.ToString(CultureInfo.InvariantCulture), actual.StringValue);
+                    break;
+                case float floatValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.DoubleValue, actual.KindCase);
+                    Assert.Equal(floatValue, actual.DoubleValue, 6);
+                    break;
+                case double doubleValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.DoubleValue, actual.KindCase);
+                    Assert.Equal(doubleValue, actual.DoubleValue, 12);
+                    break;
+                case decimal decimalValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.DecimalValue, actual.KindCase);
+                    Assert.Equal(decimalValue.ToString(CultureInfo.InvariantCulture), actual.DecimalValue);
+                    break;
+                case Guid guidValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.GuidValue, actual.KindCase);
+                    Assert.Equal(guidValue.ToString(), actual.GuidValue);
+                    break;
+                case DateTime dateTimeValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.DateTimeValue, actual.KindCase);
+                    Assert.Equal(dateTimeValue.ToString("O", CultureInfo.InvariantCulture), actual.DateTimeValue);
+                    break;
+                case DateTimeOffset dateTimeOffsetValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.DateTimeOffsetValue, actual.KindCase);
+                    Assert.Equal(dateTimeOffsetValue.ToString("O", CultureInfo.InvariantCulture), actual.DateTimeOffsetValue);
+                    break;
+                case byte[] bytesValue:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.BytesValue, actual.KindCase);
+                    Assert.Equal(bytesValue, actual.BytesValue.ToByteArray());
+                    break;
+                default:
+                    Assert.Equal(EntityEventGrpcValue.KindOneofCase.StringValue, actual.KindCase);
+                    Assert.Equal(expected.ToString(), actual.StringValue);
+                    break;
+            }
+        }
+
         [EntityEventListener("departments")]
         private sealed class TransportEventListener : BaseEntityEventListener
         {
@@ -793,12 +1549,48 @@ namespace Titanic.Test.Entity
             }
         }
 
+        [EntityEventListener("employees")]
+        private sealed class TransportEmployeeEventListener : BaseEntityEventListener
+        {
+            public static bool IsEnabled { get; set; }
+
+            /// <summary>
+            /// Инициализирует listener для сущности сотрудников.
+            /// </summary>
+            /// <param name="entityName">Имя Entity-таблицы.</param>
+            public TransportEmployeeEventListener(string entityName)
+            {
+            }
+
+            /// <summary>
+            /// Проверяет, что удалённый listener получил ссылочную колонку по исходному ORM-пути, а не только по алиасу transport-а.
+            /// </summary>
+            public override void OnSaving(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (!IsEnabled)
+                {
+                    return;
+                }
+
+                var hasPath = entity.Paths.TryGetValue(nameof(OrmEmployeeEntity.DepartmentId), out var alias);
+                TransportEventSink.SetEmployeeDepartmentSnapshot(
+                    hasPath && entity.Contains(nameof(OrmEmployeeEntity.DepartmentId)),
+                    alias,
+                    entity.Get<int?>(nameof(OrmEmployeeEntity.DepartmentId)),
+                    entity.GetDisplayValue<string>(nameof(OrmEmployeeEntity.DepartmentId)));
+            }
+        }
+
         private static class TransportEventSink
         {
             private static readonly object SyncRoot = new();
             private static readonly List<string> InternalEvents = [];
             private static UserConnection? _lastUserConnection;
             private static string? _lastOldDescription;
+            private static bool _lastEmployeeDepartmentPathResolved;
+            private static string? _lastEmployeeDepartmentAlias;
+            private static int? _lastEmployeeDepartmentValue;
+            private static string? _lastEmployeeDepartmentDisplayValue;
 
             public static IReadOnlyList<string> Events
             {
@@ -829,6 +1621,50 @@ namespace Titanic.Test.Entity
                     lock (SyncRoot)
                     {
                         return _lastOldDescription;
+                    }
+                }
+            }
+
+            public static bool LastEmployeeDepartmentPathResolved
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return _lastEmployeeDepartmentPathResolved;
+                    }
+                }
+            }
+
+            public static string? LastEmployeeDepartmentAlias
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return _lastEmployeeDepartmentAlias;
+                    }
+                }
+            }
+
+            public static int? LastEmployeeDepartmentValue
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return _lastEmployeeDepartmentValue;
+                    }
+                }
+            }
+
+            public static string? LastEmployeeDepartmentDisplayValue
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return _lastEmployeeDepartmentDisplayValue;
                     }
                 }
             }
@@ -876,6 +1712,28 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
+            /// Сохраняет данные ссылочной колонки сотрудника, прочитанные удалённым listener-ом.
+            /// </summary>
+            /// <param name="pathResolved">Удалось ли разрешить исходный ORM-путь.</param>
+            /// <param name="alias">Алиас, восстановленный из снимка сущности.</param>
+            /// <param name="value">Сырое значение ссылочной колонки.</param>
+            /// <param name="displayValue">Display-значение ссылочной колонки.</param>
+            public static void SetEmployeeDepartmentSnapshot(
+                bool pathResolved,
+                string? alias,
+                int? value,
+                string? displayValue)
+            {
+                lock (SyncRoot)
+                {
+                    _lastEmployeeDepartmentPathResolved = pathResolved;
+                    _lastEmployeeDepartmentAlias = alias;
+                    _lastEmployeeDepartmentValue = value;
+                    _lastEmployeeDepartmentDisplayValue = displayValue;
+                }
+            }
+
+            /// <summary>
             /// Инициализирует новый экземпляр Reset.
             /// </summary>
             public static void Reset()
@@ -885,6 +1743,10 @@ namespace Titanic.Test.Entity
                     InternalEvents.Clear();
                     _lastUserConnection = null;
                     _lastOldDescription = null;
+                    _lastEmployeeDepartmentPathResolved = false;
+                    _lastEmployeeDepartmentAlias = null;
+                    _lastEmployeeDepartmentValue = null;
+                    _lastEmployeeDepartmentDisplayValue = null;
                 }
             }
         }

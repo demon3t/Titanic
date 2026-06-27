@@ -1,5 +1,3 @@
-using System.Text.Json;
-using Google.Protobuf.WellKnownTypes;
 using Titanic.Common.Session;
 using Titanic.Entity.Interfaces;
 
@@ -67,7 +65,7 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(request);
 
-            return ExecuteStage(manager, request, ParseStage(request.Stage), releaseOnFinalStage: true);
+            return ExecuteStages(manager, request, GetRequestStages(request), releaseOnFinalStage: true);
         }
 
         /// <summary>
@@ -84,7 +82,7 @@ namespace Titanic.Entity.Events
             try
             {
                 EntityEventRemoteListenerCache.Create(manager, request);
-                return Success(request.Values);
+                return Success(CreateEntityFromRequest(manager, request));
             }
             catch (Exception ex)
             {
@@ -106,7 +104,7 @@ namespace Titanic.Entity.Events
             try
             {
                 EntityEventRemoteListenerCache.Release(manager, request);
-                return Success(request.Values);
+                return Success(CreateEntityFromRequest(manager, request));
             }
             catch (Exception ex)
             {
@@ -126,7 +124,7 @@ namespace Titanic.Entity.Events
             EntityEventDispatchRequest request,
             EntityEventStage stage)
         {
-            return ExecuteStage(manager, request, stage, releaseOnFinalStage: false);
+            return ExecuteStage(manager, request, stage, releaseOnFinalStage: true);
         }
 
         /// <summary>
@@ -143,20 +141,38 @@ namespace Titanic.Entity.Events
             EntityEventStage stage,
             bool releaseOnFinalStage)
         {
+            return ExecuteStages(manager, request, [stage], releaseOnFinalStage);
+        }
+
+        /// <summary>
+        /// Выполняет последовательность стадий событийного pipeline на одном reconstructed Entity.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <param name="stages">Последовательность стадий для одного transport-вызова.</param>
+        /// <param name="releaseOnFinalStage">Удалять listener после финальной стадии legacy dispatch-вызова.</param>
+        /// <returns>Результат обработки события.</returns>
+        private static EntityEventDispatchResponse ExecuteStages(
+            BaseEntityManager manager,
+            EntityEventDispatchRequest request,
+            IReadOnlyList<EntityEventStage> stages,
+            bool releaseOnFinalStage)
+        {
             var releaseListeners = false;
             try
             {
-                request.Stage = stage.ToString();
-
-                var entity = manager.Create(request.TableName, request.UserConnection, request.IsNew);
-                entity.SetOldValues(BaseEntityEventProvider.NormalizeValues(request.OldValues));
-                entity.SetValues(BaseEntityEventProvider.NormalizeValues(request.Values));
-
+                var entity = CreateEntityFromRequest(manager, request);
                 var listeners = EntityEventRemoteListenerCache.GetListeners(manager, request);
-                BaseEntityEventProvider.DispatchListeners(entity, manager, stage, listeners);
 
-                releaseListeners = releaseOnFinalStage && BaseEntityEventProvider.IsFinalStage(stage);
-                return Success(entity.ToDictionary());
+                foreach (var stage in stages)
+                {
+                    request.Stage = stage;
+                    BaseEntityEventProvider.DispatchListeners(entity, manager, stage, listeners);
+                }
+
+                var finalStage = stages[^1];
+                releaseListeners = releaseOnFinalStage && BaseEntityEventProvider.IsFinalStage(finalStage);
+                return Success(entity);
             }
             catch (InvalidOperationException ex)
             {
@@ -175,6 +191,20 @@ namespace Titanic.Entity.Events
                     EntityEventRemoteListenerCache.Release(manager, request);
                 }
             }
+        }
+
+        /// <summary>
+        /// Возвращает список стадий из transport-запроса, сохраняя обратную совместимость со старыми single-stage вызовами.
+        /// </summary>
+        /// <param name="request">Dispatch-запрос события.</param>
+        /// <returns>Последовательность стадий для выполнения.</returns>
+        private static IReadOnlyList<EntityEventStage> GetRequestStages(EntityEventDispatchRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            return request.Stages.Count > 0
+                ? request.Stages
+                : [request.Stage];
         }
 
         /// <summary>
@@ -214,88 +244,34 @@ namespace Titanic.Entity.Events
         /// <returns>Dispatch-запрос события.</returns>
         internal static EntityEventDispatchRequest FromGrpc(Grpc.EntityEventGrpcRequest request)
         {
-            return new EntityEventDispatchRequest
-            {
-                ManagerName = request.ManagerName,
-                TableName = request.TableName,
-                DispatchId = request.DispatchId,
-                Stage = request.Stage,
-                IsNew = request.IsNew,
-                UserConnection = new UserConnection
-                {
-                    UserId = Guid.Parse(request.UserConnection.UserId),
-                    Culture = new UserCulture
-                    {
-                        Id = Guid.Parse(request.UserConnection.Culture.Id),
-                        Name = request.UserConnection.Culture.Name
-                    }
-                },
-                Values = request.Values.ToDictionary(
-                    x => x.Key,
-                    x => FromGrpcValue(x.Value),
-                    StringComparer.OrdinalIgnoreCase),
-                OldValues = request.OldValues.ToDictionary(
-                    x => x.Key,
-                    x => FromGrpcValue(x.Value),
-                    StringComparer.OrdinalIgnoreCase)
-            };
+            return EntityEventGrpcContractMapper.FromGrpcRequest(request);
         }
 
         /// <summary>
-        /// Преобразует строковое имя стадии в enum.
+        /// Восстанавливает ORM-сущность из transport-запроса, сохраняя алиасы, пути и display-значения.
         /// </summary>
-        /// <param name="stage">Строковое имя стадии.</param>
-        /// <returns>Стадия событийного pipeline.</returns>
-        private static EntityEventStage ParseStage(string stage)
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="request">Transport-запрос.</param>
+        /// <returns>Восстановленная ORM-сущность.</returns>
+        private static global::Titanic.Entity.Orm.Entity CreateEntityFromRequest(
+            BaseEntityManager manager,
+            EntityEventDispatchRequest request)
         {
-            if (System.Enum.TryParse<EntityEventStage>(stage, true, out var parsed))
+            var snapshot = EntityEventSnapshotSerializer.Normalize(request.Entity);
+            var entity = manager.Create(
+                request.TableName,
+                request.UserConnection,
+                snapshot?.IsNew ?? request.IsNew);
+
+            if (snapshot != null)
             {
-                return parsed;
+                entity.ApplyTransportSnapshot(snapshot);
+                return entity;
             }
 
-            throw new InvalidOperationException($"Unknown entity event stage '{stage}'.");
-        }
-
-        /// <summary>
-        /// Преобразует protobuf-значение в CLR-значение.
-        /// </summary>
-        /// <param name="value">Protobuf-значение.</param>
-        /// <returns>CLR-значение.</returns>
-        private static object? FromGrpcValue(Value value)
-        {
-            return value.KindCase switch
-            {
-                Value.KindOneofCase.NullValue => null,
-                Value.KindOneofCase.BoolValue => value.BoolValue,
-                Value.KindOneofCase.StringValue => value.StringValue,
-                Value.KindOneofCase.NumberValue => TryRestoreNumber(value.NumberValue),
-                Value.KindOneofCase.StructValue => JsonSerializer.Deserialize<object>(value.StructValue.ToString()),
-                Value.KindOneofCase.ListValue => JsonSerializer.Deserialize<object>(value.ListValue.ToString()),
-                _ => null
-            };
-        }
-
-        /// <summary>
-        /// Восстанавливает целочисленное значение, если protobuf передал число без дробной части.
-        /// </summary>
-        /// <param name="value">Числовое значение protobuf.</param>
-        /// <returns>CLR-число.</returns>
-        private static object TryRestoreNumber(double value)
-        {
-            if (Math.Abs(value % 1) < double.Epsilon)
-            {
-                if (value is >= int.MinValue and <= int.MaxValue)
-                {
-                    return Convert.ToInt32(value);
-                }
-
-                if (value is >= long.MinValue and <= long.MaxValue)
-                {
-                    return Convert.ToInt64(value);
-                }
-            }
-
-            return value;
+            entity.SetOldValues(BaseEntityEventProvider.NormalizeValues(request.OldValues));
+            entity.SetValues(BaseEntityEventProvider.NormalizeValues(request.Values));
+            return entity;
         }
 
         /// <summary>
@@ -303,12 +279,14 @@ namespace Titanic.Entity.Events
         /// </summary>
         /// <param name="values">Значения сущности.</param>
         /// <returns>Успешный ответ.</returns>
-        private static EntityEventDispatchResponse Success(IReadOnlyDictionary<string, object?> values)
+        private static EntityEventDispatchResponse Success(global::Titanic.Entity.Orm.Entity entity)
         {
+            var snapshot = entity.CreateTransportSnapshot();
             return new EntityEventDispatchResponse
             {
                 Success = true,
-                Values = values.ToDictionary(
+                Entity = snapshot,
+                Values = entity.ToDictionary().ToDictionary(
                     x => x.Key,
                     x => x.Value,
                     StringComparer.OrdinalIgnoreCase)

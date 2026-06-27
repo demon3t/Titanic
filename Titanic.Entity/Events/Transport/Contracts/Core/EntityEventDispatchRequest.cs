@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Titanic.Common.Session;
 
 namespace Titanic.Entity.Events
@@ -27,7 +28,13 @@ namespace Titanic.Entity.Events
         /// <summary>
         /// Этап событийного pipeline.
         /// </summary>
-        public string Stage { get; set; } = string.Empty;
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public EntityEventStage Stage { get; set; }
+
+        /// <summary>
+        /// Последовательность стадий, которую серверный listener должен выполнить в рамках одного transport-вызова.
+        /// </summary>
+        public List<EntityEventStage> Stages { get; set; } = [];
 
         /// <summary>
         /// Признак новой сущности.
@@ -42,12 +49,19 @@ namespace Titanic.Entity.Events
         /// <summary>
         /// Значения колонок сущности.
         /// </summary>
+        [JsonConverter(typeof(EntityEventTransportValueDictionaryJsonConverter))]
         public Dictionary<string, object?> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Старые значения колонок сущности до текущей операции.
         /// </summary>
+        [JsonConverter(typeof(EntityEventTransportValueDictionaryJsonConverter))]
         public Dictionary<string, object?> OldValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Полный снимок сущности для точного восстановления в удалённом listener-е.
+        /// </summary>
+        public EntityEventEntitySnapshot? Entity { get; set; }
 
         #endregion Members
     }

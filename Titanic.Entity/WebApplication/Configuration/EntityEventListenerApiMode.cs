@@ -20,7 +20,12 @@ namespace Titanic.Entity.WebApplication.Configuration
         /// <summary>
         /// Документирует член типа.
         /// </summary>
-        Grpc = 2
+        Grpc = 2,
+
+        /// <summary>
+        /// Документирует член типа.
+        /// </summary>
+        WebSocket = 3
 
         #endregion Members
     }

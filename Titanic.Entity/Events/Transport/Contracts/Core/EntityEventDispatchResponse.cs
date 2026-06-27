@@ -1,5 +1,7 @@
 namespace Titanic.Entity.Events
 {
+    using System.Text.Json.Serialization;
+
     /// <summary>
     /// Контракт ответа dispatch-вызова обработчика событий.
     /// </summary>
@@ -30,7 +32,13 @@ namespace Titanic.Entity.Events
         /// <summary>
         /// Итоговые значения сущности после обработки события.
         /// </summary>
+        [JsonConverter(typeof(EntityEventTransportValueDictionaryJsonConverter))]
         public Dictionary<string, object?> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Полный итоговый снимок сущности после обработки события.
+        /// </summary>
+        public EntityEventEntitySnapshot? Entity { get; set; }
 
         #endregion Members
     }

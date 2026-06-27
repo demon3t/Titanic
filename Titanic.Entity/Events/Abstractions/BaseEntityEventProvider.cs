@@ -140,17 +140,78 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(entity);
             ArgumentNullException.ThrowIfNull(manager);
 
+            var snapshot = entity.CreateTransportSnapshot();
             return new EntityEventDispatchRequest
             {
                 ManagerName = manager.Name,
                 TableName = entity.TableName,
                 DispatchId = entity.EventDispatchId,
-                Stage = stage.ToString(),
+                Stage = stage,
+                Stages = [stage],
                 IsNew = entity.IsNew,
                 UserConnection = CloneUserConnection(entity.UserConnection),
                 Values = CopyValues(entity.ToDictionary()),
-                OldValues = CopyValues(entity.OldValues)
+                OldValues = CopyValues(entity.OldValues),
+                Entity = snapshot
             };
+        }
+
+        /// <summary>
+        /// Возвращает последовательность стадий, которую можно выполнить в одном transport-вызове без потери семантики pipeline.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="stage">Текущая стадия локального pipeline.</param>
+        /// <returns>Список стадий для одного удалённого dispatch-вызова.</returns>
+        protected static IReadOnlyList<EntityEventStage> GetDispatchStages(
+            global::Titanic.Entity.Orm.Entity entity,
+            EntityEventStage stage)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+
+            return stage switch
+            {
+                EntityEventStage.Saving => entity.IsNew
+                    ? [EntityEventStage.Saving, EntityEventStage.Inserting]
+                    : [EntityEventStage.Saving, EntityEventStage.Updating],
+                EntityEventStage.Inserted => [EntityEventStage.Inserted, EntityEventStage.Saved],
+                EntityEventStage.Updated => [EntityEventStage.Updated, EntityEventStage.Saved],
+                _ => [stage]
+            };
+        }
+
+        /// <summary>
+        /// Помечает локальные стадии, которые уже были выполнены удалённым listener-ом в рамках batched dispatch-вызова.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="stages">Фактически отправленные стадии.</param>
+        protected static void MarkBatchedStages(
+            global::Titanic.Entity.Orm.Entity entity,
+            IReadOnlyList<EntityEventStage> stages)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            ArgumentNullException.ThrowIfNull(stages);
+
+            if (stages.Count <= 1)
+            {
+                return;
+            }
+
+            entity.MarkBatchedRemoteStages(stages.Skip(1));
+        }
+
+        /// <summary>
+        /// Проверяет, была ли текущая стадия уже выполнена удалённым listener-ом в предыдущем batched dispatch-вызове.
+        /// </summary>
+        /// <param name="entity">Текущая ORM-сущность.</param>
+        /// <param name="stage">Текущая стадия локального pipeline.</param>
+        /// <returns><see langword="true" />, если отдельный transport-вызов можно пропустить.</returns>
+        protected static bool ShouldSkipTransportStage(
+            global::Titanic.Entity.Orm.Entity entity,
+            EntityEventStage stage)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+
+            return entity.TryConsumeBatchedRemoteStage(stage);
         }
 
         /// <summary>
@@ -200,7 +261,18 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(entity);
             ArgumentNullException.ThrowIfNull(response);
 
-            if (!response.Success || response.Values.Count == 0)
+            if (!response.Success)
+            {
+                return;
+            }
+
+            if (response.Entity != null)
+            {
+                entity.ApplyTransportSnapshot(response.Entity);
+                return;
+            }
+
+            if (response.Values.Count == 0)
             {
                 return;
             }
@@ -247,8 +319,20 @@ namespace Titanic.Entity.Events
 
             return values.ToDictionary(
                 x => x.Key,
-                x => NormalizeJsonValue(x.Value),
+                x => NormalizeValue(x.Value),
                 StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Нормализует одно transport-значение в CLR-тип.
+        /// </summary>
+        /// <param name="value">Значение из transport-а.</param>
+        /// <returns>CLR-значение.</returns>
+        protected internal static object? NormalizeValue(object? value)
+        {
+            return value is JsonElement element
+                ? NormalizeJsonElement(element)
+                : value;
         }
 
         /// <summary>
@@ -334,13 +418,6 @@ namespace Titanic.Entity.Events
         /// </summary>
         /// <param name="value">Значение из JSON.</param>
         /// <returns>CLR-значение.</returns>
-        private static object? NormalizeJsonValue(object? value)
-        {
-            return value is JsonElement element
-                ? NormalizeJsonElement(element)
-                : value;
-        }
-
         /// <summary>
         /// Нормализует <see cref="JsonElement" /> в CLR-значение.
         /// </summary>

@@ -1,4 +1,3 @@
-using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 
 namespace Titanic.Entity.Events.Grpc
@@ -110,41 +109,7 @@ namespace Titanic.Entity.Events.Grpc
         /// <returns>gRPC-ответ listener API.</returns>
         private static EntityEventGrpcResponse ToGrpcResponse(EntityEventDispatchResponse result)
         {
-            var response = new EntityEventGrpcResponse
-            {
-                Success = result.Success,
-                Canceled = result.Canceled,
-                CancelReason = result.CancelReason ?? string.Empty,
-                ErrorMessage = result.ErrorMessage ?? string.Empty
-            };
-
-            foreach (var value in result.Values)
-            {
-                response.Values.Add(value.Key, ToGrpcValue(value.Value));
-            }
-
-            return response;
-        }
-
-        /// <summary>
-        /// Преобразует CLR-значение в protobuf Value.
-        /// </summary>
-        /// <param name="value">CLR-значение.</param>
-        /// <returns>Protobuf-значение.</returns>
-        private static Value ToGrpcValue(object? value)
-        {
-            return value switch
-            {
-                null => Value.ForNull(),
-                bool boolValue => Value.ForBool(boolValue),
-                string stringValue => Value.ForString(stringValue),
-                Guid guidValue => Value.ForString(guidValue.ToString()),
-                DateTime dateTimeValue => Value.ForString(dateTimeValue.ToString("O")),
-                DateTimeOffset dateTimeOffsetValue => Value.ForString(dateTimeOffsetValue.ToString("O")),
-                byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
-                    => Value.ForNumber(Convert.ToDouble(value)),
-                _ => Value.ForString(value.ToString() ?? string.Empty)
-            };
+            return EntityEventGrpcContractMapper.ToGrpcResponse(result);
         }
 
         #endregion Members

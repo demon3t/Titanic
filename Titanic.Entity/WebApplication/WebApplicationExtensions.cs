@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Common.Session;
@@ -181,6 +184,16 @@ namespace Titanic.Entity.WebApplication
                 MapEventListenerEndpoints(app, manager);
             }
 
+            if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.WebSocket))
+            {
+                app.UseWebSockets();
+
+                foreach (var manager in EntityManager.GetManagers().Where(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.WebSocket))
+                {
+                    MapEventListenerWebSocketEndpoint(app, manager);
+                }
+            }
+
             if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Grpc))
             {
                 app.MapGrpcService<EntityEventListenerGrpcService>();
@@ -202,8 +215,10 @@ namespace Titanic.Entity.WebApplication
             services.AddSingleton<BaseEntityEventProvider, LocalEntityEventProvider>();
             services.AddSingleton<BaseEntityEventProvider, HttpEntityEventProvider>();
             services.AddSingleton<BaseEntityEventProvider, GrpcEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, WebSocketEntityEventProvider>();
             services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
             services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
+            services.AddSingleton<IEntityEventWebSocketClientFactory, DefaultEntityEventWebSocketClientFactory>();
         }
 
         /// <summary>
@@ -283,6 +298,30 @@ namespace Titanic.Entity.WebApplication
         }
 
         /// <summary>
+        /// Регистрирует WebSocket endpoint событийного listener API для менеджера.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        private static void MapEventListenerWebSocketEndpoint(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            BaseEntityManager manager)
+        {
+            var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
+            app.Map(basePath, async context =>
+            {
+                if (!context.WebSockets.IsWebSocketRequest)
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await context.Response.WriteAsync("WebSocket request expected.");
+                    return;
+                }
+
+                using var socket = await context.WebSockets.AcceptWebSocketAsync();
+                await ProcessEventListenerWebSocketAsync(socket, manager, context.RequestAborted);
+            });
+        }
+
+        /// <summary>
         /// Преобразует transport-ответ listener API в HTTP-результат.
         /// </summary>
         /// <param name="result">Transport-ответ listener API.</param>
@@ -300,6 +339,150 @@ namespace Titanic.Entity.WebApplication
             }
 
             return Results.Json(result, statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        /// <summary>
+        /// Обрабатывает transport-сообщения одного WebSocket listener-соединения.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="cancellationToken">Токен остановки запроса.</param>
+        private static async Task ProcessEventListenerWebSocketAsync(
+            WebSocket socket,
+            BaseEntityManager manager,
+            CancellationToken cancellationToken)
+        {
+            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                string? payload;
+                try
+                {
+                    payload = await ReceiveWebSocketMessageAsync(socket, cancellationToken);
+                }
+                catch (WebSocketException)
+                {
+                    break;
+                }
+
+                if (payload == null)
+                {
+                    break;
+                }
+
+                var response = ExecuteEventListenerWebSocketMessage(payload, manager);
+                var responsePayload = JsonSerializer.Serialize(response, EntityEventWebSocketSerializer.JsonOptions);
+                await SendWebSocketMessageAsync(socket, responsePayload, cancellationToken);
+            }
+
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                await socket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Event listener WebSocket session completed.",
+                    CancellationToken.None);
+            }
+        }
+
+        /// <summary>
+        /// Выполняет одну WebSocket-команду listener API.
+        /// </summary>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <returns>Transport-ответ listener API.</returns>
+        private static EntityEventWebSocketResponse ExecuteEventListenerWebSocketMessage(
+            string payload,
+            BaseEntityManager manager)
+        {
+            EntityEventWebSocketAction action = EntityEventWebSocketAction.Dispatch;
+
+            try
+            {
+                var request = JsonSerializer.Deserialize<EntityEventWebSocketRequest>(
+                    payload,
+                    EntityEventWebSocketSerializer.JsonOptions)
+                    ?? throw new InvalidOperationException("WebSocket request body is empty.");
+
+                action = request.Action;
+                request.Request.ManagerName = manager.Name;
+
+                var response = request.Action switch
+                {
+                    EntityEventWebSocketAction.Create => EntityEventListenerRequestExecutor.Create(manager, request.Request),
+                    EntityEventWebSocketAction.Delete => EntityEventListenerRequestExecutor.Delete(manager, request.Request),
+                    EntityEventWebSocketAction.ExecuteStage => EntityEventListenerRequestExecutor.ExecuteStage(manager, request.Request, request.Request.Stage),
+                    _ => EntityEventListenerRequestExecutor.Execute(manager, request.Request)
+                };
+
+                return new EntityEventWebSocketResponse
+                {
+                    Action = request.Action,
+                    Response = response
+                };
+            }
+            catch (Exception ex)
+            {
+                return new EntityEventWebSocketResponse
+                {
+                    Action = action,
+                    Response = new EntityEventDispatchResponse
+                    {
+                        Success = false,
+                        ErrorMessage = ex.Message
+                    }
+                };
+            }
+        }
+
+        /// <summary>
+        /// Получает одно WebSocket transport-сообщение целиком.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="cancellationToken">Токен отмены.</param>
+        /// <returns>Текст transport-сообщения или <see langword="null" />, если клиент закрыл соединение.</returns>
+        private static async Task<string?> ReceiveWebSocketMessageAsync(
+            WebSocket socket,
+            CancellationToken cancellationToken)
+        {
+            var buffer = new byte[4096];
+            using var stream = new MemoryStream();
+
+            while (true)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return null;
+                }
+
+                if (result.Count > 0)
+                {
+                    stream.Write(buffer, 0, result.Count);
+                }
+
+                if (result.EndOfMessage)
+                {
+                    return Encoding.UTF8.GetString(stream.ToArray());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Отправляет одно WebSocket transport-сообщение.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        /// <param name="cancellationToken">Токен отмены.</param>
+        private static Task SendWebSocketMessageAsync(
+            WebSocket socket,
+            string payload,
+            CancellationToken cancellationToken)
+        {
+            var bytes = Encoding.UTF8.GetBytes(payload);
+            return socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                cancellationToken);
         }
 
         /// <summary>

@@ -1,4 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.Data.Common;
+using Titanic.Db;
+using Titanic.Db.Abstractions;
+using Titanic.Db.Interfaces;
 using Titanic.Common.Session;
 using Titanic.Db.PosgreSql;
 using Titanic.Entity.Attributes;
@@ -129,6 +133,77 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Проверяет, что сохранение существующей сущности вызывает pipeline обновления.
+        /// </summary>
+        [Fact]
+        public void Entity_Save_ShouldCallUpdateEventPipeline()
+        {
+            var sink = new TestEventSink();
+            ConfigureEntityServices(sink);
+            var manager = CreateManager();
+            var entity = CreateEmployee(manager, salary: 100m);
+            entity.Save();
+            sink.Clear();
+
+            entity.Set(nameof(OrmEmployeeEntity.Salary), 150m);
+            entity.Save();
+
+            Assert.Equal(
+                new[] { "saving:employees", "updating:employees", "updated:employees", "saved:employees" },
+                sink.Events);
+            Assert.Equal(100m, sink.LastOldSalary);
+            Assert.Equal(150m, entity.OldValues[nameof(OrmEmployeeEntity.Salary)]);
+        }
+
+        /// <summary>
+        /// Проверяет, что fallback update->insert использует pipeline фактической вставки.
+        /// </summary>
+        [Fact]
+        public void Entity_Save_WhenExistingRecordIsMissing_ShouldUseInsertPipeline()
+        {
+            var sink = new TestEventSink();
+            ConfigureEntityServices(sink);
+            var manager = CreateManager(new MissingUpdateDbProvider());
+            var manualPrimaryKey = Random.Shared.Next(2_000_001, 3_000_000);
+            var entity = manager.Create("employees", CreateUserConnection(), isNew: false)
+                .Set(nameof(OrmEmployeeEntity.Id), manualPrimaryKey)
+                .Set(nameof(OrmEmployeeEntity.Name), $"EVT-FALLBACK-{Guid.NewGuid():N}")
+                .Set(nameof(OrmEmployeeEntity.Email), $"{Guid.NewGuid():N}@mail.test")
+                .Set(nameof(OrmEmployeeEntity.Salary), 300m)
+                .Set(nameof(OrmEmployeeEntity.IsActive), true);
+
+            Assert.False(entity.IsNew);
+
+            entity.Save();
+
+            Assert.Equal(
+                new[] { "saving:employees", "inserting:employees", "inserted:employees", "saved:employees" },
+                sink.Events);
+            Assert.False(entity.IsNew);
+        }
+
+        /// <summary>
+        /// Проверяет, что удаление существующей сущности вызывает pipeline удаления.
+        /// </summary>
+        [Fact]
+        public void Entity_Delete_ShouldCallDeleteEventPipeline()
+        {
+            var sink = new TestEventSink();
+            ConfigureEntityServices(sink);
+            var manager = CreateManager();
+            var entity = CreateEmployee(manager);
+            entity.Save();
+            sink.Clear();
+
+            var deleted = entity.Delete();
+
+            Assert.True(deleted);
+            Assert.Equal(
+                new[] { "deleting:employees", "deleted:employees" },
+                sink.Events);
+        }
+
+        /// <summary>
         /// Проверяет, что listener может остановить сохранение сущности.
         /// </summary>
         [Fact]
@@ -162,15 +237,40 @@ namespace Titanic.Test.Entity
         /// </summary>
         private BaseEntityManager CreateManager()
         {
+            return CreateManager(_provider);
+        }
+
+        /// <summary>
+        /// Создаёт и инициализирует тестовый Entity ORM менеджер с заданным provider-ом.
+        /// </summary>
+        /// <param name="provider">Provider БД для тестового менеджера.</param>
+        /// <returns>Тестовый Entity ORM менеджер.</returns>
+        private static BaseEntityManager CreateManager(BaseDbProvider provider)
+        {
             var manager = new EntityDbManager();
             manager.Initialize(
                 "default",
-                _provider,
+                provider,
                 new EntityManagerSettings
                 {
                     EntityModelNamespaces = new List<string> { typeof(OrmEmployeeEntity).Namespace! }
                 });
             return manager;
+        }
+
+        /// <summary>
+        /// Создаёт новую тестовую сущность сотрудника.
+        /// </summary>
+        /// <param name="manager">Entity ORM менеджер.</param>
+        /// <param name="salary">Зарплата сотрудника.</param>
+        /// <returns>Новая ORM-сущность сотрудника.</returns>
+        private static global::Titanic.Entity.Orm.Entity CreateEmployee(BaseEntityManager manager, decimal salary = 100m)
+        {
+            return manager.Create<OrmEmployeeEntity>(CreateUserConnection())
+                .Set(nameof(OrmEmployeeEntity.Name), $"EVT-{Guid.NewGuid():N}")
+                .Set(nameof(OrmEmployeeEntity.Email), $"{Guid.NewGuid():N}@mail.test")
+                .Set(nameof(OrmEmployeeEntity.Salary), salary)
+                .Set(nameof(OrmEmployeeEntity.IsActive), true);
         }
 
         /// <summary>
@@ -273,6 +373,40 @@ namespace Titanic.Test.Entity
             }
 
             /// <summary>
+            /// Фиксирует начало обновления сотрудника.
+            /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
+            public override void OnUpdating(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (!IsEnabled)
+                {
+                    return;
+                }
+
+                _currentSink?.Events.Add($"updating:{_entityName}");
+                if (entity.OldValues.TryGetValue(nameof(OrmEmployeeEntity.Salary), out var salary))
+                {
+                    _currentSink!.LastOldSalary = salary;
+                }
+            }
+
+            /// <summary>
+            /// Фиксирует завершение обновления сотрудника.
+            /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
+            public override void OnUpdated(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (!IsEnabled)
+                {
+                    return;
+                }
+
+                _currentSink?.Events.Add($"updated:{_entityName}");
+            }
+
+            /// <summary>
             /// Фиксирует завершение вставки сотрудника.
             /// </summary>
             /// <param name="entity">Текущая ORM-сущность.</param>
@@ -300,6 +434,36 @@ namespace Titanic.Test.Entity
                 }
 
                 _currentSink?.Events.Add($"saved:{_entityName}");
+            }
+
+            /// <summary>
+            /// Фиксирует начало удаления сотрудника.
+            /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
+            public override void OnDeleting(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (!IsEnabled)
+                {
+                    return;
+                }
+
+                _currentSink?.Events.Add($"deleting:{_entityName}");
+            }
+
+            /// <summary>
+            /// Фиксирует завершение удаления сотрудника.
+            /// </summary>
+            /// <param name="entity">Текущая ORM-сущность.</param>
+            /// <param name="args">Аргументы события.</param>
+            public override void OnDeleted(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
+            {
+                if (!IsEnabled)
+                {
+                    return;
+                }
+
+                _currentSink?.Events.Add($"deleted:{_entityName}");
             }
         }
 
@@ -352,6 +516,79 @@ namespace Titanic.Test.Entity
             /// Список зафиксированных событий.
             /// </summary>
             public List<string> Events { get; } = new();
+
+            /// <summary>
+            /// Старое значение зарплаты, полученное update-listener-ом.
+            /// </summary>
+            public object? LastOldSalary { get; set; }
+
+            /// <summary>
+            /// Очищает накопленные события и снимки между операциями одного теста.
+            /// </summary>
+            public void Clear()
+            {
+                Events.Clear();
+                LastOldSalary = null;
+            }
+        }
+
+        /// <summary>
+        /// Provider, который моделирует отсутствие строки при UPDATE.
+        /// </summary>
+        private sealed class MissingUpdateDbProvider : BaseDbProvider
+        {
+            /// <summary>
+            /// Создаёт тестовый provider.
+            /// </summary>
+            public MissingUpdateDbProvider()
+                : base("in-memory", new PostgresEngine())
+            {
+            }
+
+            /// <inheritdoc />
+            public override int Execute(IQuery query)
+            {
+                return query is Update ? 0 : 1;
+            }
+
+            /// <inheritdoc />
+            public override T ExecuteScalar<T>(IQuery query)
+            {
+                if (query is Select)
+                {
+                    return default!;
+                }
+
+                object result = typeof(T) switch
+                {
+                    var type when type == typeof(Guid) => Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                    var type when type == typeof(int) => 1,
+                    var type when type == typeof(long) => 1L,
+                    var type when type == typeof(string) => "in-memory",
+                    var type when type == typeof(object) => 1,
+                    _ => Activator.CreateInstance<T>()!
+                };
+
+                return (T)result;
+            }
+
+            /// <inheritdoc />
+            public override List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
+            {
+                return [];
+            }
+
+            /// <inheritdoc />
+            protected override DbConnection CreateConnection()
+            {
+                throw new NotSupportedException("MissingUpdateDbProvider does not create database connections.");
+            }
+
+            /// <inheritdoc />
+            protected override DbParameter CreateParameter(QueryParameter parameter)
+            {
+                throw new NotSupportedException("MissingUpdateDbProvider does not create database parameters.");
+            }
         }
 
         #endregion Members
