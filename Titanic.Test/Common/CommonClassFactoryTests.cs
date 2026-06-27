@@ -16,12 +16,7 @@ namespace Titanic.Test.Common
         [Fact]
         public void ClassFactory_ShouldCreateRegisteredClass_WithInjectedDependencyAndNamedConstructorArgument()
         {
-            var services = new ServiceCollection();
-            services.AddSingleton<TestDependency>();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory(services => services.AddSingleton<TestDependency>());
             ClassFactory.Bind<ITestListener, TestListener>();
 
             var listener = ClassFactory.Get<ITestListener>(new ConstructorArgument("entityName", "employees"));
@@ -36,12 +31,7 @@ namespace Titanic.Test.Common
         [Fact]
         public void ClassFactory_ShouldResolveNamedBinding()
         {
-            var services = new ServiceCollection();
-            services.AddSingleton<TestDependency>();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory(services => services.AddSingleton<TestDependency>());
             ClassFactory.Bind<ITestListener, TestListener>("employees");
 
             var listener = ClassFactory.Get<ITestListener>("employees");
@@ -55,12 +45,7 @@ namespace Titanic.Test.Common
         [Fact]
         public void ClassFactory_ShouldForceGetClassByFullName()
         {
-            var services = new ServiceCollection();
-            services.AddSingleton<TestDependency>();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory(services => services.AddSingleton<TestDependency>());
 
             var listener = ClassFactory.ForceGet<ITestListener>(
                 typeof(TestListener).FullName!,
@@ -75,11 +60,7 @@ namespace Titanic.Test.Common
         [Fact]
         public void ClassFactory_ShouldReturnFalse_WhenNamedBindingDoesNotExist()
         {
-            var services = new ServiceCollection();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory();
 
             var found = ClassFactory.TryGet<ITestListener>("missing", out var listener);
 
@@ -93,12 +74,7 @@ namespace Titanic.Test.Common
         [Fact]
         public void ClassFactory_ShouldSupportRebindWithFactoryMethod()
         {
-            var services = new ServiceCollection();
-            services.AddSingleton<TestDependency>();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory(services => services.AddSingleton<TestDependency>());
             ClassFactory.Bind<ITestListener, TestListener>();
             ClassFactory.RebindWithFactoryMethod<ITestListener>(() => new TestListener("manual", new TestDependency()));
 
@@ -107,24 +83,42 @@ namespace Titanic.Test.Common
             Assert.Equal("manual", listener.EntityName);
         }
 
+        [Fact]
+        public void ClassFactory_ShouldResolveFactoryMethod_WithoutConfiguredServiceProvider()
+        {
+            ClassFactory.Reset();
+            ClassFactory.Bind<ITestListener>(() => new TestListener("manual", new TestDependency()));
+
+            var listener = ClassFactory.Get<ITestListener>();
+
+            Assert.Equal("manual", listener.EntityName);
+            Assert.NotNull(listener.Dependency);
+        }
+
         /// <summary>
         /// Инициализирует новый экземпляр ClassFactory_ShouldThrow_WhenConstructorArgumentNameDoesNotMatch.
         /// </summary>
         [Fact]
         public void ClassFactory_ShouldThrow_WhenConstructorArgumentNameDoesNotMatch()
         {
-            var services = new ServiceCollection();
-            services.AddSingleton<TestDependency>();
-
-            using var provider = services.BuildServiceProvider();
-            ClassFactory.Reset();
-            ClassFactory.Configure(provider);
+            using var provider = ConfigureFactory(services => services.AddSingleton<TestDependency>());
             ClassFactory.Bind<ITestListener, TestListener>();
 
             var exception = Assert.Throws<InvalidOperationException>(() =>
                 ClassFactory.Get<ITestListener>(new ConstructorArgument("wrongName", "employees")));
 
             Assert.Contains(typeof(TestListener).FullName!, exception.Message);
+        }
+
+        private static ServiceProvider ConfigureFactory(Action<IServiceCollection>? configure = null)
+        {
+            var services = new ServiceCollection();
+            configure?.Invoke(services);
+
+            var provider = services.BuildServiceProvider();
+            ClassFactory.Reset();
+            ClassFactory.Configure(provider);
+            return provider;
         }
 
         private sealed class TestDependency

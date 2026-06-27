@@ -32,6 +32,11 @@
 - `BaseHeaderAuthorizationHandler<TCollection, TRequirement>` — базовый handler для чтения ключа из заголовка.
 - `BaseMockHeaderAuthorizationHandler<TCollection, TRequirement>` — базовый mock handler.
 
+### Фабрика классов
+
+- `ClassFactory` — статическая фабрика регистрации и создания объектов по типу или имени.
+- `ConstructorArgument` — именованный аргумент конструктора для ручной передачи значений при создании объекта.
+
 ### ASP.NET Core extensions
 
 - `WebApplicationExtensions.AddHeaderAuthorization<THandler, TCollection, TRequirement>(...)`

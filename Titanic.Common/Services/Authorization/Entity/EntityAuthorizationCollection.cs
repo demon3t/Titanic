@@ -46,7 +46,11 @@ namespace Titanic.Common.Services.Authorization.Entity
 
         #region Public Methods
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Добавить или обновить авторизацию пользователя по ключу.
+        /// </summary>
+        /// <param name="key">Ключ авторизации.</param>
+        /// <param name="userConnection">Контекст пользователя.</param>
         public void AddAuthorization(string key, UserConnection userConnection)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -55,7 +59,10 @@ namespace Titanic.Common.Services.Authorization.Entity
             _authorizationCollection[key] = (GetUtcNow(), userConnection);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Удалить авторизацию по ключу.
+        /// </summary>
+        /// <param name="key">Ключ авторизации.</param>
         public void RemoveAuthorization(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
@@ -66,7 +73,11 @@ namespace Titanic.Common.Services.Authorization.Entity
             _authorizationCollection.TryRemove(key, out _);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Проверить авторизацию по ключу и обновить время последнего доступа для активной записи.
+        /// </summary>
+        /// <param name="key">Ключ авторизации.</param>
+        /// <returns>Возвращает true, если ключ авторизации найден и не истёк.</returns>
         public bool CheckAuthorization(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
@@ -94,8 +105,13 @@ namespace Titanic.Common.Services.Authorization.Entity
             return false;
         }
 
-        /// <inheritdoc />
-        public bool TryGet(string key, out UserConnection? userConnection)
+        /// <summary>
+        /// Попытаться получить авторизацию из внешнего источника.
+        /// </summary>
+        /// <param name="key">Ключ авторизации.</param>
+        /// <param name="userConnection">Контекст пользователя.</param>
+        /// <returns>Возвращает true, если авторизация найдена во внешнем источнике.</returns>
+        public virtual bool TryGet(string key, out UserConnection? userConnection)
         {
             userConnection = null;
             return false;
@@ -105,8 +121,17 @@ namespace Titanic.Common.Services.Authorization.Entity
 
         #region Private Methods
 
+        /// <summary>
+        /// Получить текущее время в UTC через настроенный провайдер времени.
+        /// </summary>
+        /// <returns>Текущее время в UTC.</returns>
         private DateTimeOffset GetUtcNow() => _timeProvider.GetUtcNow();
 
+        /// <summary>
+        /// Проверить, истекло ли время жизни авторизации.
+        /// </summary>
+        /// <param name="lastAccessUtc">Время последнего доступа в UTC.</param>
+        /// <returns>Возвращает true, если авторизация устарела.</returns>
         private bool IsExpired(DateTimeOffset lastAccessUtc) => GetUtcNow() - lastAccessUtc > _maxLifetime;
 
         #endregion Private Methods
