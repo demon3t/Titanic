@@ -1,4 +1,7 @@
 using System.Net.Http.Json;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Configuration;
@@ -19,8 +22,14 @@ namespace Titanic.Test.Entity
     {
         #region Members
 
-        private const string ManagerName = "RemoteLifetimeManager";
-        private const string ListenerPath = "/entity-event-listener/lifetime";
+        private const string HttpManagerName = "RemoteLifetimeManager";
+        private const string WebSocketManagerName = "RemoteLifetimeManagerWebSocket";
+        private const string HttpListenerPath = "/entity-event-listener/lifetime";
+        private const string WebSocketListenerPath = "/entity-event-listener/lifetime-ws";
+        private static readonly JsonSerializerOptions WebSocketJsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         /// <summary>
         /// Освобождает статическое состояние тестовых listener-ов.
@@ -41,13 +50,13 @@ namespace Titanic.Test.Entity
             using var client = listenerApp.CreateHttpClient();
             var dispatchId = Guid.NewGuid().ToString("N");
 
-            await CreateAsync(client, dispatchId);
-            await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
-            await DispatchAsync(client, EntityEventStage.Inserting, dispatchId);
-            await DispatchAsync(client, EntityEventStage.Saved, dispatchId);
-            await DeleteAsync(client, dispatchId);
-            await CreateAsync(client, dispatchId);
-            await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
+            await CreateAsync(client, HttpListenerPath, dispatchId, HttpManagerName);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Saving, dispatchId, HttpManagerName);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Inserting, dispatchId, HttpManagerName);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Saved, dispatchId, HttpManagerName);
+            await DeleteAsync(client, HttpListenerPath, dispatchId, HttpManagerName);
+            await CreateAsync(client, HttpListenerPath, dispatchId, HttpManagerName);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Saving, dispatchId, HttpManagerName);
 
             var instanceIds = LifetimeEventSink.InstanceIds;
             Assert.Equal(4, instanceIds.Count);
@@ -67,10 +76,10 @@ namespace Titanic.Test.Entity
             using var client = listenerApp.CreateHttpClient();
             var dispatchId = Guid.NewGuid().ToString("N");
 
-            await CreateAsync(client, dispatchId);
-            await DispatchAsync(client, EntityEventStage.Saving, dispatchId);
+            await CreateAsync(client, HttpListenerPath, dispatchId, HttpManagerName);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Saving, dispatchId, HttpManagerName);
             await Task.Delay(150);
-            await DispatchAsync(client, EntityEventStage.Inserting, dispatchId);
+            await DispatchAsync(client, HttpListenerPath, EntityEventStage.Inserting, dispatchId, HttpManagerName);
 
             var instanceIds = LifetimeEventSink.InstanceIds;
             Assert.Equal(2, instanceIds.Count);
@@ -86,9 +95,76 @@ namespace Titanic.Test.Entity
             ResetRuntimeState();
             await using var listenerApp = await CreateListenerAppAsync();
 
-            var manager = CreateRemoteManager(listenerApp.GetHttpListenerUri(ListenerPath));
+            var manager = CreateRemoteManager(HttpManagerName, listenerApp.GetHttpListenerUri(HttpListenerPath));
             var entity = manager.Create<OrmDepartmentEntity>(CreateUserConnection())
                 .Set(nameof(OrmDepartmentEntity.Name), $"lifetime-{Guid.NewGuid():N}");
+
+            entity.Save();
+
+            var instanceIds = LifetimeEventSink.InstanceIds;
+            Assert.Equal(4, instanceIds.Count);
+            Assert.Single(instanceIds.Distinct());
+        }
+
+        /// <summary>
+        /// Проверяет, что remote WebSocket listener переиспользуется до финальной стадии и удаляется после неё.
+        /// </summary>
+        [Fact]
+        public async Task RemoteWebSocketListener_ShouldReuseInstanceUntilFinalStageAndReleaseAfterSaved()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateListenerAppAsync();
+            using var socket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+            var dispatchId = Guid.NewGuid().ToString("N");
+
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.Create, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Inserting, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Saved, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.Delete, EntityEventStage.Saved, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.Create, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+
+            var instanceIds = LifetimeEventSink.InstanceIds;
+            Assert.Equal(4, instanceIds.Count);
+            Assert.Equal(instanceIds[0], instanceIds[1]);
+            Assert.Equal(instanceIds[0], instanceIds[2]);
+            Assert.NotEqual(instanceIds[0], instanceIds[3]);
+        }
+
+        /// <summary>
+        /// Проверяет, что remote WebSocket listener удаляется после истечения idle timeout.
+        /// </summary>
+        [Fact]
+        public async Task RemoteWebSocketListener_ShouldExpireInstance_WhenIdleTimeoutPassed()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateListenerAppAsync(TimeSpan.FromMilliseconds(50));
+            using var socket = await ConnectWebSocketAsync(listenerApp, WebSocketListenerPath);
+            var dispatchId = Guid.NewGuid().ToString("N");
+
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.Create, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Saving, dispatchId, WebSocketManagerName);
+            await Task.Delay(150);
+            await SendWebSocketAsync(socket, EntityEventWebSocketAction.ExecuteStage, EntityEventStage.Inserting, dispatchId, WebSocketManagerName);
+
+            var instanceIds = LifetimeEventSink.InstanceIds;
+            Assert.Equal(2, instanceIds.Count);
+            Assert.NotEqual(instanceIds[0], instanceIds[1]);
+        }
+
+        /// <summary>
+        /// Проверяет, что client-side WebSocket dispatch передаёт один DispatchId на весь Save pipeline.
+        /// </summary>
+        [Fact]
+        public async Task EntitySave_WithRemoteWebSocketListener_ShouldReuseOneRemoteListenerInstance()
+        {
+            ResetRuntimeState();
+            await using var listenerApp = await CreateListenerAppAsync();
+
+            var manager = CreateRemoteManager(WebSocketManagerName, listenerApp.GetWebSocketListenerUri(WebSocketListenerPath));
+            var entity = manager.Create<OrmDepartmentEntity>(CreateUserConnection())
+                .Set(nameof(OrmDepartmentEntity.Name), $"lifetime-ws-{Guid.NewGuid():N}");
 
             entity.Save();
 
@@ -102,11 +178,11 @@ namespace Titanic.Test.Entity
         /// </summary>
         /// <param name="client">HTTP-клиент тестового приложения.</param>
         /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
-        private static async Task CreateAsync(HttpClient client, string dispatchId)
+        private static async Task CreateAsync(HttpClient client, string listenerPath, string dispatchId, string managerName)
         {
             var response = await client.PostAsJsonAsync(
-                BuildActionPath(HttpEntityEventProvider.CreateActionPath),
-                CreateDispatchRequest(EntityEventStage.Saving, dispatchId));
+                BuildActionPath(listenerPath, HttpEntityEventProvider.CreateActionPath),
+                CreateDispatchRequest(EntityEventStage.Saving, dispatchId, managerName));
             response.EnsureSuccessStatusCode();
         }
 
@@ -116,11 +192,16 @@ namespace Titanic.Test.Entity
         /// <param name="client">HTTP-клиент тестового приложения.</param>
         /// <param name="stage">Стадия событийного pipeline.</param>
         /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
-        private static async Task DispatchAsync(HttpClient client, EntityEventStage stage, string dispatchId)
+        private static async Task DispatchAsync(
+            HttpClient client,
+            string listenerPath,
+            EntityEventStage stage,
+            string dispatchId,
+            string managerName)
         {
             var response = await client.PostAsJsonAsync(
-                BuildStagePath(stage),
-                CreateDispatchRequest(stage, dispatchId));
+                BuildStagePath(listenerPath, stage),
+                CreateDispatchRequest(stage, dispatchId, managerName));
             response.EnsureSuccessStatusCode();
         }
 
@@ -129,11 +210,11 @@ namespace Titanic.Test.Entity
         /// </summary>
         /// <param name="client">HTTP-клиент тестового приложения.</param>
         /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
-        private static async Task DeleteAsync(HttpClient client, string dispatchId)
+        private static async Task DeleteAsync(HttpClient client, string listenerPath, string dispatchId, string managerName)
         {
             var response = await client.PostAsJsonAsync(
-                BuildActionPath(HttpEntityEventProvider.DeleteActionPath),
-                CreateDispatchRequest(EntityEventStage.Saved, dispatchId));
+                BuildActionPath(listenerPath, HttpEntityEventProvider.DeleteActionPath),
+                CreateDispatchRequest(EntityEventStage.Saved, dispatchId, managerName));
             response.EnsureSuccessStatusCode();
         }
 
@@ -171,13 +252,25 @@ namespace Titanic.Test.Entity
                     [
                         new EntityManagerSettings
                         {
-                            Name = ManagerName,
+                            Name = HttpManagerName,
                             DbProviderName = "RemoteLifetimeInMemory",
                             EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
                             EventListenerApi = new EntityManagerEventListenerApiSettings
                             {
                                 Mode = EntityEventListenerApiMode.Http,
-                                Path = ListenerPath,
+                                Path = HttpListenerPath,
+                                ListenerInstanceIdleTimeout = listenerIdleTimeout ?? TimeSpan.FromMinutes(5)
+                            }
+                        },
+                        new EntityManagerSettings
+                        {
+                            Name = WebSocketManagerName,
+                            DbProviderName = "RemoteLifetimeInMemory",
+                            EntityModelNamespaces = [typeof(OrmDepartmentEntity).Namespace!],
+                            EventListenerApi = new EntityManagerEventListenerApiSettings
+                            {
+                                Mode = EntityEventListenerApiMode.WebSocket,
+                                Path = WebSocketListenerPath,
                                 ListenerInstanceIdleTimeout = listenerIdleTimeout ?? TimeSpan.FromMinutes(5)
                             }
                         }
@@ -190,11 +283,11 @@ namespace Titanic.Test.Entity
         /// Создаёт менеджер, который вызывает внешний HTTP listener.
         /// </summary>
         /// <returns>Менеджер Entity ORM.</returns>
-        private static BaseEntityManager CreateRemoteManager(string listenerUri)
+        private static BaseEntityManager CreateRemoteManager(string managerName, string listenerUri)
         {
             var manager = new EntityDbManager();
             manager.Initialize(
-                ManagerName,
+                managerName,
                 new EntityEventInMemoryDbProvider("in-memory", new PostgresEngine()),
                 new EntityManagerSettings
                 {
@@ -211,14 +304,14 @@ namespace Titanic.Test.Entity
         /// <param name="stage">Стадия событийного pipeline.</param>
         /// <param name="dispatchId">Идентификатор обработки одной сущности.</param>
         /// <returns>Dispatch-запрос события.</returns>
-        private static EntityEventDispatchRequest CreateDispatchRequest(EntityEventStage stage, string dispatchId)
+        private static EntityEventDispatchRequest CreateDispatchRequest(EntityEventStage stage, string dispatchId, string managerName)
         {
             return new EntityEventDispatchRequest
             {
-                ManagerName = ManagerName,
+                ManagerName = managerName,
                 TableName = "departments",
                 DispatchId = dispatchId,
-                Stage = stage.ToString(),
+                Stage = stage,
                 IsNew = true,
                 UserConnection = CreateUserConnection(),
                 Values = new Dictionary<string, object?>
@@ -233,9 +326,9 @@ namespace Titanic.Test.Entity
         /// </summary>
         /// <param name="actionPath">Относительный путь действия.</param>
         /// <returns>Полный путь HTTP-действия.</returns>
-        private static string BuildActionPath(string actionPath)
+        private static string BuildActionPath(string listenerPath, string actionPath)
         {
-            return $"{ListenerPath.TrimEnd('/')}/{actionPath}";
+            return $"{listenerPath.TrimEnd('/')}/{actionPath}";
         }
 
         /// <summary>
@@ -243,9 +336,100 @@ namespace Titanic.Test.Entity
         /// </summary>
         /// <param name="stage">Стадия событийного pipeline.</param>
         /// <returns>Полный путь HTTP endpoint-а стадии.</returns>
-        private static string BuildStagePath(EntityEventStage stage)
+        private static string BuildStagePath(string listenerPath, EntityEventStage stage)
         {
-            return BuildActionPath(HttpEntityEventProvider.GetActionPath(stage));
+            return BuildActionPath(listenerPath, HttpEntityEventProvider.GetActionPath(stage));
+        }
+
+        /// <summary>
+        /// Открывает WebSocket-соединение с тестовым listener API.
+        /// </summary>
+        /// <param name="listenerApp">Тестовое приложение listener API.</param>
+        /// <param name="path">Путь WebSocket endpoint-а.</param>
+        /// <returns>Подключённый WebSocket-клиент.</returns>
+        private static async Task<ClientWebSocket> ConnectWebSocketAsync(EntityEventListenerTestApplication listenerApp, string path)
+        {
+            var socket = new ClientWebSocket();
+            await socket.ConnectAsync(new Uri(listenerApp.GetWebSocketListenerUri(path)), CancellationToken.None);
+            return socket;
+        }
+
+        /// <summary>
+        /// Отправляет transport-запрос по WebSocket и проверяет успешность transport-ответа.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <param name="action">Команда listener API.</param>
+        /// <param name="stage">Стадия pipeline.</param>
+        /// <param name="dispatchId">Идентификатор обработки.</param>
+        /// <param name="managerName">Имя целевого менеджера.</param>
+        private static async Task SendWebSocketAsync(
+            ClientWebSocket socket,
+            EntityEventWebSocketAction action,
+            EntityEventStage stage,
+            string dispatchId,
+            string managerName)
+        {
+            var payload = JsonSerializer.Serialize(
+                new EntityEventWebSocketRequest
+                {
+                    Action = action,
+                    Request = CreateDispatchRequest(stage, dispatchId, managerName)
+                },
+                WebSocketJsonOptions);
+
+            await SendWebSocketTextAsync(socket, payload);
+            var responsePayload = await ReceiveWebSocketTextAsync(socket);
+            var response = JsonSerializer.Deserialize<EntityEventWebSocketResponse>(
+                responsePayload,
+                WebSocketJsonOptions)
+                ?? throw new InvalidOperationException("WebSocket listener вернул пустой transport-ответ.");
+
+            Assert.True(response.Response.Success, response.Response.ErrorMessage ?? "WebSocket listener вернул ошибку.");
+        }
+
+        /// <summary>
+        /// Отправляет одно текстовое сообщение по WebSocket.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        private static Task SendWebSocketTextAsync(ClientWebSocket socket, string payload)
+        {
+            var bytes = Encoding.UTF8.GetBytes(payload);
+            return socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Читает одно текстовое сообщение из WebSocket.
+        /// </summary>
+        /// <param name="socket">Активный WebSocket-клиент.</param>
+        /// <returns>Текст transport-сообщения.</returns>
+        private static async Task<string> ReceiveWebSocketTextAsync(ClientWebSocket socket)
+        {
+            var buffer = new byte[4096];
+            using var stream = new MemoryStream();
+
+            while (true)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    throw new WebSocketException("Listener закрыл WebSocket до чтения transport-ответа.");
+                }
+
+                if (result.Count > 0)
+                {
+                    stream.Write(buffer, 0, result.Count);
+                }
+
+                if (result.EndOfMessage)
+                {
+                    return Encoding.UTF8.GetString(stream.ToArray());
+                }
+            }
         }
 
         /// <summary>

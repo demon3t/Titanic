@@ -87,33 +87,27 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(services);
 
+            if (ShouldSkipTransportStage(entity, stage))
+            {
+                return;
+            }
+
             var request = CreateRequest(entity, manager, stage);
+            var stages = GetDispatchStages(entity, stage);
+            request.Stage = stages[0];
+            request.Stages = [.. stages];
             var baseUri = ResolveHttpBaseUri(GetListenerUri(manager));
-            using var client = CreateClient(baseUri, services);
+            var client = CreateClient(baseUri, services);
 
-            if (IsInitialStage(stage))
-            {
-                SendHttp(request, BuildActionUri(baseUri, CreateActionPath), client);
-            }
-
-            try
-            {
-                var response = SendHttp(
-                    request,
-                    BuildActionUri(baseUri, GetActionPath(stage)),
-                    client);
-                ApplyResponseValues(entity, response);
-            }
-            catch
-            {
-                TryDeleteRemoteListener(request, baseUri, client);
-                throw;
-            }
-
-            if (IsFinalStage(stage))
-            {
-                TryDeleteRemoteListener(request, baseUri, client);
-            }
+            // Серверный cache listener-ов сам лениво создаёт экземпляр по DispatchId
+            // и освобождает его на финальной стадии pipeline, поэтому отдельные create/delete
+            // transport-вызовы не нужны для штатного remote dispatch.
+            var response = SendHttp(
+                request,
+                BuildActionUri(baseUri, stages.Count > 1 ? string.Empty : GetActionPath(stage)),
+                client);
+            ApplyResponseValues(entity, response);
+            MarkBatchedStages(entity, stages);
         }
 
         /// <summary>
@@ -173,24 +167,6 @@ namespace Titanic.Entity.Events
 
             EnsureResponseSuccess(body, response.StatusCode);
             return body;
-        }
-
-        /// <summary>
-        /// Пытается удалить remote listener, не перекрывая исходный результат обработки события.
-        /// </summary>
-        /// <param name="request">Transport-запрос события.</param>
-        /// <param name="baseUri">Базовый URI listener-а.</param>
-        /// <param name="client">HTTP-клиент listener-а.</param>
-        private static void TryDeleteRemoteListener(EntityEventDispatchRequest request, Uri baseUri, HttpClient client)
-        {
-            try
-            {
-                SendHttp(request, BuildActionUri(baseUri, DeleteActionPath), client);
-            }
-            catch
-            {
-                // TTL на стороне listener API удалит экземпляр, если явная очистка не дошла.
-            }
         }
 
         /// <summary>

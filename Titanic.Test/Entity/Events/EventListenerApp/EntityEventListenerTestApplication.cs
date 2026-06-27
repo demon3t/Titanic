@@ -110,6 +110,22 @@ namespace Titanic.Test.Entity
             return new Uri(HttpBaseAddress, path.TrimStart('/')).ToString();
         }
 
+        /// <summary>
+        /// Создаёт абсолютный WebSocket URI listener endpoint-а.
+        /// </summary>
+        /// <param name="path">Путь listener endpoint-а.</param>
+        /// <returns>Абсолютный WebSocket URI.</returns>
+        public string GetWebSocketListenerUri(string path)
+        {
+            var builder = new UriBuilder(new Uri(HttpBaseAddress, path.TrimStart('/')))
+            {
+                Scheme = HttpBaseAddress.Scheme == Uri.UriSchemeHttps ? "wss" : "ws",
+                Port = HttpBaseAddress.Port
+            };
+
+            return builder.Uri.ToString();
+        }
+
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {

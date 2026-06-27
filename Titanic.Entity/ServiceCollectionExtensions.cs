@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Titanic.Entity.Events;
 using Titanic.Entity.Interfaces;
@@ -112,8 +112,10 @@ namespace Titanic.Entity
             services.AddSingleton<BaseEntityEventProvider, LocalEntityEventProvider>();
             services.AddSingleton<BaseEntityEventProvider, HttpEntityEventProvider>();
             services.AddSingleton<BaseEntityEventProvider, GrpcEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, WebSocketEntityEventProvider>();
             services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
             services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
+            services.AddSingleton<IEntityEventWebSocketClientFactory, DefaultEntityEventWebSocketClientFactory>();
         }
 
         /// <summary>

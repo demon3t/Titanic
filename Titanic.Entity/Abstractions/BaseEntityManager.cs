@@ -249,7 +249,7 @@ namespace Titanic.Entity.Interfaces
                 api.ListenerInstanceIdleTimeout = TimeSpan.FromMinutes(5);
             }
 
-            if (api.Mode == EntityEventListenerApiMode.Http)
+            if (api.Mode is EntityEventListenerApiMode.Http or EntityEventListenerApiMode.WebSocket)
             {
                 api.Path = string.IsNullOrWhiteSpace(api.Path)
                     ? $"/entity-event-listener/{managerName}"

@@ -1,6 +1,4 @@
 using System.Net;
-using System.Text.Json;
-using Google.Protobuf.WellKnownTypes;
 using Titanic.Entity.Events.Grpc;
 using Titanic.Entity.Interfaces;
 
@@ -35,30 +33,25 @@ namespace Titanic.Entity.Events
             ArgumentNullException.ThrowIfNull(manager);
             ArgumentNullException.ThrowIfNull(services);
 
+            if (ShouldSkipTransportStage(entity, stage))
+            {
+                return;
+            }
+
             var request = CreateRequest(entity, manager, stage);
+            var stages = GetDispatchStages(entity, stage);
+            request.Stage = stages[0];
+            request.Stages = [.. stages];
+            var grpcRequest = ToGrpcRequest(request);
             var listenerUri = NormalizeGrpcUri(GetListenerUri(manager));
             var client = CreateClient(listenerUri, services);
 
-            if (IsInitialStage(stage))
-            {
-                SendLifecycleGrpc(client.Create(ToGrpcRequest(request)));
-            }
-
-            try
-            {
-                var response = SendStageGrpc(client, ToGrpcRequest(request), stage);
-                ApplyResponseValues(entity, response);
-            }
-            catch
-            {
-                TryDeleteRemoteListener(client, request);
-                throw;
-            }
-
-            if (IsFinalStage(stage))
-            {
-                TryDeleteRemoteListener(client, request);
-            }
+            // Серверный cache listener-ов сам лениво создаёт экземпляр по DispatchId
+            // и освобождает его на финальной стадии pipeline, поэтому отдельные create/delete
+            // transport-вызовы не нужны для штатного remote dispatch.
+            var response = SendStageGrpc(client, grpcRequest, stage, stages.Count > 1);
+            ApplyResponseValues(entity, response);
+            MarkBatchedStages(entity, stages);
         }
 
         /// <summary>
@@ -86,50 +79,25 @@ namespace Titanic.Entity.Events
         private static EntityEventDispatchResponse SendStageGrpc(
             EntityEventListenerGrpc.EntityEventListenerGrpcClient client,
             EntityEventGrpcRequest request,
-            EntityEventStage stage)
+            EntityEventStage stage,
+            bool useDispatch)
         {
-            var response = stage switch
-            {
-                EntityEventStage.Saving => client.OnSaving(request),
-                EntityEventStage.Saved => client.OnSaved(request),
-                EntityEventStage.Inserting => client.OnInserting(request),
-                EntityEventStage.Inserted => client.OnInserted(request),
-                EntityEventStage.Updating => client.OnUpdating(request),
-                EntityEventStage.Updated => client.OnUpdated(request),
-                EntityEventStage.Deleting => client.OnDeleting(request),
-                EntityEventStage.Deleted => client.OnDeleted(request),
-                _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "Unsupported entity event stage.")
-            };
+            var response = useDispatch
+                ? client.Dispatch(request)
+                : stage switch
+                {
+                    EntityEventStage.Saving => client.OnSaving(request),
+                    EntityEventStage.Saved => client.OnSaved(request),
+                    EntityEventStage.Inserting => client.OnInserting(request),
+                    EntityEventStage.Inserted => client.OnInserted(request),
+                    EntityEventStage.Updating => client.OnUpdating(request),
+                    EntityEventStage.Updated => client.OnUpdated(request),
+                    EntityEventStage.Deleting => client.OnDeleting(request),
+                    EntityEventStage.Deleted => client.OnDeleted(request),
+                    _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "Unsupported entity event stage.")
+                };
 
             return ConvertGrpcResponse(response);
-        }
-
-        /// <summary>
-        /// Проверяет ответ lifecycle-вызова gRPC listener-а.
-        /// </summary>
-        /// <param name="response">gRPC-ответ listener-а.</param>
-        private static void SendLifecycleGrpc(EntityEventGrpcResponse response)
-        {
-            ConvertGrpcResponse(response);
-        }
-
-        /// <summary>
-        /// Пытается удалить remote listener, не перекрывая исходный результат обработки события.
-        /// </summary>
-        /// <param name="client">gRPC-клиент listener-а.</param>
-        /// <param name="request">Transport-запрос события.</param>
-        private static void TryDeleteRemoteListener(
-            EntityEventListenerGrpc.EntityEventListenerGrpcClient client,
-            EntityEventDispatchRequest request)
-        {
-            try
-            {
-                SendLifecycleGrpc(client.Delete(ToGrpcRequest(request)));
-            }
-            catch
-            {
-                // TTL на стороне listener API удалит экземпляр, если явная очистка не дошла.
-            }
         }
 
         /// <summary>
@@ -139,18 +107,7 @@ namespace Titanic.Entity.Events
         /// <returns>Transport-ответ событийного слоя.</returns>
         private static EntityEventDispatchResponse ConvertGrpcResponse(EntityEventGrpcResponse response)
         {
-            var result = new EntityEventDispatchResponse
-            {
-                Success = response.Success,
-                Canceled = response.Canceled,
-                CancelReason = string.IsNullOrWhiteSpace(response.CancelReason) ? null : response.CancelReason,
-                ErrorMessage = string.IsNullOrWhiteSpace(response.ErrorMessage) ? null : response.ErrorMessage,
-                Values = response.Values.ToDictionary(
-                    x => x.Key,
-                    x => FromGrpcValue(x.Value),
-                    StringComparer.OrdinalIgnoreCase)
-            };
-
+            var result = EntityEventGrpcContractMapper.FromGrpcResponse(response);
             EnsureResponseSuccess(result, HttpStatusCode.OK);
             return result;
         }
@@ -183,98 +140,7 @@ namespace Titanic.Entity.Events
         /// <returns>gRPC transport-запрос.</returns>
         private static EntityEventGrpcRequest ToGrpcRequest(EntityEventDispatchRequest request)
         {
-            var result = new EntityEventGrpcRequest
-            {
-                ManagerName = request.ManagerName,
-                TableName = request.TableName,
-                DispatchId = request.DispatchId,
-                Stage = request.Stage,
-                IsNew = request.IsNew,
-                UserConnection = new EntityEventGrpcUserConnection
-                {
-                    UserId = request.UserConnection.UserId.ToString(),
-                    Culture = new EntityEventGrpcUserCulture
-                    {
-                        Id = request.UserConnection.Culture.Id.ToString(),
-                        Name = request.UserConnection.Culture.Name
-                    }
-                }
-            };
-
-            foreach (var value in request.Values)
-            {
-                result.Values.Add(value.Key, ToGrpcValue(value.Value));
-            }
-
-            foreach (var value in request.OldValues)
-            {
-                result.OldValues.Add(value.Key, ToGrpcValue(value.Value));
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Преобразует CLR-значение в protobuf Value.
-        /// </summary>
-        /// <param name="value">CLR-значение.</param>
-        /// <returns>Protobuf-значение.</returns>
-        private static Value ToGrpcValue(object? value)
-        {
-            return value switch
-            {
-                null => Value.ForNull(),
-                bool boolValue => Value.ForBool(boolValue),
-                string stringValue => Value.ForString(stringValue),
-                Guid guidValue => Value.ForString(guidValue.ToString()),
-                DateTime dateTimeValue => Value.ForString(dateTimeValue.ToString("O")),
-                DateTimeOffset dateTimeOffsetValue => Value.ForString(dateTimeOffsetValue.ToString("O")),
-                byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
-                    => Value.ForNumber(Convert.ToDouble(value)),
-                _ => Value.ForString(value.ToString() ?? string.Empty)
-            };
-        }
-
-        /// <summary>
-        /// Преобразует protobuf Value в CLR-значение.
-        /// </summary>
-        /// <param name="value">Protobuf-значение.</param>
-        /// <returns>CLR-значение.</returns>
-        private static object? FromGrpcValue(Value value)
-        {
-            return value.KindCase switch
-            {
-                Value.KindOneofCase.NullValue => null,
-                Value.KindOneofCase.BoolValue => value.BoolValue,
-                Value.KindOneofCase.StringValue => value.StringValue,
-                Value.KindOneofCase.NumberValue => TryRestoreNumber(value.NumberValue),
-                Value.KindOneofCase.StructValue => JsonSerializer.Deserialize<object>(value.StructValue.ToString()),
-                Value.KindOneofCase.ListValue => JsonSerializer.Deserialize<object>(value.ListValue.ToString()),
-                _ => null
-            };
-        }
-
-        /// <summary>
-        /// Восстанавливает целочисленное значение, если protobuf передал число без дробной части.
-        /// </summary>
-        /// <param name="value">Числовое значение protobuf.</param>
-        /// <returns>CLR-число.</returns>
-        private static object TryRestoreNumber(double value)
-        {
-            if (Math.Abs(value % 1) < double.Epsilon)
-            {
-                if (value is >= int.MinValue and <= int.MaxValue)
-                {
-                    return Convert.ToInt32(value);
-                }
-
-                if (value is >= long.MinValue and <= long.MaxValue)
-                {
-                    return Convert.ToInt64(value);
-                }
-            }
-
-            return value;
+            return EntityEventGrpcContractMapper.ToGrpcRequest(request);
         }
 
         #endregion Members
