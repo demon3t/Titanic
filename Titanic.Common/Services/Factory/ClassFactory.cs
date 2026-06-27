@@ -80,7 +80,12 @@ namespace Titanic.Common.Services.Factory
         public static void Bind<T>(Func<T> resolveMethod, string name) where T : class
         {
             ArgumentNullException.ThrowIfNull(resolveMethod);
-            AddBinding(new ClassFactoryBinding(typeof(T), NormalizeName(name), null, _ => resolveMethod()));
+            AddBinding(new ClassFactoryBinding(
+                typeof(T),
+                NormalizeName(name),
+                null,
+                () => resolveMethod()
+                    ?? throw new InvalidOperationException($"Factory method for '{typeof(T).FullName}' returned null.")));
         }
 
         /// <summary>
@@ -336,7 +341,7 @@ namespace Titanic.Common.Services.Factory
         {
             if (binding.FactoryMethod != null)
             {
-                return binding.FactoryMethod(GetServiceProvider());
+                return binding.FactoryMethod();
             }
 
             return CreateByImplementation(binding.ImplementationType!, constructorArguments);
@@ -579,7 +584,7 @@ namespace Titanic.Common.Services.Factory
             Type ServiceType,
             string Name,
             Type? ImplementationType,
-            Func<IServiceProvider, object>? FactoryMethod);
+            Func<object>? FactoryMethod);
 
         #endregion Members
     }
