@@ -14,7 +14,7 @@ namespace Titanic.Db.Builders
         private readonly TParent _parent;
         private readonly Func<QueryExpression, TParent> _apply;
         private QueryExpression? _current;
-        private string _nextOperator = "AND";
+        private LogicalOperator _nextOperator = LogicalOperator.And;
 
         #endregion Поля
 
@@ -176,7 +176,7 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер HAVING для добавления следующего условия.</returns>
         public HavingBuilder<TParent> And()
         {
-            _nextOperator = "AND";
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 
@@ -186,7 +186,7 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер HAVING для добавления следующего условия.</returns>
         public HavingBuilder<TParent> Or()
         {
-            _nextOperator = "OR";
+            _nextOperator = LogicalOperator.Or;
             return this;
         }
 
@@ -218,9 +218,9 @@ namespace Titanic.Db.Builders
             var op = _nextOperator;
             _current = _current == null
                 ? expression
-                : op == "OR" ? QueryExpression.Or(_current, expression) : QueryExpression.And(_current, expression);
+                : op == LogicalOperator.Or ? QueryExpression.Or(_current, expression) : QueryExpression.And(_current, expression);
 
-            _nextOperator = "AND";
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 

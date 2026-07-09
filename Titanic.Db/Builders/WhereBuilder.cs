@@ -13,9 +13,9 @@ namespace Titanic.Db.Builders
 
         private readonly TParent _parent;
         private readonly Func<QueryExpression, TParent> _apply;
-        private readonly Stack<(string Operator, string ParentOperator, List<QueryExpression> Items)> _groups = new();
+        private readonly Stack<(LogicalOperator Operator, LogicalOperator ParentOperator, List<QueryExpression> Items)> _groups = new();
         private QueryExpression? _current;
-        private string _nextOperator = "AND";
+        private LogicalOperator _nextOperator = LogicalOperator.And;
 
         #endregion Поля
 
@@ -357,7 +357,7 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер условий для продолжения цепочки вызовов.</returns>
         public WhereBuilder<TParent> And()
         {
-            _nextOperator = "AND";
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 
@@ -368,7 +368,7 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер условий для продолжения цепочки вызовов.</returns>
         public WhereBuilder<TParent> Or()
         {
-            _nextOperator = "OR";
+            _nextOperator = LogicalOperator.Or;
             return this;
         }
 
@@ -379,8 +379,8 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер условий для заполнения открытой группы.</returns>
         public WhereBuilder<TParent> AndOpen()
         {
-            _groups.Push(("AND", _nextOperator, new List<QueryExpression>()));
-            _nextOperator = "AND";
+            _groups.Push((LogicalOperator.And, _nextOperator, new List<QueryExpression>()));
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 
@@ -391,8 +391,8 @@ namespace Titanic.Db.Builders
         /// <returns>Текущий билдер условий для заполнения открытой группы.</returns>
         public WhereBuilder<TParent> OrOpen()
         {
-            _groups.Push(("OR", _nextOperator, new List<QueryExpression>()));
-            _nextOperator = "AND";
+            _groups.Push((LogicalOperator.Or, _nextOperator, new List<QueryExpression>()));
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 
@@ -410,7 +410,7 @@ namespace Titanic.Db.Builders
             }
 
             var group = _groups.Pop();
-            var expression = group.Operator == "OR"
+            var expression = group.Operator == LogicalOperator.Or
                 ? QueryExpression.Or(group.Items.ToArray())
                 : QueryExpression.And(group.Items.ToArray());
 
@@ -466,7 +466,7 @@ namespace Titanic.Db.Builders
             return QueryExpression.Binary(QueryExpression.Column(alias, columnName), op, value);
         }
 
-        private WhereBuilder<TParent> Add(QueryExpression expression, string? connector = null)
+        private WhereBuilder<TParent> Add(QueryExpression expression, LogicalOperator? connector = null)
         {
             if (_groups.Count > 0)
             {
@@ -477,10 +477,10 @@ namespace Titanic.Db.Builders
                 var op = connector ?? _nextOperator;
                 _current = _current == null
                     ? expression
-                    : op == "OR" ? QueryExpression.Or(_current, expression) : QueryExpression.And(_current, expression);
+                    : op == LogicalOperator.Or ? QueryExpression.Or(_current, expression) : QueryExpression.And(_current, expression);
             }
 
-            _nextOperator = "AND";
+            _nextOperator = LogicalOperator.And;
             return this;
         }
 

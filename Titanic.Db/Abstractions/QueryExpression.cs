@@ -46,7 +46,7 @@ namespace Titanic.Db.Abstractions
         /// SQL-оператор или имя функции, необходимое для выражений с настраиваемой генерацией.
         /// </summary>
         /// <remarks>
-        /// Используется для raw-выражений, бинарных и групповых операторов, а также custom SQL-функций.
+        /// Используется для raw-выражений, бинарных операторов, а также custom SQL-функций.
         /// </remarks>
         public string? Operator { get; set; }
 
@@ -64,6 +64,11 @@ namespace Titanic.Db.Abstractions
         /// Оператор условия, который определяет сравнение между дочерними выражениями.
         /// </summary>
         public ConditionOperator? ConditionOperatorType { get; set; }
+
+        /// <summary>
+        /// Логический оператор, который объединяет дочерние выражения группы.
+        /// </summary>
+        public LogicalOperator? LogicalOperatorType { get; set; }
 
         /// <summary>
         /// Подзапрос, используемый выражением для операций вроде <c>IN</c> или вложенных выборок.
@@ -128,7 +133,7 @@ namespace Titanic.Db.Abstractions
 
         private QueryExpression(ExpressionType expressionType, string? sql = null, string? op = null,
             ConditionOperator? conditionOperator = null, UnaryOperator unaryOperator = UnaryOperator.None,
-            object? value = null, BaseQuery? query = null,
+            LogicalOperator? logicalOperator = null, object? value = null, BaseQuery? query = null,
             IEnumerable<QueryExpression>? expressions = null)
         {
             ExpressionType = expressionType;
@@ -136,6 +141,7 @@ namespace Titanic.Db.Abstractions
             Operator = op;
             ConditionOperatorType = conditionOperator;
             UnaryOperatorType = unaryOperator;
+            LogicalOperatorType = logicalOperator;
             Value = value;
             Query = query;
             if (expressions != null)
@@ -224,9 +230,20 @@ namespace Titanic.Db.Abstractions
             => new(ExpressionType.Binary, conditionOperator: ConditionOperator.NotIn, expressions: new[] { Column(alias, columnName), List(values.Select(Param)) });
 
         internal static QueryExpression And(params QueryExpression[] expressions)
-            => new(ExpressionType.Group, op: "AND", expressions: expressions.Where(e => e != null));
+        {
+            return new(
+                ExpressionType.Group,
+                logicalOperator: LogicalOperator.And,
+                expressions: expressions.Where(e => e != null));
+        }
+
         internal static QueryExpression Or(params QueryExpression[] expressions)
-            => new(ExpressionType.Group, op: "OR", expressions: expressions.Where(e => e != null));
+        {
+            return new(
+                ExpressionType.Group,
+                logicalOperator: LogicalOperator.Or,
+                expressions: expressions.Where(e => e != null));
+        }
         internal static QueryExpression Not(QueryExpression expression)
             => new(ExpressionType.Unary, unaryOperator: UnaryOperator.Not, expressions: new[] { expression });
 
