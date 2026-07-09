@@ -1,4 +1,5 @@
 using Titanic.Db.Abstractions;
+using Titanic.Db.Enums;
 
 namespace Titanic.Db.Builders
 {
@@ -9,7 +10,6 @@ namespace Titanic.Db.Builders
     /// <typeparam name="TQuery">Тип запроса.</typeparam>
     public class WhereItem<TQuery> where TQuery : BaseQuery
     {
-        private readonly TQuery _query;
         private readonly string _alias;
         private readonly string _columnName;
         private readonly Func<QueryExpression, TQuery> _addWhere;
@@ -17,7 +17,6 @@ namespace Titanic.Db.Builders
 
         internal WhereItem(TQuery query, string alias, string columnName, Func<QueryExpression, TQuery> addWhere)
         {
-            _query = query;
             _alias = alias;
             _columnName = columnName;
             _addWhere = addWhere;
@@ -34,136 +33,58 @@ namespace Titanic.Db.Builders
 
         /// <summary>Добавить условие равенства.</summary>
         public TQuery IsEqual(object? value)
-        {
-            var expr = _negated
-                ? QueryExpression.Not(EqualExpr(value))
-                : EqualExpr(value);
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
 
         /// <summary>Добавить условие равенства с другой колонкой.</summary>
         public TQuery IsEqual(string targetAlias, string targetColumnName)
-        {
-            var expr = QueryExpression.Binary(
-                LeftColumnExpr(),
-                Enums.ConditionOperator.Equal,
-                QueryExpression.Column(targetAlias, targetColumnName));
-            if (_negated)
-            {
-                expr = QueryExpression.Not(expr);
-            }
-
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(targetAlias, targetColumnName, ConditionOperator.Equal));
 
         /// <summary>Добавить условие равенства с выражением.</summary>
         public TQuery IsEqual(QueryExpression value)
-        {
-            var expr = QueryExpression.Binary(
-                LeftColumnExpr(),
-                Enums.ConditionOperator.Equal,
-                value);
-            if (_negated)
-            {
-                expr = QueryExpression.Not(expr);
-            }
-
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
 
         /// <summary>Добавить условие больше.</summary>
         public TQuery IsGreaterThan(object? value)
-        {
-            var expr = _negated
-                ? QueryExpression.Not(GreaterExpr(value))
-                : GreaterExpr(value);
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
 
         /// <summary>Добавить условие больше с выражением.</summary>
         public TQuery IsGreaterThan(QueryExpression value)
-        {
-            var expr = QueryExpression.Binary(
-                LeftColumnExpr(),
-                Enums.ConditionOperator.GreaterThan,
-                value);
-            if (_negated)
-            {
-                expr = QueryExpression.Not(expr);
-            }
-
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
 
         /// <summary>Добавить условие больше или равно.</summary>
         public TQuery IsGreaterOrEqual(object? value)
-        {
-            var expr = _negated
-                ? QueryExpression.Not(GreaterOrEqualExpr(value))
-                : GreaterOrEqualExpr(value);
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThanOrEqual));
 
         /// <summary>Добавить условие меньше.</summary>
         public TQuery IsLess(object? value)
-        {
-            var expr = _negated
-                ? QueryExpression.Not(LessExpr(value))
-                : LessExpr(value);
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
 
         /// <summary>Добавить условие меньше с выражением.</summary>
         public TQuery IsLess(QueryExpression value)
-        {
-            var expr = QueryExpression.Binary(
-                LeftColumnExpr(),
-                Enums.ConditionOperator.LessThan,
-                value);
-            if (_negated)
-            {
-                expr = QueryExpression.Not(expr);
-            }
-
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
 
         /// <summary>Добавить условие меньше или равно.</summary>
         public TQuery IsLessOrEqual(object? value)
-        {
-            var expr = _negated
-                ? QueryExpression.Not(LessOrEqualExpr(value))
-                : LessOrEqualExpr(value);
-            return _addWhere(expr);
-        }
+            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThanOrEqual));
 
         /// <summary>
         /// Добавить условие LIKE. Шаблон со знаками <c>%</c> должен быть подготовлен вызывающим кодом.
         /// </summary>
         public TQuery IsLike(object? value)
         {
-            var expr = _negated
-                ? QueryExpression.Not(LikeExpr(value))
-                : LikeExpr(value);
+            var expr = ApplyNegation(ComparisonExpr(value, ConditionOperator.Like));
             _negated = false;
             return _addWhere(expr);
         }
 
         /// <summary>Добавить условие IS NULL. После <see cref="Not"/> формируется отрицание над IS NULL.</summary>
         public TQuery IsNull()
-        {
-            if (_negated)
-            {
-                return _addWhere(QueryExpression.Not(IsNullExpr()));
-            }
-
-            return _addWhere(IsNullExpr());
-        }
+            => AddExpression(IsNullExpr());
 
         /// <summary>Добавить условие IN по подзапросу. После <see cref="Not"/> формируется NOT IN.</summary>
         public TQuery In(BaseQuery subQuery)
         {
-            var op = _negated ? Enums.ConditionOperator.NotIn : Enums.ConditionOperator.In;
+            var op = _negated ? ConditionOperator.NotIn : ConditionOperator.In;
             return _addWhere(QueryExpression.Binary(
                 LeftColumnExpr(),
                 op,
@@ -174,14 +95,10 @@ namespace Titanic.Db.Builders
         public TQuery Between(object? low, object? high)
         {
             var expr = QueryExpression.And(
-                GreaterOrEqualExpr(low),
-                LessOrEqualExpr(high));
-            if (_negated)
-            {
-                expr = QueryExpression.Not(expr);
-            }
+                ComparisonExpr(low, ConditionOperator.GreaterThanOrEqual),
+                ComparisonExpr(high, ConditionOperator.LessThanOrEqual));
 
-            return _addWhere(expr);
+            return AddExpression(expr);
         }
 
         /// <summary>Обернуть произвольное выражение в NOT.</summary>
@@ -195,77 +112,31 @@ namespace Titanic.Db.Builders
                 ? QueryExpression.Column(_columnName)
                 : QueryExpression.Column(_alias, _columnName);
 
-        private QueryExpression EqualExpr(object? value)
+        private TQuery AddExpression(QueryExpression expression)
+            => _addWhere(ApplyNegation(expression));
+
+        private QueryExpression ApplyNegation(QueryExpression expression)
+            => _negated ? QueryExpression.Not(expression) : expression;
+
+        private QueryExpression ComparisonExpr(object? value, ConditionOperator op)
         {
-            if (value is QueryExpression valueExpression)
+            if (op == ConditionOperator.Equal && value is null)
             {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Equal, valueExpression);
+                return IsNullExpr();
             }
 
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.Equal(_columnName, value)
-                : QueryExpression.Equal(_alias, _columnName, value);
+            var valueExpression = value is QueryExpression expression
+                ? expression
+                : QueryExpression.Param(value);
+
+            return QueryExpression.Binary(LeftColumnExpr(), op, valueExpression);
         }
 
-        private QueryExpression GreaterExpr(object? value)
-        {
-            if (value is QueryExpression valueExpression)
-            {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.GreaterThan, valueExpression);
-            }
-
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.Greater(_columnName, value)
-                : QueryExpression.Greater(_alias, _columnName, value);
-        }
-
-        private QueryExpression GreaterOrEqualExpr(object? value)
-        {
-            if (value is QueryExpression valueExpression)
-            {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.GreaterThanOrEqual, valueExpression);
-            }
-
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.GreaterOrEqual(_columnName, value)
-                : QueryExpression.GreaterOrEqual(_alias, _columnName, value);
-        }
-
-        private QueryExpression LessExpr(object? value)
-        {
-            if (value is QueryExpression valueExpression)
-            {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.LessThan, valueExpression);
-            }
-
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.Less(_columnName, value)
-                : QueryExpression.Less(_alias, _columnName, value);
-        }
-
-        private QueryExpression LessOrEqualExpr(object? value)
-        {
-            if (value is QueryExpression valueExpression)
-            {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.LessThanOrEqual, valueExpression);
-            }
-
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.LessOrEqual(_columnName, value)
-                : QueryExpression.LessOrEqual(_alias, _columnName, value);
-        }
-
-        private QueryExpression LikeExpr(object? value)
-        {
-            if (value is QueryExpression valueExpression)
-            {
-                return QueryExpression.Binary(LeftColumnExpr(), Enums.ConditionOperator.Like, valueExpression);
-            }
-
-            return string.IsNullOrWhiteSpace(_alias)
-                ? QueryExpression.Like(_columnName, value)
-                : QueryExpression.Like(_alias, _columnName, value);
-        }
+        private QueryExpression ComparisonExpr(string targetAlias, string targetColumnName, ConditionOperator op)
+            => QueryExpression.Binary(
+                LeftColumnExpr(),
+                op,
+                QueryExpression.Column(targetAlias, targetColumnName));
 
         private QueryExpression IsNullExpr()
             => string.IsNullOrWhiteSpace(_alias)

@@ -31,31 +31,31 @@ namespace Titanic.Db.Builders
         #region Операторы
 
         public HavingBuilder<TParent> Equal(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Equal, value));
+            => Add(Compare(columnName, ConditionOperator.Equal, value));
 
         public HavingBuilder<TParent> Equal(string alias, string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.Equal, value));
+            => Add(Compare(alias, columnName, ConditionOperator.Equal, value));
 
         public HavingBuilder<TParent> NotEqual(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.NotEqual, value));
+            => Add(Compare(columnName, ConditionOperator.NotEqual, value));
 
         public HavingBuilder<TParent> GreaterThan(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.GreaterThan, value));
+            => Add(Compare(columnName, ConditionOperator.GreaterThan, value));
 
         public HavingBuilder<TParent> GreaterThan(string alias, string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(alias, columnName), ConditionOperator.GreaterThan, value));
+            => Add(Compare(alias, columnName, ConditionOperator.GreaterThan, value));
 
         public HavingBuilder<TParent> GreaterThanOrEqual(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.GreaterThanOrEqual, value));
+            => Add(Compare(columnName, ConditionOperator.GreaterThanOrEqual, value));
 
         public HavingBuilder<TParent> LessThan(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.LessThan, value));
+            => Add(Compare(columnName, ConditionOperator.LessThan, value));
 
         public HavingBuilder<TParent> LessThanOrEqual(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.LessThanOrEqual, value));
+            => Add(Compare(columnName, ConditionOperator.LessThanOrEqual, value));
 
         public HavingBuilder<TParent> Like(string columnName, QueryExpression value)
-            => Add(QueryExpression.Binary(QueryExpression.Column(columnName), ConditionOperator.Like, value));
+            => Add(Compare(columnName, ConditionOperator.Like, value));
 
         public HavingBuilder<TParent> IsNull(string columnName)
             => Add(QueryExpression.IsNull(columnName));
@@ -93,6 +93,12 @@ namespace Titanic.Db.Builders
         {
             return _current == null ? _parent : _apply(_current);
         }
+
+        private static QueryExpression Compare(string columnName, ConditionOperator op, QueryExpression value)
+            => QueryExpression.Binary(QueryExpression.Column(columnName), op, value);
+
+        private static QueryExpression Compare(string alias, string columnName, ConditionOperator op, QueryExpression value)
+            => QueryExpression.Binary(QueryExpression.Column(alias, columnName), op, value);
 
         private HavingBuilder<TParent> Add(QueryExpression expression)
         {
