@@ -15,10 +15,10 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Adds a column to the SELECT list.
+        /// Добавить колонку в список выбираемых выражений SELECT.
         /// </summary>
-        /// <param name="columnName">The column name.</param>
-        /// <returns>The current column builder.</returns>
+        /// <param name="columnName">Имя колонки без алиаса источника.</param>
+        /// <returns>Текущий билдер колонок для продолжения настройки SELECT.</returns>
         public ColumnBuilder Column(string columnName)
         {
             _select.AddColumn(QueryExpression.Column(columnName));
@@ -26,11 +26,11 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Adds a column from the specified source alias to the SELECT list.
+        /// Добавить колонку из указанного источника в список выбираемых выражений SELECT.
         /// </summary>
-        /// <param name="sourceAlias">The source alias.</param>
-        /// <param name="columnName">The column name.</param>
-        /// <returns>The current column builder.</returns>
+        /// <param name="sourceAlias">Алиас таблицы или подзапроса, которому принадлежит колонка.</param>
+        /// <param name="columnName">Имя выбираемой колонки.</param>
+        /// <returns>Текущий билдер колонок для продолжения настройки SELECT.</returns>
         public ColumnBuilder Column(string sourceAlias, string columnName)
         {
             _select.AddColumn(QueryExpression.Column(sourceAlias, columnName));
@@ -38,10 +38,10 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Adds an expression to the SELECT list.
+        /// Добавить готовое SQL-выражение в список выбираемых выражений SELECT.
         /// </summary>
-        /// <param name="expression">The expression to select.</param>
-        /// <returns>The current column builder.</returns>
+        /// <param name="expression">Выражение, которое будет добавлено в секцию SELECT.</param>
+        /// <returns>Текущий билдер колонок для продолжения настройки SELECT.</returns>
         public ColumnBuilder Column(QueryExpression expression)
         {
             _select.AddColumn(expression);
@@ -49,11 +49,11 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Adds an expression associated with the specified source alias to the SELECT list.
+        /// Добавить готовое SQL-выражение, логически связанное с указанным алиасом источника.
         /// </summary>
-        /// <param name="sourceAlias">The source alias.</param>
-        /// <param name="expression">The expression to select.</param>
-        /// <returns>The current column builder.</returns>
+        /// <param name="sourceAlias">Алиас источника данных, к которому относится выражение.</param>
+        /// <param name="expression">Выражение, которое будет добавлено в секцию SELECT.</param>
+        /// <returns>Текущий билдер колонок для продолжения настройки SELECT.</returns>
         public ColumnBuilder Column(string sourceAlias, QueryExpression expression)
         {
             _select.AddColumn(expression);
@@ -61,9 +61,9 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Marks the SELECT query as DISTINCT.
+        /// Включить режим DISTINCT для текущего SELECT-запроса.
         /// </summary>
-        /// <returns>The configured SELECT query.</returns>
+        /// <returns>Настраиваемый SELECT-запрос для продолжения цепочки вызовов.</returns>
         public Select Distinct()
         {
             _select.Distinct();
@@ -71,11 +71,11 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Sets the source table for the SELECT query.
+        /// Указать таблицу-источник для текущего SELECT-запроса.
         /// </summary>
-        /// <param name="tableName">The table name.</param>
-        /// <param name="alias">The optional table alias.</param>
-        /// <returns>The configured SELECT query.</returns>
+        /// <param name="tableName">Имя таблицы, из которой будет выполняться выборка.</param>
+        /// <param name="alias">Необязательный алиас таблицы в SQL-запросе.</param>
+        /// <returns>Настраиваемый SELECT-запрос для продолжения цепочки вызовов.</returns>
         public Select From(string tableName, string? alias = null)
         {
             _select.SetFrom(tableName, alias);

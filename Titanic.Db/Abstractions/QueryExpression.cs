@@ -12,54 +12,88 @@ namespace Titanic.Db.Abstractions
 
         protected List<QueryExpression> Expressions = new();
 
+        /// <summary>
+        /// Тип выражения, по которому SQL-движок выбирает правило генерации SQL.
+        /// </summary>
         public ExpressionType ExpressionType { get; set; }
 
-        /// <summary>SQL текст для raw выражений.</summary>
+        /// <summary>
+        /// SQL-фрагмент, который используется для выражений с явно заданным raw-текстом.
+        /// </summary>
         public string? Sql { get; set; }
 
-        /// <summary>Имя колонки.</summary>
+        /// <summary>
+        /// Имя колонки источника данных, участвующей в выражении.
+        /// </summary>
         public string? ColumnName { get; set; }
 
-        /// <summary>Алиас источника данных.</summary>
+        /// <summary>
+        /// Алиас таблицы, подзапроса или другого источника, которому принадлежит колонка.
+        /// </summary>
         public string? SourceAlias { get; set; }
 
-        /// <summary>Алиас результата выражения.</summary>
+        /// <summary>
+        /// Алиас, под которым результат выражения будет доступен во внешнем SQL.
+        /// </summary>
         public string? Alias { get; set; }
 
-        /// <summary>Значение параметра или константы.</summary>
+        /// <summary>
+        /// Значение параметра или константы, которое будет передано в SQL через параметры запроса.
+        /// </summary>
         public object? Value { get; set; }
 
-        /// <summary>SQL оператор или имя функции.</summary>
-        /// <remarks>Используется для raw-выражений, бинарных/group-операторов и custom SQL-функций.</remarks>
+        /// <summary>
+        /// SQL-оператор или имя функции, необходимое для выражений с настраиваемой генерацией.
+        /// </summary>
+        /// <remarks>
+        /// Используется для raw-выражений, бинарных и групповых операторов, а также custom SQL-функций.
+        /// </remarks>
         public string? Operator { get; set; }
 
-        /// <summary>Тип унарного оператора.</summary>
+        /// <summary>
+        /// Тип унарного оператора, который должен быть применён к текущему выражению.
+        /// </summary>
         public UnaryOperator UnaryOperatorType { get; set; } = UnaryOperator.None;
 
-        /// <summary>Каноническая SQL-функция (рендерится движком).</summary>
+        /// <summary>
+        /// Каноническая SQL-функция, которую конкретный движок преобразует в диалект базы данных.
+        /// </summary>
         public SqlFunction SqlFunctionType { get; set; } = SqlFunction.None;
 
-        /// <summary>Оператор условия.</summary>
+        /// <summary>
+        /// Оператор условия, который определяет сравнение между дочерними выражениями.
+        /// </summary>
         public ConditionOperator? ConditionOperatorType { get; set; }
 
-        /// <summary>Подзапрос.</summary>
+        /// <summary>
+        /// Подзапрос, используемый выражением для операций вроде <c>IN</c> или вложенных выборок.
+        /// </summary>
         public BaseQuery? Query { get; set; }
 
-        /// <summary>Дочерние выражения.</summary>
+        /// <summary>
+        /// Дочерние выражения, из которых строится составное SQL-выражение.
+        /// </summary>
         public IReadOnlyList<QueryExpression> Children => Expressions;
 
         #endregion Свойства
 
         #region Конструкторы
 
-        /// <summary>Создать выражение колонки.</summary>
+        /// <summary>
+        /// Создать выражение колонки по её имени.
+        /// </summary>
+        /// <param name="columnName">Имя колонки или символ <c>*</c> для выбора всех колонок.</param>
         public QueryExpression(string columnName)
         {
             ColumnName = columnName;
             ExpressionType = columnName == "*" ? ExpressionType.Asterisk : ExpressionType.SourceColumn;
         }
 
-        /// <summary>Создать выражение с явным типом.</summary>
+        /// <summary>
+        /// Создать выражение из SQL-фрагмента с явно указанным типом выражения.
+        /// </summary>
+        /// <param name="sql">SQL-фрагмент или имя колонки, в зависимости от указанного типа.</param>
+        /// <param name="type">Тип создаваемого выражения.</param>
         public QueryExpression(string sql, ExpressionType type)
         {
             ExpressionType = type;
@@ -69,7 +103,11 @@ namespace Titanic.Db.Abstractions
                 Sql = sql;
         }
 
-        /// <summary>Создать выражение колонки источника с алиасом.</summary>
+        /// <summary>
+        /// Создать выражение колонки с указанием алиаса источника данных.
+        /// </summary>
+        /// <param name="alias">Алиас таблицы или подзапроса, которому принадлежит колонка.</param>
+        /// <param name="columnName">Имя колонки или символ <c>*</c> для выбора всех колонок источника.</param>
         public QueryExpression(string alias, string columnName)
         {
             SourceAlias = alias;
@@ -77,7 +115,11 @@ namespace Titanic.Db.Abstractions
             ExpressionType = columnName == "*" ? ExpressionType.Asterisk : ExpressionType.SourceColumn;
         }
 
-        /// <summary>Создать выражение значения.</summary>
+        /// <summary>
+        /// Создать выражение параметра или константного значения.
+        /// </summary>
+        /// <param name="value">Значение, которое будет сохранено в выражении.</param>
+        /// <param name="isParam">Если <c>true</c>, значение будет параметром запроса; иначе будет SQL-константой.</param>
         public QueryExpression(object value, bool isParam = true)
         {
             Value = value;
@@ -254,12 +296,21 @@ namespace Titanic.Db.Abstractions
         /// <summary>
         /// Построить SQL выражение.
         /// </summary>
-        public string ToSql(QueryBuildContext context) => context.Engine.BuildExpression(this, context);
+        /// <param name="context">Контекст построения SQL, содержащий движок диалекта и параметры.</param>
+        /// <returns>SQL-фрагмент, соответствующий текущему выражению.</returns>
+        public string ToSql(QueryBuildContext context)
+        {
+            return context.Engine.BuildExpression(this, context);
+        }
 
         /// <summary>
-        /// Enumerates child expressions.
+        /// Перечислить дочерние выражения текущего узла.
         /// </summary>
-        public IEnumerator<QueryExpression> GetEnumerator() => Expressions.GetEnumerator();
+        /// <returns>Перечислитель дочерних выражений.</returns>
+        public IEnumerator<QueryExpression> GetEnumerator()
+        {
+            return Expressions.GetEnumerator();
+        }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         #endregion Методы

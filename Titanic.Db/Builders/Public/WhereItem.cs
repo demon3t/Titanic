@@ -23,53 +23,113 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Включить отрицание для следующего условия.
+        /// Включить отрицание для следующего условия, сформированного этим билдером.
         /// </summary>
+        /// <returns>Текущий билдер условия для продолжения fluent-цепочки.</returns>
         public WhereItem<TQuery> Not()
         {
             _negated = true;
             return this;
         }
 
-        /// <summary>Добавить условие равенства.</summary>
+        /// <summary>
+        /// Добавить в запрос условие равенства текущей колонки переданному значению.
+        /// Значение <see langword="null"/> автоматически преобразуется в условие <c>IS NULL</c>.
+        /// </summary>
+        /// <param name="value">Значение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
         public TQuery IsEqual(object? value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
-
-        /// <summary>Добавить условие равенства с другой колонкой.</summary>
-        public TQuery IsEqual(string targetAlias, string targetColumnName)
-            => AddExpression(ComparisonExpr(targetAlias, targetColumnName, ConditionOperator.Equal));
-
-        /// <summary>Добавить условие равенства с выражением.</summary>
-        public TQuery IsEqual(QueryExpression value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
-
-        /// <summary>Добавить условие больше.</summary>
-        public TQuery IsGreaterThan(object? value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
-
-        /// <summary>Добавить условие больше с выражением.</summary>
-        public TQuery IsGreaterThan(QueryExpression value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
-
-        /// <summary>Добавить условие больше или равно.</summary>
-        public TQuery IsGreaterOrEqual(object? value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThanOrEqual));
-
-        /// <summary>Добавить условие меньше.</summary>
-        public TQuery IsLess(object? value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
-
-        /// <summary>Добавить условие меньше с выражением.</summary>
-        public TQuery IsLess(QueryExpression value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
-
-        /// <summary>Добавить условие меньше или равно.</summary>
-        public TQuery IsLessOrEqual(object? value)
-            => AddExpression(ComparisonExpr(value, ConditionOperator.LessThanOrEqual));
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
+        }
 
         /// <summary>
-        /// Добавить условие LIKE. Шаблон со знаками <c>%</c> должен быть подготовлен вызывающим кодом.
+        /// Добавить в запрос условие равенства текущей колонки другой колонке.
         /// </summary>
+        /// <param name="targetAlias">Алиас таблицы или подзапроса, которому принадлежит сравниваемая колонка.</param>
+        /// <param name="targetColumnName">Имя колонки, с которой сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsEqual(string targetAlias, string targetColumnName)
+        {
+            return AddExpression(ComparisonExpr(targetAlias, targetColumnName, ConditionOperator.Equal));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие равенства текущей колонки произвольному SQL-выражению.
+        /// </summary>
+        /// <param name="value">Выражение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsEqual(QueryExpression value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.Equal));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка больше переданного значения.
+        /// </summary>
+        /// <param name="value">Значение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsGreaterThan(object? value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка больше результата SQL-выражения.
+        /// </summary>
+        /// <param name="value">Выражение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsGreaterThan(QueryExpression value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThan));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка больше или равна переданному значению.
+        /// </summary>
+        /// <param name="value">Значение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsGreaterOrEqual(object? value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.GreaterThanOrEqual));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка меньше переданного значения.
+        /// </summary>
+        /// <param name="value">Значение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsLess(object? value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка меньше результата SQL-выражения.
+        /// </summary>
+        /// <param name="value">Выражение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsLess(QueryExpression value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.LessThan));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие, проверяющее что текущая колонка меньше или равна переданному значению.
+        /// </summary>
+        /// <param name="value">Значение, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
+        public TQuery IsLessOrEqual(object? value)
+        {
+            return AddExpression(ComparisonExpr(value, ConditionOperator.LessThanOrEqual));
+        }
+
+        /// <summary>
+        /// Добавить в запрос условие <c>LIKE</c> для текущей колонки.
+        /// Шаблон со знаками <c>%</c> должен быть подготовлен вызывающим кодом.
+        /// </summary>
+        /// <param name="value">Шаблон, с которым сравнивается текущая колонка.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
         public TQuery IsLike(object? value)
         {
             var expr = ApplyNegation(ComparisonExpr(value, ConditionOperator.Like));
@@ -77,11 +137,22 @@ namespace Titanic.Db.Builders
             return _addWhere(expr);
         }
 
-        /// <summary>Добавить условие IS NULL. После <see cref="Not"/> формируется отрицание над IS NULL.</summary>
+        /// <summary>
+        /// Добавить в запрос условие <c>IS NULL</c> для текущей колонки.
+        /// После вызова <see cref="Not"/> условие будет обёрнуто в отрицание.
+        /// </summary>
+        /// <returns>Запрос, в который добавлено условие.</returns>
         public TQuery IsNull()
-            => AddExpression(IsNullExpr());
+        {
+            return AddExpression(IsNullExpr());
+        }
 
-        /// <summary>Добавить условие IN по подзапросу. После <see cref="Not"/> формируется NOT IN.</summary>
+        /// <summary>
+        /// Добавить в запрос условие <c>IN</c>, где набор значений берётся из подзапроса.
+        /// После вызова <see cref="Not"/> оператор будет заменён на <c>NOT IN</c>.
+        /// </summary>
+        /// <param name="subQuery">Подзапрос, возвращающий значения для сравнения.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
         public TQuery In(BaseQuery subQuery)
         {
             var op = _negated ? ConditionOperator.NotIn : ConditionOperator.In;
@@ -91,7 +162,13 @@ namespace Titanic.Db.Builders
                 QueryExpression.SubQuery(subQuery)));
         }
 
-        /// <summary>Добавить условие BETWEEN.</summary>
+        /// <summary>
+        /// Добавить в запрос условие диапазона для текущей колонки.
+        /// Границы диапазона включаются через сравнения <c>&gt;=</c> и <c>&lt;=</c>.
+        /// </summary>
+        /// <param name="low">Нижняя граница диапазона.</param>
+        /// <param name="high">Верхняя граница диапазона.</param>
+        /// <returns>Запрос, в который добавлено условие.</returns>
         public TQuery Between(object? low, object? high)
         {
             var expr = QueryExpression.And(
@@ -101,22 +178,32 @@ namespace Titanic.Db.Builders
             return AddExpression(expr);
         }
 
-        /// <summary>Обернуть произвольное выражение в NOT.</summary>
+        /// <summary>
+        /// Добавить в запрос произвольное выражение, обёрнутое в оператор <c>NOT</c>.
+        /// </summary>
+        /// <param name="expression">Выражение, которое нужно отрицать.</param>
+        /// <returns>Запрос, в который добавлено отрицательное условие.</returns>
         public TQuery Not(QueryExpression expression)
         {
             return _addWhere(QueryExpression.Not(expression));
         }
 
         private QueryExpression LeftColumnExpr()
-            => string.IsNullOrWhiteSpace(_alias)
+        {
+            return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.Column(_columnName)
                 : QueryExpression.Column(_alias, _columnName);
+        }
 
         private TQuery AddExpression(QueryExpression expression)
-            => _addWhere(ApplyNegation(expression));
+        {
+            return _addWhere(ApplyNegation(expression));
+        }
 
         private QueryExpression ApplyNegation(QueryExpression expression)
-            => _negated ? QueryExpression.Not(expression) : expression;
+        {
+            return _negated ? QueryExpression.Not(expression) : expression;
+        }
 
         private QueryExpression ComparisonExpr(object? value, ConditionOperator op)
         {
@@ -133,15 +220,19 @@ namespace Titanic.Db.Builders
         }
 
         private QueryExpression ComparisonExpr(string targetAlias, string targetColumnName, ConditionOperator op)
-            => QueryExpression.Binary(
+        {
+            return QueryExpression.Binary(
                 LeftColumnExpr(),
                 op,
                 QueryExpression.Column(targetAlias, targetColumnName));
+        }
 
         private QueryExpression IsNullExpr()
-            => string.IsNullOrWhiteSpace(_alias)
+        {
+            return string.IsNullOrWhiteSpace(_alias)
                 ? QueryExpression.IsNull(_columnName)
                 : QueryExpression.IsNull(_alias, _columnName);
+        }
 
     }
 }

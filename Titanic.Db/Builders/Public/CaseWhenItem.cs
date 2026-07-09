@@ -17,116 +17,144 @@ namespace Titanic.Db.Builders
         }
 
         /// <summary>
-        /// Creates a CASE branch that checks equality with an expression.
+        /// Создать ветку CASE WHEN с проверкой равенства левого выражения переданному выражению.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsEqual(QueryExpression right)
-            => Build(Enums.ConditionOperator.Equal, right);
+        {
+            return Build(Enums.ConditionOperator.Equal, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks equality with a value.
+        /// Создать ветку CASE WHEN с проверкой равенства левого выражения переданному значению.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsEqual(object? value)
-            => IsEqual(QueryExpression.Param(value));
+        {
+            return IsEqual(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks inequality with an expression.
+        /// Создать ветку CASE WHEN с проверкой неравенства левого выражения переданному выражению.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsNotEqual(QueryExpression right)
-            => Build(Enums.ConditionOperator.NotEqual, right);
+        {
+            return Build(Enums.ConditionOperator.NotEqual, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks inequality with a value.
+        /// Создать ветку CASE WHEN с проверкой неравенства левого выражения переданному значению.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsNotEqual(object? value)
-            => IsNotEqual(QueryExpression.Param(value));
+        {
+            return IsNotEqual(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks greater-than comparison with an expression.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение больше переданного выражения.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsGreaterThan(QueryExpression right)
-            => Build(Enums.ConditionOperator.GreaterThan, right);
+        {
+            return Build(Enums.ConditionOperator.GreaterThan, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks greater-than comparison with a value.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение больше переданного значения.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsGreaterThan(object? value)
-            => IsGreaterThan(QueryExpression.Param(value));
+        {
+            return IsGreaterThan(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks greater-than-or-equal comparison with an expression.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение больше или равно переданному выражению.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsGreaterOrEqual(QueryExpression right)
-            => Build(Enums.ConditionOperator.GreaterThanOrEqual, right);
+        {
+            return Build(Enums.ConditionOperator.GreaterThanOrEqual, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks greater-than-or-equal comparison with a value.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение больше или равно переданному значению.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsGreaterOrEqual(object? value)
-            => IsGreaterOrEqual(QueryExpression.Param(value));
+        {
+            return IsGreaterOrEqual(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks less-than comparison with an expression.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение меньше переданного выражения.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLess(QueryExpression right)
-            => Build(Enums.ConditionOperator.LessThan, right);
+        {
+            return Build(Enums.ConditionOperator.LessThan, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks less-than comparison with a value.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение меньше переданного значения.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLess(object? value)
-            => IsLess(QueryExpression.Param(value));
+        {
+            return IsLess(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks less-than-or-equal comparison with an expression.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение меньше или равно переданному выражению.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLessOrEqual(QueryExpression right)
-            => Build(Enums.ConditionOperator.LessThanOrEqual, right);
+        {
+            return Build(Enums.ConditionOperator.LessThanOrEqual, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks less-than-or-equal comparison with a value.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение меньше или равно переданному значению.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">Значение, которое будет добавлено в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLessOrEqual(object? value)
-            => IsLessOrEqual(QueryExpression.Param(value));
+        {
+            return IsLessOrEqual(QueryExpression.Param(value));
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks LIKE comparison with an expression.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение соответствует LIKE-выражению.
         /// </summary>
-        /// <param name="right">The expression to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="right">Правое LIKE-выражение, с которым сравнивается левая часть CASE WHEN.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLike(QueryExpression right)
-            => Build(Enums.ConditionOperator.Like, right);
+        {
+            return Build(Enums.ConditionOperator.Like, right);
+        }
 
         /// <summary>
-        /// Creates a CASE branch that checks LIKE comparison with a value.
+        /// Создать ветку CASE WHEN с проверкой, что левое выражение соответствует LIKE-шаблону.
         /// </summary>
-        /// <param name="value">The value to compare with.</param>
-        /// <returns>A builder for the THEN expression.</returns>
+        /// <param name="value">LIKE-шаблон, который будет добавлен в запрос как параметр сравнения.</param>
+        /// <returns>Билдер THEN-части для текущей ветки CASE.</returns>
         public CaseThenItem IsLike(object? value)
-            => IsLike(QueryExpression.Param(value));
+        {
+            return IsLike(QueryExpression.Param(value));
+        }
 
         private CaseThenItem Build(Enums.ConditionOperator op, QueryExpression right)
         {
