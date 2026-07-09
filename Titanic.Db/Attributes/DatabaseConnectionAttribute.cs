@@ -15,6 +15,10 @@ namespace Titanic.Db.Attributes
         /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DatabaseConnectionAttribute"/> class.
+        /// </summary>
+        /// <param name="name">The configured database connection name.</param>
         public DatabaseConnectionAttribute(string name)
         {
             if (string.IsNullOrWhiteSpace(name))

@@ -16,6 +16,11 @@ namespace Titanic.Db.Builders
             _whenExpression = whenExpression;
         }
 
+        /// <summary>
+        /// Sets the result expression for the current CASE branch.
+        /// </summary>
+        /// <param name="thenExpression">The expression returned when the branch condition matches.</param>
+        /// <returns>The parent CASE expression builder.</returns>
         public CaseItem Then(QueryExpression thenExpression)
         {
             return _caseItem.AddBranch(_whenExpression, thenExpression);

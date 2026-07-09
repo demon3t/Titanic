@@ -256,6 +256,9 @@ namespace Titanic.Db.Abstractions
         /// </summary>
         public string ToSql(QueryBuildContext context) => context.Engine.BuildExpression(this, context);
 
+        /// <summary>
+        /// Enumerates child expressions.
+        /// </summary>
         public IEnumerator<QueryExpression> GetEnumerator() => Expressions.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 

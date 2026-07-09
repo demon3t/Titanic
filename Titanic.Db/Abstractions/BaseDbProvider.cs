@@ -748,6 +748,9 @@ namespace Titanic.Db.Abstractions
                 _fromPool = fromPool;
             }
 
+            /// <summary>
+            /// Returns the wrapped connection to its owner.
+            /// </summary>
             public void Dispose()
             {
                 _owner.ReleaseConnection(_connection, _fromPool);

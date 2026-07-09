@@ -143,6 +143,9 @@ namespace Titanic.Db.Abstractions
             return Provider ?? throw new InvalidOperationException("Для выполнения запроса нужно установить провайдер БД.");
         }
 
+        /// <summary>
+        /// Enumerates query expressions used by this query.
+        /// </summary>
         public IEnumerator<QueryExpression> GetEnumerator()
         {
             foreach (var expression in Expressions)

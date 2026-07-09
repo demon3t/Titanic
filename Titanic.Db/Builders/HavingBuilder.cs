@@ -20,6 +20,9 @@ namespace Titanic.Db.Builders
 
         #region Конструкторы
 
+        /// <summary>
+        /// Создать билдер HAVING и callback для применения готового выражения.
+        /// </summary>
         public HavingBuilder(TParent parent, Func<QueryExpression, TParent> apply)
         {
             _parent = parent;
@@ -30,39 +33,75 @@ namespace Titanic.Db.Builders
 
         #region Операторы
 
+        /// <summary>
+        /// Добавить условие равенства для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> Equal(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.Equal, value));
 
+        /// <summary>
+        /// Добавить условие равенства для HAVING-колонки с алиасом.
+        /// </summary>
         public HavingBuilder<TParent> Equal(string alias, string columnName, QueryExpression value)
             => Add(Compare(alias, columnName, ConditionOperator.Equal, value));
 
+        /// <summary>
+        /// Добавить условие неравенства для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> NotEqual(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.NotEqual, value));
 
+        /// <summary>
+        /// Добавить условие "больше" для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> GreaterThan(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.GreaterThan, value));
 
+        /// <summary>
+        /// Добавить условие "больше" для HAVING-колонки с алиасом.
+        /// </summary>
         public HavingBuilder<TParent> GreaterThan(string alias, string columnName, QueryExpression value)
             => Add(Compare(alias, columnName, ConditionOperator.GreaterThan, value));
 
+        /// <summary>
+        /// Добавить условие "больше или равно" для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> GreaterThanOrEqual(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.GreaterThanOrEqual, value));
 
+        /// <summary>
+        /// Добавить условие "меньше" для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> LessThan(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.LessThan, value));
 
+        /// <summary>
+        /// Добавить условие "меньше или равно" для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> LessThanOrEqual(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.LessThanOrEqual, value));
 
+        /// <summary>
+        /// Добавить условие LIKE для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> Like(string columnName, QueryExpression value)
             => Add(Compare(columnName, ConditionOperator.Like, value));
 
+        /// <summary>
+        /// Добавить условие IS NULL для HAVING-колонки.
+        /// </summary>
         public HavingBuilder<TParent> IsNull(string columnName)
             => Add(QueryExpression.IsNull(columnName));
 
+        /// <summary>
+        /// Добавить условие EXISTS с подзапросом.
+        /// </summary>
         public HavingBuilder<TParent> Exists(BaseQuery subQuery)
             => Add(QueryExpression.Exists(subQuery));
 
+        /// <summary>
+        /// Добавить условие NOT EXISTS с подзапросом.
+        /// </summary>
         public HavingBuilder<TParent> NotExists(BaseQuery subQuery)
             => Add(QueryExpression.Not(QueryExpression.Exists(subQuery)));
 
@@ -70,12 +109,18 @@ namespace Titanic.Db.Builders
 
         #region Связки
 
+        /// <summary>
+        /// Задать AND для следующего HAVING-условия.
+        /// </summary>
         public HavingBuilder<TParent> And()
         {
             _nextOperator = "AND";
             return this;
         }
 
+        /// <summary>
+        /// Задать OR для следующего HAVING-условия.
+        /// </summary>
         public HavingBuilder<TParent> Or()
         {
             _nextOperator = "OR";
