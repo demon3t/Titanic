@@ -85,55 +85,100 @@ namespace Titanic.Db.Abstractions
         protected abstract DbParameter CreateParameter(QueryParameter parameter);
 
         /// <summary>
-        /// Create SELECT query builder for this provider.
+        /// Создать билдер SELECT-запроса, связанный с текущим провайдером.
         /// </summary>
-        public virtual Select Select() => new(this);
+        /// <returns>Новый экземпляр билдера <see cref="Select"/>.</returns>
+        public virtual Select Select()
+        {
+            return new(this);
+        }
 
         /// <summary>
-        /// Create SELECT query builder with columns for this provider.
+        /// Создать билдер SELECT-запроса и сразу добавить в него список выбираемых колонок.
         /// </summary>
-        public virtual Select Select(params string[] columns) => new Select(this).Columns(columns);
+        /// <param name="columns">Имена колонок, которые должны попасть в секцию SELECT.</param>
+        /// <returns>Новый экземпляр билдера <see cref="Select"/> с добавленными колонками.</returns>
+        public virtual Select Select(params string[] columns)
+        {
+            return new Select(this).Columns(columns);
+        }
 
         /// <summary>
-        /// Create UPDATE query builder for this provider.
+        /// Создать билдер UPDATE-запроса, связанный с текущим провайдером.
         /// </summary>
-        public virtual Update Update() => new(this);
+        /// <returns>Новый экземпляр билдера <see cref="Update"/>.</returns>
+        public virtual Update Update()
+        {
+            return new(this);
+        }
 
         /// <summary>
-        /// Create UPDATE query builder for this provider.
+        /// Создать билдер UPDATE-запроса и сразу указать обновляемую таблицу.
         /// </summary>
-        public virtual Update Update(string tableName) => new Update(this).Table(tableName);
+        /// <param name="tableName">Имя таблицы, которая будет обновляться.</param>
+        /// <returns>Новый экземпляр билдера <see cref="Update"/> с указанной таблицей.</returns>
+        public virtual Update Update(string tableName)
+        {
+            return new Update(this).Table(tableName);
+        }
 
         /// <summary>
-        /// Create DELETE query builder for this provider.
+        /// Создать билдер DELETE-запроса, связанный с текущим провайдером.
         /// </summary>
-        public virtual Delete Delete() => new(this);
+        /// <returns>Новый экземпляр билдера <see cref="Delete"/>.</returns>
+        public virtual Delete Delete()
+        {
+            return new(this);
+        }
 
         /// <summary>
-        /// Create DELETE query builder for this provider.
+        /// Создать билдер DELETE-запроса и сразу указать таблицу-источник.
         /// </summary>
-        public virtual Delete Delete(string tableName) => new Delete(this).From(tableName);
+        /// <param name="tableName">Имя таблицы, из которой будут удаляться строки.</param>
+        /// <returns>Новый экземпляр билдера <see cref="Delete"/> с указанной таблицей.</returns>
+        public virtual Delete Delete(string tableName)
+        {
+            return new Delete(this).From(tableName);
+        }
 
         /// <summary>
-        /// Create INSERT query builder for this provider.
+        /// Создать билдер INSERT-запроса, связанный с текущим провайдером.
         /// </summary>
-        public virtual InsertSelect Insert() => new(this);
+        /// <returns>Новый экземпляр билдера <see cref="InsertSelect"/>.</returns>
+        public virtual InsertSelect Insert()
+        {
+            return new(this);
+        }
 
         /// <summary>
-        /// Create INSERT query builder for this provider.
+        /// Создать билдер INSERT-запроса и сразу указать целевую таблицу.
         /// </summary>
-        public virtual InsertSelect Insert(string tableName) => new InsertSelect(this).Into(tableName);
+        /// <param name="tableName">Имя таблицы, в которую будут вставляться данные.</param>
+        /// <returns>Новый экземпляр билдера <see cref="InsertSelect"/> с указанной таблицей.</returns>
+        public virtual InsertSelect Insert(string tableName)
+        {
+            return new InsertSelect(this).Into(tableName);
+        }
 
         /// <summary>
-        /// Create Table (DDL) builder for this provider.
+        /// Создать DDL-билдер таблицы для текущего провайдера.
         /// </summary>
-        public virtual Table Table(string tableName) => new(this, tableName);
+        /// <param name="tableName">Имя таблицы, для которой будет создан DDL-билдер.</param>
+        /// <returns>Новый экземпляр билдера <see cref="Table"/>.</returns>
+        public virtual Table Table(string tableName)
+        {
+            return new(this, tableName);
+        }
 
         /// <summary>
-        /// Create Table (DDL) builder for CLR model marked with Db table attributes.
+        /// Создать DDL-билдер таблицы для CLR-модели с атрибутами таблицы.
         /// </summary>
-        /// <typeparam name="TModel"> Тип CLR-модели таблицы. </typeparam>
-        public virtual Table Table<TModel>() => new(this, Titanic.Db.Table.ResolveTableName<TModel>());
+        /// <typeparam name="TModel">Тип CLR-модели, из которой будет получено имя таблицы.</typeparam>
+        /// <returns>Новый экземпляр билдера <see cref="Table"/> для таблицы модели.</returns>
+        public virtual Table Table<TModel>()
+        {
+            return new(this, Titanic.Db.Table.ResolveTableName<TModel>());
+        }
 
         #region Table DDL
 
@@ -543,7 +588,11 @@ namespace Titanic.Db.Abstractions
         /// <param name="query"> Запрос. </param>
         /// <param name="mapRow"> Преобразователь строки. </param>
         public virtual List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
-            => Query(query, mapRow);
+        {
+            ArgumentNullException.ThrowIfNull(mapRow);
+
+            return Query(query, mapRow);
+        }
 
         /// <summary>
         /// Выполнить запрос с чтением строк и вернуть готовый список результатов через IDataReader.
@@ -748,6 +797,10 @@ namespace Titanic.Db.Abstractions
                 _fromPool = fromPool;
             }
 
+            /// <summary>
+            /// Освободить обёрнутое подключение: вернуть его владельцу в пул
+            /// или закрыть, если подключение не было получено из пула.
+            /// </summary>
             public void Dispose()
             {
                 _owner.ReleaseConnection(_connection, _fromPool);

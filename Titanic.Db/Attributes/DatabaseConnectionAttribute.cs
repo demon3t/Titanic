@@ -15,6 +15,10 @@ namespace Titanic.Db.Attributes
         /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Создать атрибут с именем подключения, которое будет использоваться при регистрации базы.
+        /// </summary>
+        /// <param name="name">Имя подключения из конфигурации или менеджера подключений.</param>
         public DatabaseConnectionAttribute(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
