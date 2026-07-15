@@ -388,11 +388,26 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр BuildWhereColumnExpression.
+        /// Строит выражение чтения колонки, на которую указывает переданный путь сущности.
         /// </summary>
+        /// <param name="path">Путь сущности к колонке, используемой в WHERE-выражении.</param>
+        /// <returns>Выражение запроса для найденной колонки.</returns>
         internal QueryExpression BuildWhereColumnExpression(string path)
         {
+            return BuildWhereColumnExpression(path, out _);
+        }
+
+        /// <summary>
+        /// Строит выражение чтения колонки и возвращает ее метаданные для вызывающего кода,
+        /// которому нужна нормализация значений с учетом типа.
+        /// </summary>
+        /// <param name="path">Путь сущности к колонке, используемой в WHERE-выражении.</param>
+        /// <param name="column">Метаданные конечной колонки, найденной по переданному пути.</param>
+        /// <returns>Выражение запроса для найденной колонки.</returns>
+        internal QueryExpression BuildWhereColumnExpression(string path, out ColumnStructure column)
+        {
             var resolved = ResolvePath(path, allowTerminalReference: false);
+            column = resolved.TerminalColumn;
             return BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn);
         }
 

@@ -658,6 +658,42 @@ namespace Titanic.Test.Entity
             AssertParameters(build, 100);
         }
 
+        /// <summary>
+        /// Проверяет, что GUID-значения фильтров, восстановленные из JSON-модели ESQ,
+        /// передаются провайдеру БД как параметры <see cref="Guid"/>, а не как текст.
+        /// </summary>
+        [Fact]
+        public void ESQJsonModel_GuidFilter_ShouldRestoreStringValueAsGuidParameter()
+        {
+            var recordId = Guid.Parse("7e8d71b9-2591-d1b9-c51d-aa205eca08ad");
+            var json = $$"""
+            {
+              "tableName": "employees",
+              "columns": [
+                { "path": "Name" }
+              ],
+              "filters": {
+                "items": [
+                  { "path": "Id", "comparisonType": "Equal", "value": "{{recordId}}" }
+                ]
+              }
+            }
+            """;
+
+            var build = ESQJsonModel.FromJson(json).ToESQ(_provider, OrmTestUserConnection.Create()).Build();
+
+            AssertSql(
+                "SELECT\n"
+                    + "\t\"t0\".\"name\" AS \"Name\"\n"
+                    + "FROM\n"
+                    + "\t\"employees\" AS \"t0\"\n"
+                    + "WHERE\n"
+                    + "\t(\"t0\".\"id\" = @p0)",
+                build.Sql);
+
+            AssertParameters(build, recordId);
+        }
+
         [Fact]
         public void ESQJsonModel_NestedFilterGroup_ShouldRestoreGroupedWhere()
         {
