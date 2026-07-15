@@ -23,7 +23,7 @@ namespace Titanic.Db.Abstractions
             }
 
             var value = reader.GetValue(ordinal);
-            return (T)Convert.ChangeType(value, typeof(T));
+            return DbValueConverter.ConvertTo<T>(value)!;
         }
 
         /// <summary>
@@ -41,7 +41,7 @@ namespace Titanic.Db.Abstractions
             }
 
             var value = reader.GetValue(ordinal);
-            return (T)Convert.ChangeType(value, typeof(T));
+            return DbValueConverter.ConvertTo<T>(value);
         }
     }
 }

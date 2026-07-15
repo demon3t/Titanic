@@ -279,7 +279,7 @@ namespace Titanic.Db.Abstractions
                 var ordinal = reader.GetOrdinal(columnName);
                 if (!reader.IsDBNull(ordinal))
                 {
-                    result = (T)Convert.ChangeType(reader.GetValue(ordinal), typeof(T));
+                    result = DbValueConverter.ConvertTo<T>(reader.GetValue(ordinal));
                 }
             });
             return result;
@@ -301,7 +301,7 @@ namespace Titanic.Db.Abstractions
                 var ordinal = reader.GetOrdinal(columnName);
                 if (!reader.IsDBNull(ordinal))
                 {
-                    result = (T)Convert.ChangeType(reader.GetValue(ordinal), typeof(T));
+                    result = DbValueConverter.ConvertTo<T>(reader.GetValue(ordinal));
                 }
             });
             return result;
