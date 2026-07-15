@@ -717,13 +717,7 @@ namespace Titanic.Db.Abstractions
             command.CommandText = sql;
             AddParameters(command, parameters);
 
-            var result = command.ExecuteScalar();
-            if (result == null || result is DBNull)
-            {
-                return default;
-            }
-
-            return (T)Convert.ChangeType(result, typeof(T));
+            return DbValueConverter.ConvertTo<T>(command.ExecuteScalar());
         }
 
         private void AddParameters(DbCommand command, IEnumerable<QueryParameter>? parameters)
