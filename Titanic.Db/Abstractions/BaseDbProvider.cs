@@ -723,7 +723,13 @@ namespace Titanic.Db.Abstractions
                 return default;
             }
 
-            return (T)Convert.ChangeType(result, typeof(T));
+            if (result is T typedResult)
+            {
+                return typedResult;
+            }
+
+            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+            return (T)Convert.ChangeType(result, targetType);
         }
 
         private void AddParameters(DbCommand command, IEnumerable<QueryParameter>? parameters)
