@@ -8,7 +8,7 @@ namespace Titanic.Db.Configuration
     /// Позволяет поднять нужные классы по полному имени типа
     /// без явной compile-time зависимости на конкретную сборку.
     /// </summary>
-    public static class ProviderReflectionFactory
+    internal static class ProviderReflectionFactory
     {
         /// <summary>
         /// Создать экземпляр <see cref="BaseDbProvider"/> по описанию типов.

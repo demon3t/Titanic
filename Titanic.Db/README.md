@@ -71,6 +71,19 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - `HavingExpression` — fluent `HAVING`.
 - `CaseItem`, `CaseWhenItem`, `CaseThenItem` — fluent `CASE`.
 
+## Граница публичного API
+
+Публичным контрактом пакета считаются:
+
+- точки входа `DbManager`, `ServiceCollectionExtensions`, `WebAppDbExtensions`;
+- базовые классы для расширения провайдеров и SQL-диалектов: `BaseDbProvider`, `BaseDbEngine`, `Database`, `BaseDatabase`;
+- fluent builders, expression model, SQL enums и модели результата запроса;
+- атрибуты таблиц, колонок, индексов и подключений;
+- конфигурационные модели `DbConfig`, `DbProviderConfig`, `ProviderTypeConfig`, `ConnectionPoolConfig`;
+- `DbReader` / `IDbReader` и extension-методы чтения значений.
+
+Вспомогательные reflection-фабрики, runtime-детали регистрации провайдеров и объект пула подключений не являются внешним контрактом. Для подключения провайдера используйте конфигурацию, `DbManager` или DI extension-методы; для настройки пула — `ConnectionPoolConfig`.
+
 ## Пример использования
 
 ```csharp

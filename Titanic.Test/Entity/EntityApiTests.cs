@@ -560,14 +560,7 @@ namespace Titanic.Test.Entity
         /// </summary>
         private static EntityApiRequest CreateSaveOperationRequest()
         {
-            var request = CreateSaveRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
+            return CreateSaveRequest();
         }
 
         /// <summary>
@@ -575,14 +568,7 @@ namespace Titanic.Test.Entity
         /// </summary>
         private static EntityApiRequest CreateSaveExistingOperationRequest()
         {
-            var request = CreateUpdateRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
+            return CreateUpdateRequest();
         }
 
         /// <summary>
@@ -590,14 +576,7 @@ namespace Titanic.Test.Entity
         /// </summary>
         private static EntityApiRequest CreateDeleteOperationRequest()
         {
-            var request = CreateDeleteRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Delete,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
+            return CreateDeleteRequest();
         }
 
         /// <summary>
@@ -620,10 +599,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateSaveRequest.
         /// </summary>
-        private static EntityApiSaveRequest CreateSaveRequest()
+        private static EntityApiRequest CreateSaveRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -636,10 +616,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateUpdateRequest.
         /// </summary>
-        private static EntityApiSaveRequest CreateUpdateRequest()
+        private static EntityApiRequest CreateUpdateRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -653,10 +634,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateDeleteRequest.
         /// </summary>
-        private static EntityApiDeleteRequest CreateDeleteRequest()
+        private static EntityApiRequest CreateDeleteRequest()
         {
-            return new EntityApiDeleteRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Delete,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {

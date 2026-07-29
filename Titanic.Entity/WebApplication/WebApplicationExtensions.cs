@@ -868,28 +868,6 @@ namespace Titanic.Entity.WebApplication
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
-            EntityApiSaveRequest request)
-        {
-            return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateRequestEntity.
-        /// </summary>
-        private static Orm.Entity CreateRequestEntity(
-            BaseEntityManager manager,
-            UserConnection userConnection,
-            EntityApiDeleteRequest request)
-        {
-            return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateRequestEntity.
-        /// </summary>
-        private static Orm.Entity CreateRequestEntity(
-            BaseEntityManager manager,
-            UserConnection userConnection,
             EntityApiRequest request)
         {
             return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
