@@ -222,7 +222,7 @@ namespace Titanic.Entity.Orm
 
             var alias = ResolveAlias(pathOrAlias) ?? pathOrAlias;
             var column = ResolveColumn(alias, pathOrAlias);
-            var normalizedValue = NormalizeValue(column, value);
+            var normalizedValue = EntityValueNormalizer.NormalizeColumnValue(column, value);
             if (_values.TryGetValue(alias, out var existing))
             {
                 existing.Value = normalizedValue;
@@ -796,24 +796,6 @@ namespace Titanic.Entity.Orm
                 string stringValue => string.IsNullOrWhiteSpace(stringValue),
                 _ => false
             };
-        }
-
-        /// <summary>
-        /// Нормализовать входное значение по типу колонки.
-        /// </summary>
-        /// <param name="column"> Метаданные колонки. </param>
-        /// <param name="value"> Исходное значение. </param>
-        /// <returns> Значение в CLR-типе, подходящем для провайдера БД. </returns>
-        private static object? NormalizeValue(ColumnStructure? column, object? value)
-        {
-            if (column?.DataValueType == DataValueType.Guid
-                && value is string stringValue
-                && Guid.TryParse(stringValue, out var guidValue))
-            {
-                return guidValue;
-            }
-
-            return value;
         }
 
         /// <summary>

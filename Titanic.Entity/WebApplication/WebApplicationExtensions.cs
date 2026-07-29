@@ -679,7 +679,7 @@ namespace Titanic.Entity.WebApplication
             EntityApiRequest request)
         {
             var structure = ResolveEntityStructure(manager, request);
-            var values = NormalizeValues(request.Values, structure);
+            var values = EntityValueNormalizer.NormalizeValues(request.Values, structure);
             var primaryColumn = structure.GetPrimaryColumnStructure();
             var hasPrimaryKey = HasPrimaryKey(values, primaryColumn, out var primaryValue);
 
@@ -964,7 +964,7 @@ namespace Titanic.Entity.WebApplication
                 CopyFilterNodes(request.Query.Filters.ToEntityFilterCollection(), query.Filters);
             }
 
-            foreach (var value in NormalizeValues(request.Values, structure).Where(x => !IsEmptyFilterValue(x.Value)))
+            foreach (var value in EntityValueNormalizer.NormalizeValues(request.Values, structure).Where(x => !IsEmptyFilterValue(x.Value)))
             {
                 query.AddFilter(EntityComparisonType.Equal, value.Key, value.Value);
             }
@@ -1072,87 +1072,6 @@ namespace Titanic.Entity.WebApplication
         }
 
         #endregion Request Handling
-
-        #region Value Normalization
-
-        /// <summary>
-        /// Приводит значения запроса из JSON-примитивов к типам колонок сущности, если структура
-        /// целевой сущности доступна.
-        /// </summary>
-        /// <param name="values">Входящие значения запроса, сгруппированные по имени колонки сущности.</param>
-        /// <param name="structure">Необязательная структура сущности для нормализации с учетом типа.</param>
-        /// <returns>Нормализованные значения запроса с регистронезависимыми ключами.</returns>
-        private static Dictionary<string, object?> NormalizeValues(
-            IReadOnlyDictionary<string, object?> values,
-            EntityStructure? structure = null)
-        {
-            return values.ToDictionary(
-                x => x.Key,
-                x => NormalizeColumnValue(FindColumnStructure(structure, x.Key), NormalizeJsonValue(x.Value)),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Находит метаданные колонки сущности по имени поля из запроса.
-        /// </summary>
-        /// <param name="structure">Структура сущности, содержащая доступные колонки.</param>
-        /// <param name="columnName">Имя поля запроса, которое нужно сопоставить с колонками структуры.</param>
-        /// <returns>Метаданные найденной колонки или <c>null</c>, если колонка недоступна.</returns>
-        private static ColumnStructure? FindColumnStructure(EntityStructure? structure, string columnName)
-        {
-            return structure?.ColumnsStructure.FirstOrDefault(x => x.Matches(columnName));
-        }
-
-        /// <summary>
-        /// Восстанавливает значение запроса в CLR-тип, который ожидает колонка, когда JSON
-        /// десериализовался в совместимое примитивное значение.
-        /// </summary>
-        /// <param name="column">Метаданные колонки, по которым определяется ожидаемый CLR-тип.</param>
-        /// <param name="value">Значение запроса после общей JSON-нормализации.</param>
-        /// <returns>Нормализованное значение при успешном преобразовании; иначе исходное значение.</returns>
-        private static object? NormalizeColumnValue(ColumnStructure? column, object? value)
-        {
-            if (column?.DataValueType == DataValueType.Guid
-                && value is string stringValue
-                && Guid.TryParse(stringValue, out var guidValue))
-            {
-                return guidValue;
-            }
-
-            return value;
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр NormalizeJsonValue.
-        /// </summary>
-        private static object? NormalizeJsonValue(object? value)
-        {
-            return value is System.Text.Json.JsonElement element
-                ? NormalizeJsonElement(element)
-                : value;
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр NormalizeJsonElement.
-        /// </summary>
-        private static object? NormalizeJsonElement(System.Text.Json.JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                System.Text.Json.JsonValueKind.Null => null,
-                System.Text.Json.JsonValueKind.Undefined => null,
-                System.Text.Json.JsonValueKind.String => element.GetString(),
-                System.Text.Json.JsonValueKind.True => true,
-                System.Text.Json.JsonValueKind.False => false,
-                System.Text.Json.JsonValueKind.Number when element.TryGetInt32(out var intValue) => intValue,
-                System.Text.Json.JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
-                System.Text.Json.JsonValueKind.Number when element.TryGetDecimal(out var decimalValue) => decimalValue,
-                System.Text.Json.JsonValueKind.Number => element.GetDouble(),
-                _ => throw new NotSupportedException($"JSON value kind '{element.ValueKind}' is not supported in Entity API.")
-            };
-        }
-
-        #endregion Value Normalization
 
         #region Path Helpers
 

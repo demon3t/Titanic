@@ -116,11 +116,13 @@ namespace Titanic.Entity.Orm
 
             if (SecondValue != null)
             {
-                filter.WithRange(NormalizeJsonValue(Value), NormalizeJsonValue(SecondValue));
+                filter.WithRange(
+                    EntityValueNormalizer.NormalizeJsonValue(Value),
+                    EntityValueNormalizer.NormalizeJsonValue(SecondValue));
             }
             else
             {
-                filter.WithValue(NormalizeJsonValue(Value));
+                filter.WithValue(EntityValueNormalizer.NormalizeJsonValue(Value));
             }
 
             if (IsNot)
@@ -131,31 +133,5 @@ namespace Titanic.Entity.Orm
             return filter;
         }
 
-        private static object? NormalizeJsonValue(object? value)
-        {
-            if (value is JsonElement element)
-            {
-                return NormalizeJsonElement(element);
-            }
-
-            return value;
-        }
-
-        private static object? NormalizeJsonElement(JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                JsonValueKind.Null => null,
-                JsonValueKind.Undefined => null,
-                JsonValueKind.String => element.GetString(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Number when element.TryGetInt32(out var intValue) => intValue,
-                JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
-                JsonValueKind.Number when element.TryGetDecimal(out var decimalValue) => decimalValue,
-                JsonValueKind.Number => element.GetDouble(),
-                _ => throw new NotSupportedException($"JSON value kind '{element.ValueKind}' is not supported in ESQ filters.")
-            };
-        }
     }
 }

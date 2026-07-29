@@ -301,6 +301,35 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
+        /// Проверяет, что строковый GUID из JSON-запроса сохраняется как типизированный параметр обновления.
+        /// </summary>
+        [Fact]
+        public async Task EntityApi_SaveWithStringGuidPrimaryKey_ShouldUseGuidParameter()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+            var recordId = Guid.Parse("7e8d71b9-2591-d1b9-c51d-aa205eca08ad");
+
+            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
+            {
+                Operation = EntityApiOperationType.Save,
+                TableName = "departments",
+                Values = new Dictionary<string, object?>
+                {
+                    ["Id"] = recordId.ToString(),
+                    ["Name"] = "Updated from API"
+                }
+            });
+
+            response.EnsureSuccessStatusCode();
+
+            Assert.Contains("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                EntityApiMockDbProvider.LastParameters,
+                parameter => parameter.Value is Guid guidValue && guidValue == recordId);
+        }
+
+        /// <summary>
         /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmInsertWhenPrimaryKeyMissing.
         /// </summary>
         [Fact]

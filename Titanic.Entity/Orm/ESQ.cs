@@ -2,7 +2,6 @@
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
-using Titanic.Db.Enums;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
@@ -359,30 +358,13 @@ namespace Titanic.Entity.Orm
         private static QueryExpression BuildFilterExpression(EntitySelectBuilder builder, EntityQueryFilter filter)
         {
             var left = builder.BuildWhereColumnExpression(filter.Path, out var column);
-            var value = NormalizeFilterValue(column, filter.Value);
-            var secondValue = NormalizeFilterValue(column, filter.SecondValue);
+            var value = EntityValueNormalizer.NormalizeColumnValue(column, filter.Value);
+            var secondValue = EntityValueNormalizer.NormalizeColumnValue(column, filter.SecondValue);
             var expression = filter.SecondValue != null
                 ? EntityComparisonExpressionBuilder.BuildBetween(left, value, secondValue)
                 : EntityComparisonExpressionBuilder.Build(left, filter.ComparisonType, value);
 
             return filter.IsNot ? QueryExpression.Not(expression) : expression;
-        }
-
-        /// <summary>
-        /// Приводит строковые значения из JSON к CLR-типу, который ожидает фильтруемая колонка.
-        /// Если значение нельзя безопасно преобразовать, возвращает его без изменений.
-        /// </summary>
-        /// <param name="column">Метаданные колонки, по которым определяется ожидаемый тип значения.</param>
-        /// <param name="value">Значение фильтра, полученное из сериализованной ESQ-модели.</param>
-        /// <returns>Нормализованное значение при успешном преобразовании; иначе исходное значение.</returns>
-        private static object? NormalizeFilterValue(ColumnStructure column, object? value)
-        {
-            if (column.DataValueType != DataValueType.Guid || value is not string stringValue)
-            {
-                return value;
-            }
-
-            return Guid.TryParse(stringValue, out var guidValue) ? guidValue : value;
         }
 
         internal sealed record EntityQueryOrder(string Path, bool Desc);
