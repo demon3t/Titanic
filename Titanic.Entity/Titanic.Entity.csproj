@@ -4,10 +4,25 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>Titanic.Entity</PackageId>
+    <Version>1.2.0</Version>
+    <Authors>demon3t</Authors>
+    <Description>Entity ORM and HTTP API layer for Titanic.</Description>
+    <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageTags>orm;entity;http-api;database;postgresql</PackageTags>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeCommonOutputInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="Attributes\ColumnAttribute.cs~RF50b783.TMP" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE.txt" Pack="true" PackagePath="\" Link="LICENSE.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,7 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" />
+    <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Titanic.Db\Titanic.Db.csproj" />
   </ItemGroup>
 
@@ -32,5 +47,11 @@
   <ItemGroup>
     <Protobuf Include="WebApplication\EventListenerApi\Protos\entity_event_listener.proto" GrpcServices="Both" />
   </ItemGroup>
+
+  <Target Name="IncludeCommonOutputInPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference')->WithMetadataValue('Filename', 'Titanic.Common'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

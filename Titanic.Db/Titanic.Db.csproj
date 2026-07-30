@@ -4,10 +4,25 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>Titanic.Db</PackageId>
+    <Version>1.2.0</Version>
+    <Authors>demon3t</Authors>
+    <Description>Low-level SQL builder and database abstractions for Titanic.</Description>
+    <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageTags>sql;database;orm;query-builder;postgresql</PackageTags>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeCommonOutputInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE.txt" Pack="true" PackagePath="\" Link="LICENSE.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,7 +33,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" />
+    <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" PrivateAssets="all" />
   </ItemGroup>
+
+  <Target Name="IncludeCommonOutputInPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference')->WithMetadataValue('Filename', 'Titanic.Common'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>
