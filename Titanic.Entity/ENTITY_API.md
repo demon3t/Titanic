@@ -1,4 +1,4 @@
-# Entity ORM HTTP API
+﻿# Entity ORM HTTP API
 
 Документ описывает HTTP-контракт Entity ORM из проекта `Titanic.Entity`. Его цель - дать фронтенду или другому AI достаточно информации, чтобы написать UI-компоненты, клиентский SDK и сценарии взаимодействия с Entity ORM через HTTP.
 
@@ -33,7 +33,7 @@ Endpoint-ы поднимаются автоматически для каждо�
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
-          "AuthorizationProviderType": "MyApp.Security.EntityApiUserConnectionProvider, MyApp",
+          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
           "DefaultBatchExecutionMode": "Sequential"
         },
         "ValidateDatabaseSchemaOnCompile": true,
@@ -67,20 +67,118 @@ app.MapTitanicEntityApi();
 
 Фронт должен хранить этот путь как настройку окружения.
 
+## JSON-соглашения
+
+HTTP API использует web JSON naming policy, поэтому имена полей в JSON пишутся в `camelCase`, даже если C#-модель называется `EntityApiRequest.Operation` или `ESQJsonModel.TableName`.
+
+Для запросов frontend-клиенту рекомендуется передавать enum-значения числами. Это делает контракт удобным для SDK и не привязывает UI к строковым именам enum-ов. При этом часть моделей помечена `JsonStringEnumConverter`, поэтому backend также принимает строковые имена enum-ов вроде `"Select"` или `"Sequential"`; в typed batch response такие enum-поля сейчас сериализуются строками.
+
+Правило для SDK:
+
+- request: отправлять enum как число из таблиц ниже;
+- SDK state: хранить enum как числовую константу;
+- string enum names: поддерживать только на границе HTTP-сериализации/десериализации, если нужна совместимость;
+- single-operation success response: приходит только `result`, без enum-полей операции;
+- single-operation error response: поле `operation` может быть числовым;
+- batch raw response: `executionMode` и `results[].operation` могут прийти строковыми enum-именами, поэтому SDK должен нормализовать их в числовые константы.
+
 ## Endpoint-ы
 
 | Метод | URL | Назначение |
 | --- | --- | --- |
+| `GET` | `{Api.Path}/structure` | Получить структуру Entity API менеджера: сущности, колонки и reference-связи. |
 | `POST` | `{Api.Path}` | Выполнить одну операцию `Select`, `Save` или `Delete`. |
 | `POST` | `{Api.Path}/batch` | Выполнить несколько операций одним HTTP-запросом. |
 
 Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/update`, `{Api.Path}/delete` не используются.
 
+## Endpoint структуры
+
+`GET {Api.Path}/structure` возвращает структуру конкретного `EntityManager`, уже ограниченную его `EntityModelNamespaces`.
+
+Пример ответа:
+
+```json
+{
+  "entities": [
+    {
+      "tableName": "employees",
+      "entityTypeName": "MyApp.EntityModels.OrmEmployeeEntity",
+      "columns": [
+        {
+          "propertyName": "Id",
+          "columnName": "id",
+          "dataValueType": 6,
+          "isNullable": false,
+          "isPrimary": true,
+          "isDisplay": false,
+          "isReference": false,
+          "referenceTableName": null
+        },
+        {
+          "propertyName": "Name",
+          "columnName": "name",
+          "dataValueType": 0,
+          "isNullable": false,
+          "isPrimary": false,
+          "isDisplay": true,
+          "isReference": false,
+          "referenceTableName": null
+        },
+        {
+          "propertyName": "DepartmentId",
+          "columnName": "department_id",
+          "dataValueType": 6,
+          "isNullable": true,
+          "isPrimary": false,
+          "isDisplay": false,
+          "isReference": true,
+          "referenceTableName": "departments"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Формальная модель ответа:
+
+```ts
+type DataValueType = 0 | 6;
+
+interface EntityApiManagerStructureResponse {
+  entities: EntityApiStructureEntityResponse[];
+}
+
+interface EntityApiStructureEntityResponse {
+  tableName: string;
+  entityTypeName: string;
+  columns: EntityApiStructureColumnResponse[];
+}
+
+interface EntityApiStructureColumnResponse {
+  propertyName: string;
+  columnName: string;
+  dataValueType: DataValueType;
+  isNullable: boolean;
+  isPrimary: boolean;
+  isDisplay: boolean;
+  isReference: boolean;
+  referenceTableName: string | null;
+}
+```
+
+Это endpoint для frontend-метаданных и диагностики manager scope. Он полезен, если UI должен:
+
+- строить список доступных сущностей;
+- понимать, какие ORM-пути и reference-колонки реально доступны;
+- валидировать конфигурацию формы против структуры backend-менеджера.
+
 ## Авторизация и UserConnection
 
-Каждый запрос передает токен из заголовка `Api.AuthorizationHeaderName` в пользовательский provider, реализующий `Titanic.Common.Services.Authorization.Interfaces.IUserConnectionTokenProvider`. Provider должен вернуть `UserConnection`; дальше все операции Entity ORM выполняются только с этим `UserConnection`.
+Каждый запрос проходит через `IEntityApiAuthorizationProvider`. Провайдер авторизации должен вернуть `UserConnection`; дальше все операции Entity ORM выполняются только с этим `UserConnection`.
 
-`Titanic.Entity` не содержит встроенной production-реализации поиска пользователя. Где искать токен, как проверять его и как заполнять `UserConnection`, решает пользовательское приложение.
+Минимальный тестовый provider `HeaderEntityApiAuthorizationProvider` читает ключ из заголовка, имя которого задано в `Api.AuthorizationHeaderName`.
 
 Пример HTTP-заголовков:
 
@@ -88,74 +186,107 @@ Legacy endpoint-ы вида `{Api.Path}/select`, `{Api.Path}/save`, `{Api.Path}/
 Content-Type: application/json
 Accept: application/json
 X-Entity-Key: postman-local-user
+X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 ```
 
-Если provider не нашел пользователя по токену, Entity API возвращает `403 Forbidden`.
+`X-Entity-Culture` поддерживается стандартным header-provider как отладочный способ передать культуру. В production лучше реализовать собственный `IEntityApiAuthorizationProvider`, который сам проверяет пользователя и заполняет `UserConnection.Culture`.
 
 ## Числовые enum-значения
 
-В запросах лучше передавать enum-значения числами. Это стабильнее для UI-клиента и дешевле для сериализации. Backend также поддерживает строковые значения для совместимости, но примеры ниже используют числа.
+В запросах лучше передавать enum-значения числами. Это стабильнее для UI-клиента и дешевле для сериализации. Backend также поддерживает указанные строковые значения для совместимости, но примеры ниже используют числа.
 
 ### EntityApiOperationType
 
-| Число | Имя | Назначение |
+| Число | Строка | Назначение |
 | --- | --- | --- |
-| `0` | `Unknown` | Операция не задана или не распознана. |
-| `1` | `Select` | Прочитать сущности через EntitySchemaQuery. |
-| `2` | `Save` | Создать или обновить сущность через `Entity.Save()`. |
-| `3` | `Delete` | Удалить строки корневой сущности по обязательному фильтру. |
+| `0` | `"Unknown"` | Операция не задана или не распознана. |
+| `1` | `"Select"` | Прочитать сущности через EntitySchemaQuery. |
+| `2` | `"Save"` | Создать или обновить сущность через `Entity.Save()`. |
+| `3` | `"Delete"` | Удалить строки корневой сущности по обязательному фильтру. |
 
 ### EntityApiBatchExecutionMode
 
-| Число | Имя | Назначение |
+| Число | Строка | Назначение |
 | --- | --- | --- |
-| `0` | `Sequential` | Выполнять batch-операции по порядку. |
-| `1` | `Parallel` | Выполнять независимые batch-операции параллельно. |
+| `0` | `"Sequential"` | Выполнять batch-операции по порядку. |
+| `1` | `"Parallel"` | Выполнять независимые batch-операции параллельно. |
 
 ### EntityLogicalOperation
 
-| Число | Имя | Назначение |
+| Число | Строка | Назначение |
 | --- | --- | --- |
-| `0` | `And` | Объединить фильтры через AND. |
-| `1` | `Or` | Объединить фильтры через OR. |
+| `0` | `"And"` | Объединить фильтры через AND. |
+| `1` | `"Or"` | Объединить фильтры через OR. |
 
 ### EntityAggregationType
 
-| Число | Имя | Назначение |
+| Число | Строка | Назначение |
 | --- | --- | --- |
-| `0` | `None` | Обычная колонка без агрегации. |
-| `1` | `Count` | COUNT. |
-| `2` | `Sum` | SUM. |
-| `3` | `Avg` | AVG. |
-| `4` | `Min` | MIN. |
-| `5` | `Max` | MAX. |
+| `0` | `"None"` | Обычная колонка без агрегации. |
+| `1` | `"Count"` | COUNT. |
+| `2` | `"Sum"` | SUM. |
+| `3` | `"Avg"` | AVG. |
+| `4` | `"Min"` | MIN. |
+| `5` | `"Max"` | MAX. |
 
 ### EntityComparisonType
 
-| Число | Имя | Назначение |
+| Число | Строка | Назначение |
 | --- | --- | --- |
-| `0` | `Equal` | Равно. |
-| `1` | `NotEqual` | Не равно. |
-| `2` | `GreaterThan` | Больше. |
-| `3` | `GreaterThanOrEqual` | Больше или равно. |
-| `4` | `LessThan` | Меньше. |
-| `5` | `LessThanOrEqual` | Меньше или равно. |
-| `6` | `In` | Входит в набор. Для UI напрямую обычно не использовать. |
-| `7` | `NotIn` | Не входит в набор. Для UI напрямую обычно не использовать. |
-| `8` | `Like` | SQL LIKE. |
-| `9` | `NotLike` | SQL NOT LIKE. |
-| `10` | `ILike` | PostgreSQL ILIKE, если поддерживается провайдером. |
-| `11` | `IsNull` | Значение отсутствует. |
-| `12` | `IsNotNull` | Значение заполнено. |
-| `13` | `Contains` | Поиск по вхождению без ручного `%...%`. |
-| `14` | `StartsWith` | Поиск по началу строки без ручного `%`. |
-| `15` | `EndsWith` | Поиск по концу строки без ручного `%`. |
+| `0` | `"Equal"` | Равно. |
+| `1` | `"NotEqual"` | Не равно. |
+| `2` | `"GreaterThan"` | Больше. |
+| `3` | `"GreaterThanOrEqual"` | Больше или равно. |
+| `4` | `"LessThan"` | Меньше. |
+| `5` | `"LessThanOrEqual"` | Меньше или равно. |
+| `6` | `"In"` | Входит в набор. Для UI напрямую обычно не использовать. |
+| `7` | `"NotIn"` | Не входит в набор. Для UI напрямую обычно не использовать. |
+| `8` | `"Like"` | SQL LIKE. |
+| `9` | `"NotLike"` | SQL NOT LIKE. |
+| `10` | `"ILike"` | PostgreSQL ILIKE, если поддерживается провайдером. |
+| `11` | `"IsNull"` | Значение отсутствует. |
+| `12` | `"IsNotNull"` | Значение заполнено. |
+| `13` | `"Contains"` | Поиск по вхождению без ручного `%...%`. |
+| `14` | `"StartsWith"` | Поиск по началу строки без ручного `%`. |
+| `15` | `"EndsWith"` | Поиск по концу строки без ручного `%`. |
+
+### EntityOrderDirection
+
+| Число | Строка | Назначение |
+| --- | --- | --- |
+| `0` | `"Ascending"` | Сортировка по возрастанию, SQL `ASC`. |
+| `1` | `"Descending"` | Сортировка по убыванию, SQL `DESC`. |
+
+### DataValueType
+
+`dataValueType` приходит в `GET {Api.Path}/structure` и помогает UI выбрать редактор поля, нормализацию значения и формат отображения.
+
+| Число | Имя | Назначение для frontend |
+| --- | --- | --- |
+| `0` | `String` | Строковое значение. Использовать текстовый input, search/filter как строку. |
+| `6` | `Guid` | Идентификатор. Использовать UUID-строку в JSON; backend нормализует строковый GUID для фильтров и write-операций. |
+
 ## Единая модель операции
 
 `POST {Api.Path}` принимает объект `EntityApiRequest`.
 
 ```ts
-type EntityApiOperationType = 0 | 1 | 2 | 3;
+const EntityApiOperation = {
+  Unknown: 0,
+  Select: 1,
+  Save: 2,
+  Delete: 3
+} as const;
+
+type EntityApiOperationType =
+  (typeof EntityApiOperation)[keyof typeof EntityApiOperation];
+
+type EntityApiOperationTypeWire =
+  | EntityApiOperationType
+  | "Unknown"
+  | "Select"
+  | "Save"
+  | "Delete";
 
 interface EntityApiRequest {
   name?: string | null;
@@ -167,6 +298,17 @@ interface EntityApiRequest {
 }
 ```
 
+Поля `EntityApiRequest`:
+
+| Поле | Обязательно | Для каких операций | Описание |
+| --- | --- | --- | --- |
+| `name` | Нет | Batch | Стабильный client-side id операции внутри batch. Если пустой, backend назначит GUID-строку. |
+| `operation` | Да | Все | `1` Select, `2` Save, `3` Delete. `0` или неизвестное значение вернет `400`. |
+| `query` | Да для Select; опционально для Delete | Select, Delete | ESQ JSON. Для Delete можно передать `query.filters`. |
+| `tableName` | Да, если нет `entityTypeName`/`query.tableName` | Save, Delete | Имя таблицы Entity без SQL-схемы. |
+| `entityTypeName` | Да, если нет `tableName`/`query.entityTypeName` | Save, Delete | Полное имя CLR Entity-типа. |
+| `values` | Да для Save; опционально для Delete | Save, Delete | Словарь значений по `propertyName`, `columnName` или совместимому alias. |
+
 Правила:
 
 - `operation = 1` (`Select`) требует поле `query`.
@@ -175,6 +317,7 @@ interface EntityApiRequest {
 - Отдельного `Update` значения нет. Для обновления используется `operation = 2` (`Save`) с непустым primary key в `values`.
 - `tableName` задается без схемы, например `departments`, `employees`.
 - `entityTypeName` можно использовать вместо `tableName`, если UI работает с зарегистрированными CLR Entity-моделями.
+- `EntityApiOperationTypeWire` нужен только если SDK принимает старые payload-ы со строковыми enum-именами; перед хранением в state и перед отправкой новых запросов значение лучше нормализовать в `EntityApiOperationType`.
 
 ## Ответ одной операции
 
@@ -286,13 +429,59 @@ interface ESQFilterJsonModel {
 
 interface ESQOrderJsonModel {
   path: string;
-  direction?: 0 | 1;
+  direction?: EntityOrderDirection;
   desc?: boolean;
 }
 
-type EntityLogicalOperation = 0 | 1;
-type EntityAggregationType = 0 | 1 | 2 | 3 | 4 | 5;
+const EntityLogicalOperation = {
+  And: 0,
+  Or: 1
+} as const;
+
+const EntityAggregation = {
+  None: 0,
+  Count: 1,
+  Sum: 2,
+  Avg: 3,
+  Min: 4,
+  Max: 5
+} as const;
+
+const EntityComparison = {
+  Equal: 0,
+  NotEqual: 1,
+  GreaterThan: 2,
+  GreaterThanOrEqual: 3,
+  LessThan: 4,
+  LessThanOrEqual: 5,
+  In: 6,
+  NotIn: 7,
+  Like: 8,
+  NotLike: 9,
+  ILike: 10,
+  IsNull: 11,
+  IsNotNull: 12,
+  Contains: 13,
+  StartsWith: 14,
+  EndsWith: 15
+} as const;
+
+const EntityOrderDirection = {
+  Ascending: 0,
+  Descending: 1
+} as const;
+
+type EntityLogicalOperation =
+  (typeof EntityLogicalOperation)[keyof typeof EntityLogicalOperation];
+type EntityAggregationType =
+  (typeof EntityAggregation)[keyof typeof EntityAggregation];
+type EntityComparisonType =
+  (typeof EntityComparison)[keyof typeof EntityComparison];
+type EntityOrderDirection =
+  (typeof EntityOrderDirection)[keyof typeof EntityOrderDirection];
 ```
+
+Строковые enum-имена (`"And"`, `"Count"`, `"Equal"`, `"Ascending"` и т.п.) backend может принять благодаря JSON-конвертерам. Для новых frontend-моделей их лучше считать wire-compatibility форматом и сразу приводить к числовым константам.
 
 `orders[].direction` задает направление сортировки:
 
@@ -669,6 +858,7 @@ departments -> sys_departments_lcz
 Культура берется из `UserConnection`, который создает authorization provider. Для стандартного header-provider можно передать:
 
 ```http
+X-Entity-Culture: 22222222-2222-2222-2222-222222222222
 ```
 
 Если локализованное значение не найдено или пустое, backend возвращает значение основной таблицы.
@@ -783,12 +973,12 @@ HTTP `Delete` сначала читает коллекцию сущностей 
 
 ```ts
 interface EntityApiBatchRequest {
-  executionMode?: 0 | 1 | null;
+  executionMode?: EntityApiBatchExecutionMode | null;
   requests: EntityApiRequest[];
 }
 
 interface EntityApiBatchResponse {
-  executionMode: 0 | 1;
+  executionMode: EntityApiBatchExecutionMode;
   results: EntityApiOperationResult[];
 }
 
@@ -800,7 +990,27 @@ interface EntityApiOperationResult {
   result?: unknown;
   errorMessage?: string | null;
 }
+
+interface EntityApiBatchResponseWire {
+  executionMode: EntityApiBatchExecutionMode | "Sequential" | "Parallel";
+  results: EntityApiOperationResultWire[];
+}
+
+type EntityApiOperationResultWire =
+  Omit<EntityApiOperationResult, "operation"> & {
+    operation: EntityApiOperationTypeWire;
+  };
+
+const EntityApiBatchExecutionMode = {
+  Sequential: 0,
+  Parallel: 1
+} as const;
+
+type EntityApiBatchExecutionMode =
+  (typeof EntityApiBatchExecutionMode)[keyof typeof EntityApiBatchExecutionMode];
 ```
+
+`EntityApiBatchResponseWire` отражает сырой HTTP-ответ: текущий backend может вернуть `"Sequential"` и `"Select"` строками. SDK-клиенту лучше нормализовать его в `EntityApiBatchResponse` с числовыми `executionMode` и `operation`.
 
 Пример:
 
@@ -830,6 +1040,40 @@ interface EntityApiOperationResult {
           { "path": "Name" }
         ]
       }
+    }
+  ]
+}
+```
+
+Пример ответа:
+
+```json
+{
+  "executionMode": "Sequential",
+  "results": [
+    {
+      "name": "createDepartment",
+      "operation": "Save",
+      "success": true,
+      "statusCode": 200,
+      "result": {
+        "Name": { "value": "Batch Department", "displayValue": null },
+        "Id": { "value": "11111111-1111-1111-1111-111111111111", "displayValue": null }
+      },
+      "errorMessage": null
+    },
+    {
+      "name": "loadDepartments",
+      "operation": "Select",
+      "success": true,
+      "statusCode": 200,
+      "result": [
+        {
+          "Id": { "value": "11111111-1111-1111-1111-111111111111", "displayValue": null },
+          "Name": { "value": "Batch Department", "displayValue": null }
+        }
+      ],
+      "errorMessage": null
     }
   ]
 }
@@ -1023,20 +1267,8 @@ export class EntityOrmClient {
 
 ## Ограничения текущего API
 
-- API не возвращает metadata схемы отдельным endpoint-ом. UI должен иметь metadata из своей конфигурации или другого backend endpoint-а.
 - Нет отдельной операции `Update`; используется только `Save`.
 - Batch `Parallel` не гарантирует порядок выполнения и не должен использоваться для зависимых операций.
 - `In` и `NotIn` рассчитаны на backend subquery и не являются удобным UI-оператором в текущей JSON-модели.
 - `Save` и `Delete` работают с корневой таблицей; связанные таблицы, прочитанные через JOIN, не сохраняются автоматически.
 - Локализация настраивается в backend metadata и `UserConnection`, а не в JSON-запросе.
-
-
-
-
-
-
-
-
-
-
-

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Titanic.Common.Services.Authentication;
 using Titanic.Common.Services.Authorization.Base;
 using Titanic.Common.Services.Authorization.Interfaces;
@@ -27,8 +28,8 @@ namespace Titanic.Common.WebApplication
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentException.ThrowIfNullOrWhiteSpace(policyName);
 
-            builder.Services.AddSingleton<TCollection>();
-            builder.Services.AddSingleton<IAuthorizationHandler, THandler>();
+            builder.Services.TryAddSingleton<TCollection>();
+            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationHandler, THandler>());
 
             builder.Services.AddAuthorizationBuilder()
                 .AddPolicy(policyName, policy =>

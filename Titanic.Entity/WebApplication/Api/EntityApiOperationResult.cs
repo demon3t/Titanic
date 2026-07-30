@@ -37,17 +37,7 @@ namespace Titanic.Entity.WebApplication.Api
         /// <summary>
         /// Текст ошибки, если операция завершилась неуспешно.
         /// </summary>
-        public string? Error { get; set; }
-
-        /// <summary>
-        /// Обратная совместимость для старого имени свойства.
-        /// </summary>
-        [JsonIgnore]
-        public string? ErrorMessage
-        {
-            get => Error;
-            set => Error = value;
-        }
+        public string? ErrorMessage { get; set; }
 
         /// <summary>
         /// Создать успешный результат операции.

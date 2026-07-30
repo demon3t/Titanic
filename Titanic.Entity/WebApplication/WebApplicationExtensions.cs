@@ -1,11 +1,16 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Common.Session;
 using Titanic.Db;
+using Titanic.Db.Enums;
 using Titanic.Entity.Exceptions;
+using Titanic.Entity.Events;
+using Titanic.Entity.Events.Grpc;
 using Titanic.Entity.Interfaces;
 using Titanic.Entity.Orm;
 using Titanic.Entity.Strurture;
@@ -15,10 +20,16 @@ using Orm = Titanic.Entity.Orm;
 
 namespace Titanic.Entity.WebApplication
 {
+    /// <summary>
+    /// Методы расширения для настройки Entity ORM и Entity API в web-приложениях.
+    /// </summary>
     public static class WebApplicationExtensions
     {
         #region Builder Extensions
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntity.
+        /// </summary>
         public static WebApplicationBuilder AddTitanicEntity(
             this WebApplicationBuilder builder,
             string configSectionName = "TitanicEntity")
@@ -36,6 +47,9 @@ namespace Titanic.Entity.WebApplication
             return builder;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntity.
+        /// </summary>
         public static WebApplicationBuilder AddTitanicEntity(
             this WebApplicationBuilder builder,
             Action<EntityManagerConfig> configure)
@@ -58,6 +72,9 @@ namespace Titanic.Entity.WebApplication
             return builder;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntityApi.
+        /// </summary>
         public static WebApplicationBuilder AddTitanicEntityApi(
             this WebApplicationBuilder builder,
             string configSectionName = "TitanicEntity")
@@ -65,6 +82,9 @@ namespace Titanic.Entity.WebApplication
             return builder.AddTitanicEntity(configSectionName);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntityApi.
+        /// </summary>
         public static WebApplicationBuilder AddTitanicEntityApi(
             this WebApplicationBuilder builder,
             Action<EntityManagerConfig> configure)
@@ -72,6 +92,33 @@ namespace Titanic.Entity.WebApplication
             return builder.AddTitanicEntity(configure);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntityEventListenerApi.
+        /// </summary>
+        public static WebApplicationBuilder AddTitanicEntityEventListenerApi(
+            this WebApplicationBuilder builder,
+            string configSectionName = "TitanicEntity")
+        {
+            builder.AddTitanicEntity(configSectionName);
+            builder.Services.AddGrpc();
+            return builder;
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр AddTitanicEntityEventListenerApi.
+        /// </summary>
+        public static WebApplicationBuilder AddTitanicEntityEventListenerApi(
+            this WebApplicationBuilder builder,
+            Action<EntityManagerConfig> configure)
+        {
+            builder.AddTitanicEntity(configure);
+            builder.Services.AddGrpc();
+            return builder;
+        }
+
+        /// <summary>
+        /// Инициализирует менеджер Entity ORM из конфигурации.
+        /// </summary>
         public static WebApplicationBuilder InitEntityManager<TManager>(this WebApplicationBuilder builder, string managerKey)
             where TManager : BaseEntityManager, new()
         {
@@ -108,9 +155,13 @@ namespace Titanic.Entity.WebApplication
 
         #region App Extensions
 
+        /// <summary>
+        /// Инициализирует новый экземпляр MapTitanicEntityApi.
+        /// </summary>
         public static Microsoft.AspNetCore.Builder.WebApplication MapTitanicEntityApi(this Microsoft.AspNetCore.Builder.WebApplication app)
         {
             ArgumentNullException.ThrowIfNull(app);
+            EntityManager.ConfigureServices(app.Services);
 
             foreach (var manager in EntityManager.GetManagers().Where(x => x.Api.AutoRegisterEndpoint))
             {
@@ -120,15 +171,60 @@ namespace Titanic.Entity.WebApplication
             return app;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр MapTitanicEntityEventListenerApi.
+        /// </summary>
+        public static Microsoft.AspNetCore.Builder.WebApplication MapTitanicEntityEventListenerApi(
+            this Microsoft.AspNetCore.Builder.WebApplication app)
+        {
+            ArgumentNullException.ThrowIfNull(app);
+            EntityManager.ConfigureServices(app.Services);
+
+            foreach (var manager in EntityManager.GetManagers().Where(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Http))
+            {
+                MapEventListenerEndpoints(app, manager);
+            }
+
+            if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.WebSocket))
+            {
+                app.UseWebSockets();
+
+                foreach (var manager in EntityManager.GetManagers().Where(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.WebSocket))
+                {
+                    MapEventListenerWebSocketEndpoint(app, manager);
+                }
+            }
+
+            if (EntityManager.GetManagers().Any(x => x.EventListenerApi.Mode == EntityEventListenerApiMode.Grpc))
+            {
+                app.MapGrpcService<EntityEventListenerGrpcService>();
+            }
+
+            return app;
+        }
+
         #endregion App Extensions
 
         #region Registration Helpers
 
+        /// <summary>
+        /// Инициализирует новый экземпляр RegisterEntityApiServices.
+        /// </summary>
         private static void RegisterEntityApiServices(IServiceCollection services)
         {
-            services.AddSingleton<EntityApiAuthorizationProviderFactory>();
+            services.AddSingleton<HeaderEntityApiAuthorizationProvider>();
+            services.AddSingleton<BaseEntityEventProvider, LocalEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, HttpEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, GrpcEntityEventProvider>();
+            services.AddSingleton<BaseEntityEventProvider, WebSocketEntityEventProvider>();
+            services.AddSingleton<IEntityEventHttpClientFactory, DefaultEntityEventHttpClientFactory>();
+            services.AddSingleton<IEntityEventGrpcClientFactory, DefaultEntityEventGrpcClientFactory>();
+            services.AddSingleton<IEntityEventWebSocketClientFactory, DefaultEntityEventWebSocketClientFactory>();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр RegisterManagersInServices.
+        /// </summary>
         private static void RegisterManagersInServices(IServiceCollection services)
         {
             foreach (var manager in EntityManager.GetManagers())
@@ -142,9 +238,271 @@ namespace Titanic.Entity.WebApplication
 
         #region Endpoint Mapping
 
+        /// <summary>
+        /// Регистрирует HTTP endpoint-ы событийного listener API для менеджера.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        private static void MapEventListenerEndpoints(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            BaseEntityManager manager)
+        {
+            var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
+
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.CreateActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Create(manager, request));
+            });
+
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saving);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Saved);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Inserted);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updating);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Updated);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleting);
+            MapEventListenerStageEndpoint(app, basePath, manager, EntityEventStage.Deleted);
+
+            app.MapPost($"{basePath}/{HttpEntityEventProvider.DeleteActionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Delete(manager, request));
+            });
+
+            app.MapPost(basePath, (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.Execute(manager, request));
+            });
+        }
+
+        /// <summary>
+        /// Регистрирует HTTP endpoint конкретной стадии событийного pipeline.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="basePath">Базовый путь listener API.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="stage">Стадия событийного pipeline.</param>
+        private static void MapEventListenerStageEndpoint(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            string basePath,
+            BaseEntityManager manager,
+            EntityEventStage stage)
+        {
+            var actionPath = HttpEntityEventProvider.GetActionPath(stage);
+            app.MapPost($"{basePath}/{actionPath}", (EntityEventDispatchRequest request) =>
+            {
+                request.ManagerName = manager.Name;
+                return ToEventListenerResult(EntityEventListenerRequestExecutor.ExecuteStage(manager, request, stage));
+            });
+        }
+
+        /// <summary>
+        /// Регистрирует WebSocket endpoint событийного listener API для менеджера.
+        /// </summary>
+        /// <param name="app">Web-приложение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        private static void MapEventListenerWebSocketEndpoint(
+            Microsoft.AspNetCore.Builder.WebApplication app,
+            BaseEntityManager manager)
+        {
+            var basePath = NormalizeApiPath(manager.EventListenerApi.Path);
+            app.Map(basePath, async context =>
+            {
+                if (!context.WebSockets.IsWebSocketRequest)
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await context.Response.WriteAsync("WebSocket request expected.");
+                    return;
+                }
+
+                using var socket = await context.WebSockets.AcceptWebSocketAsync();
+                await ProcessEventListenerWebSocketAsync(socket, manager, context.RequestAborted);
+            });
+        }
+
+        /// <summary>
+        /// Преобразует transport-ответ listener API в HTTP-результат.
+        /// </summary>
+        /// <param name="result">Transport-ответ listener API.</param>
+        /// <returns>HTTP-результат listener API.</returns>
+        private static IResult ToEventListenerResult(EntityEventDispatchResponse result)
+        {
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            if (result.Canceled)
+            {
+                return Results.Json(result, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            return Results.Json(result, statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        /// <summary>
+        /// Обрабатывает transport-сообщения одного WebSocket listener-соединения.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="cancellationToken">Токен остановки запроса.</param>
+        private static async Task ProcessEventListenerWebSocketAsync(
+            WebSocket socket,
+            BaseEntityManager manager,
+            CancellationToken cancellationToken)
+        {
+            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                string? payload;
+                try
+                {
+                    payload = await ReceiveWebSocketMessageAsync(socket, cancellationToken);
+                }
+                catch (WebSocketException)
+                {
+                    break;
+                }
+
+                if (payload == null)
+                {
+                    break;
+                }
+
+                var response = ExecuteEventListenerWebSocketMessage(payload, manager);
+                var responsePayload = JsonSerializer.Serialize(response, EntityEventWebSocketSerializer.JsonOptions);
+                await SendWebSocketMessageAsync(socket, responsePayload, cancellationToken);
+            }
+
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                await socket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Event listener WebSocket session completed.",
+                    CancellationToken.None);
+            }
+        }
+
+        /// <summary>
+        /// Выполняет одну WebSocket-команду listener API.
+        /// </summary>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <returns>Transport-ответ listener API.</returns>
+        private static EntityEventWebSocketResponse ExecuteEventListenerWebSocketMessage(
+            string payload,
+            BaseEntityManager manager)
+        {
+            EntityEventWebSocketAction action = EntityEventWebSocketAction.Dispatch;
+
+            try
+            {
+                var request = JsonSerializer.Deserialize<EntityEventWebSocketRequest>(
+                    payload,
+                    EntityEventWebSocketSerializer.JsonOptions)
+                    ?? throw new InvalidOperationException("WebSocket request body is empty.");
+
+                action = request.Action;
+                request.Request.ManagerName = manager.Name;
+
+                var response = request.Action switch
+                {
+                    EntityEventWebSocketAction.Create => EntityEventListenerRequestExecutor.Create(manager, request.Request),
+                    EntityEventWebSocketAction.Delete => EntityEventListenerRequestExecutor.Delete(manager, request.Request),
+                    EntityEventWebSocketAction.ExecuteStage => EntityEventListenerRequestExecutor.ExecuteStage(manager, request.Request, request.Request.Stage),
+                    _ => EntityEventListenerRequestExecutor.Execute(manager, request.Request)
+                };
+
+                return new EntityEventWebSocketResponse
+                {
+                    Action = request.Action,
+                    Response = response
+                };
+            }
+            catch (Exception ex)
+            {
+                return new EntityEventWebSocketResponse
+                {
+                    Action = action,
+                    Response = new EntityEventDispatchResponse
+                    {
+                        Success = false,
+                        ErrorMessage = ex.Message
+                    }
+                };
+            }
+        }
+
+        /// <summary>
+        /// Получает одно WebSocket transport-сообщение целиком.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="cancellationToken">Токен отмены.</param>
+        /// <returns>Текст transport-сообщения или <see langword="null" />, если клиент закрыл соединение.</returns>
+        private static async Task<string?> ReceiveWebSocketMessageAsync(
+            WebSocket socket,
+            CancellationToken cancellationToken)
+        {
+            var buffer = new byte[4096];
+            using var stream = new MemoryStream();
+
+            while (true)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return null;
+                }
+
+                if (result.Count > 0)
+                {
+                    stream.Write(buffer, 0, result.Count);
+                }
+
+                if (result.EndOfMessage)
+                {
+                    return Encoding.UTF8.GetString(stream.ToArray());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Отправляет одно WebSocket transport-сообщение.
+        /// </summary>
+        /// <param name="socket">Активное WebSocket-соединение.</param>
+        /// <param name="payload">Текст transport-сообщения.</param>
+        /// <param name="cancellationToken">Токен отмены.</param>
+        private static Task SendWebSocketMessageAsync(
+            WebSocket socket,
+            string payload,
+            CancellationToken cancellationToken)
+        {
+            var bytes = Encoding.UTF8.GetBytes(payload);
+            return socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр MapManagerEndpoints.
+        /// </summary>
         private static void MapManagerEndpoints(Microsoft.AspNetCore.Builder.WebApplication app, BaseEntityManager manager)
         {
             var basePath = NormalizeApiPath(manager.Api.Path);
+
+            app.MapGet($"{basePath}/structure", async Task<IResult> (HttpContext context) =>
+            {
+                var authorization = await AuthorizeAsync(context, manager);
+                if (!authorization.IsAuthorized || authorization.UserConnection == null)
+                {
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+                }
+
+                return Results.Ok(BuildStructureResponse(manager));
+            });
 
             app.MapPost(basePath, async Task<IResult> (HttpContext context, EntityApiRequest request) =>
             {
@@ -178,29 +536,15 @@ namespace Titanic.Entity.WebApplication
                     Results = results
                 });
             });
-
-            app.MapGet($"{basePath}/structure", async Task<IResult> (HttpContext context) =>
-            {
-                var authorization = await AuthorizeStructureAsync(context, manager);
-                if (!authorization.IsAuthorized || authorization.UserConnection == null)
-                {
-                    return Results.Json(
-                        new EntityApiErrorResponse
-                        {
-                            Error = authorization.ErrorMessage ?? "Forbidden.",
-                            StatusCode = StatusCodes.Status403Forbidden
-                        },
-                        statusCode: StatusCodes.Status403Forbidden);
-                }
-
-                return Results.Ok(ToStructureResponse(manager));
-            });
         }
 
         #endregion Endpoint Mapping
 
         #region Operation Execution
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteRequest.
+        /// </summary>
         private static EntityApiOperationResult ExecuteRequest(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -256,6 +600,9 @@ namespace Titanic.Entity.WebApplication
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteBatchSequential.
+        /// </summary>
         private static List<EntityApiOperationResult> ExecuteBatchSequential(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -266,6 +613,9 @@ namespace Titanic.Entity.WebApplication
                 .ToList();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteBatchParallel.
+        /// </summary>
         private static async Task<List<EntityApiOperationResult>> ExecuteBatchParallel(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -278,6 +628,9 @@ namespace Titanic.Entity.WebApplication
             return (await Task.WhenAll(tasks)).ToList();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EnsureBatchRequestNames.
+        /// </summary>
         private static void EnsureBatchRequestNames(IEnumerable<EntityApiRequest> requests)
         {
             foreach (var request in requests)
@@ -289,6 +642,9 @@ namespace Titanic.Entity.WebApplication
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteSelect.
+        /// </summary>
         private static EntityApiOperationResult ExecuteSelect(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -314,17 +670,20 @@ namespace Titanic.Entity.WebApplication
             return EntityApiOperationResult.Ok(request.Operation, rows, request.Name);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteSave.
+        /// </summary>
         private static EntityApiOperationResult ExecuteSave(
             BaseEntityManager manager,
             UserConnection userConnection,
             EntityApiRequest request)
         {
             var structure = ResolveEntityStructure(manager, request);
-            var values = NormalizeValues(request.Values);
+            var values = EntityValueNormalizer.NormalizeValues(request.Values, structure);
             var primaryColumn = structure.GetPrimaryColumnStructure();
+            var hasPrimaryKey = HasPrimaryKey(values, primaryColumn, out var primaryValue);
 
-            if (HasPrimaryKey(values, primaryColumn, out var primaryValue)
-                && IsEmptyPrimaryKeyValue(primaryValue))
+            if (hasPrimaryKey && IsEmptyPrimaryKeyValue(primaryValue))
             {
                 return EntityApiOperationResult.Fail(
                     request.Operation,
@@ -334,13 +693,29 @@ namespace Titanic.Entity.WebApplication
                     request.Name);
             }
 
-            var entity = manager.Create(structure.TableName, userConnection);
+            var oldValues = hasPrimaryKey
+                ? LoadOldEntityValues(manager, userConnection, structure, primaryColumn, primaryValue)
+                : null;
+            var entity = EntityManager.Create(
+                structure,
+                manager.Provider,
+                userConnection,
+                isNew: !hasPrimaryKey,
+                manager: manager);
+            if (oldValues != null)
+            {
+                entity.SetOldValues(oldValues);
+            }
+
             entity.SetValues(values);
             entity.Save();
 
             return EntityApiOperationResult.Ok(request.Operation, ToResponse(entity), request.Name);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ExecuteDelete.
+        /// </summary>
         private static EntityApiOperationResult ExecuteDelete(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -371,72 +746,126 @@ namespace Titanic.Entity.WebApplication
             return EntityApiOperationResult.Ok(request.Operation, new { deleted = affected > 0, affected }, request.Name);
         }
 
+        /// <summary>
+        /// Загружает старые значения строки перед update-операцией Entity API.
+        /// </summary>
+        /// <param name="manager">Менеджер Entity ORM.</param>
+        /// <param name="userConnection">Контекст пользователя.</param>
+        /// <param name="structure">Структура сущности.</param>
+        /// <param name="primaryColumn">Первичная колонка сущности.</param>
+        /// <param name="primaryValue">Значение первичного ключа.</param>
+        /// <returns>Старые значения строки или пустой словарь, если строка не найдена.</returns>
+        private static Dictionary<string, object?> LoadOldEntityValues(
+            BaseEntityManager manager,
+            UserConnection userConnection,
+            EntityStructure structure,
+            ColumnStructure primaryColumn,
+            object? primaryValue)
+        {
+            var query = new EntitySchemaQuery(manager.Provider, structure, manager.StructureScope, userConnection, manager)
+            {
+                RowCount = 1
+            };
+            query.AddAllSchemaColumns();
+            query.AddFilter(EntityComparisonType.Equal, primaryColumn.PropertyName, primaryValue);
+
+            return query.GetEntityCollection()
+                .FirstOrDefault()
+                ?.ToDictionary()
+                ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр ToHttpResult.
+        /// </summary>
         private static IResult ToHttpResult(EntityApiOperationResult result)
         {
             return result.Success
                 ? Results.Ok(result.Result)
-                : Results.Json(result, statusCode: result.StatusCode);
+                : Results.Json(
+                    new
+                    {
+                        error = result.ErrorMessage,
+                        operation = result.Operation
+                    },
+                    statusCode: result.StatusCode);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildStructureResponse.
+        /// </summary>
+        private static EntityApiManagerStructureResponse BuildStructureResponse(BaseEntityManager manager)
+        {
+            return new EntityApiManagerStructureResponse
+            {
+                Entities = manager.StructureScope.EntitiesStructure
+                    .Select(entity => new EntityApiStructureEntityResponse
+                    {
+                        TableName = entity.TableName,
+                        EntityTypeName = entity.EntityType.FullName ?? entity.EntityType.Name,
+                        Columns = entity.ColumnsStructure
+                            .Select(column => new EntityApiStructureColumnResponse
+                            {
+                                PropertyName = column.PropertyName,
+                                ColumnName = column.ColumnName,
+                                DataValueType = column.DataValueType,
+                                IsNullable = column.IsNullable,
+                                IsPrimary = column.IsPrimary,
+                                IsDisplay = column.IsDisplay,
+                                IsReference = column.IsReference,
+                                ReferenceTableName = column.ReferenceTableName
+                            })
+                            .ToList()
+                    })
+                    .ToList()
+            };
         }
 
         #endregion Operation Execution
 
         #region Authorization
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AuthorizeAsync.
+        /// </summary>
         private static ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
-            if (!context.Request.Headers.TryGetValue(manager.Api.AuthorizationHeaderName, out var token)
-                || string.IsNullOrWhiteSpace(token.ToString()))
-            {
-                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail(
-                    $"Header '{manager.Api.AuthorizationHeaderName}' is required."));
-            }
-
-            var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
-            var provider = factory.CreateProvider(
-                context.RequestServices,
-                manager.Api.AuthorizationProviderType,
-                $"Entity API authorization provider for manager '{manager.Name}'");
-            return ResolveAuthorizationAsync(provider, token.ToString(), context);
+            var provider = CreateAuthorizationProvider(context.RequestServices, manager);
+            return provider.AuthorizeAsync(context, manager);
         }
 
-        private static ValueTask<EntityApiAuthorizationResult> AuthorizeStructureAsync(HttpContext context, BaseEntityManager manager)
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAuthorizationProvider.
+        /// </summary>
+        private static IEntityApiAuthorizationProvider CreateAuthorizationProvider(
+            IServiceProvider services,
+            BaseEntityManager manager)
         {
-            if (!context.Request.Headers.TryGetValue(manager.Api.AuthorizationHeaderName, out var token)
-                || string.IsNullOrWhiteSpace(token.ToString()))
+            if (string.IsNullOrWhiteSpace(manager.Api.AuthorizationProviderType))
             {
-                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail(
-                    $"Header '{manager.Api.AuthorizationHeaderName}' is required."));
+                return services.GetRequiredService<HeaderEntityApiAuthorizationProvider>();
             }
 
-            if (string.IsNullOrWhiteSpace(manager.Api.StructureAuthorizationProviderType))
+            var providerType = Type.GetType(manager.Api.AuthorizationProviderType)
+                ?? throw new InvalidOperationException(
+                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' not found.");
+            if (!typeof(IEntityApiAuthorizationProvider).IsAssignableFrom(providerType))
             {
-                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail(
-                    $"Structure authorization provider is not configured for manager '{manager.Name}'."));
+                throw new InvalidOperationException(
+                    $"Entity API authorization provider '{manager.Api.AuthorizationProviderType}' must implement IEntityApiAuthorizationProvider.");
             }
 
-            var factory = context.RequestServices.GetRequiredService<EntityApiAuthorizationProviderFactory>();
-            var provider = factory.CreateProvider(
-                context.RequestServices,
-                manager.Api.StructureAuthorizationProviderType,
-                $"Entity API structure authorization provider for manager '{manager.Name}'");
-            return ResolveAuthorizationAsync(provider, token.ToString(), context);
-        }
-
-        private static async ValueTask<EntityApiAuthorizationResult> ResolveAuthorizationAsync(
-            IUserConnectionTokenProvider provider,
-            string token,
-            HttpContext context)
-        {
-            var userConnection = await provider.FindByTokenAsync(token, context);
-            return userConnection == null
-                ? EntityApiAuthorizationResult.Fail("Forbidden.")
-                : EntityApiAuthorizationResult.Success(userConnection);
+            return (IEntityApiAuthorizationProvider)ActivatorUtilities.CreateInstance(services, providerType);
         }
 
         #endregion Authorization
 
         #region Request Handling
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateRequestEntity.
+        /// </summary>
+        [Obsolete("Deprecated; RemoveIn=1.4.0; Replacement=CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest)")]
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -445,6 +874,10 @@ namespace Titanic.Entity.WebApplication
             return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateRequestEntity.
+        /// </summary>
+        [Obsolete("Deprecated; RemoveIn=1.4.0; Replacement=CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest)")]
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -453,6 +886,9 @@ namespace Titanic.Entity.WebApplication
             return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateRequestEntity.
+        /// </summary>
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -461,6 +897,9 @@ namespace Titanic.Entity.WebApplication
             return manager.Create(ResolveTableName(manager, request.TableName, request.EntityTypeName), userConnection);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ResolveTableName.
+        /// </summary>
         private static string ResolveTableName(
             BaseEntityManager manager,
             string? tableName,
@@ -479,6 +918,9 @@ namespace Titanic.Entity.WebApplication
             throw new InvalidOperationException("Entity API request must contain TableName or EntityTypeName.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ResolveEntityStructure.
+        /// </summary>
         private static EntityStructure ResolveEntityStructure(BaseEntityManager manager, EntityApiRequest request)
         {
             if (!string.IsNullOrWhiteSpace(request.TableName))
@@ -507,6 +949,9 @@ namespace Titanic.Entity.WebApplication
             throw new InvalidOperationException("Entity API request must contain TableName or EntityTypeName.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildDeleteFilterQuery.
+        /// </summary>
         private static EntitySchemaQuery BuildDeleteFilterQuery(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -521,7 +966,7 @@ namespace Titanic.Entity.WebApplication
                 CopyFilterNodes(request.Query.Filters.ToEntityFilterCollection(), query.Filters);
             }
 
-            foreach (var value in NormalizeValues(request.Values).Where(x => !IsEmptyFilterValue(x.Value)))
+            foreach (var value in EntityValueNormalizer.NormalizeValues(request.Values, structure).Where(x => !IsEmptyFilterValue(x.Value)))
             {
                 query.AddFilter(EntityComparisonType.Equal, value.Key, value.Value);
             }
@@ -529,6 +974,9 @@ namespace Titanic.Entity.WebApplication
             return query;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CopyFilterNodes.
+        /// </summary>
         private static void CopyFilterNodes(EntityQueryFilterCollection source, EntityQueryFilterCollection target)
         {
             target.IsEnabled = source.IsEnabled;
@@ -548,6 +996,9 @@ namespace Titanic.Entity.WebApplication
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр HasActiveFilters.
+        /// </summary>
         private static bool HasActiveFilters(EntityQueryFilterCollection collection)
         {
             if (!collection.IsEnabled)
@@ -569,6 +1020,9 @@ namespace Titanic.Entity.WebApplication
             return false;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр HasPrimaryKey.
+        /// </summary>
         private static bool HasPrimaryKey(
             IReadOnlyDictionary<string, object?> values,
             ColumnStructure primaryColumn,
@@ -578,9 +1032,15 @@ namespace Titanic.Entity.WebApplication
                 || values.TryGetValue(primaryColumn.ColumnName, out value);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр IsEmptyPrimaryKeyValue.
+        /// </summary>
         private static bool IsEmptyPrimaryKeyValue(object? value)
             => IsEmptyFilterValue(value);
 
+        /// <summary>
+        /// Инициализирует новый экземпляр IsEmptyFilterValue.
+        /// </summary>
         private static bool IsEmptyFilterValue(object? value)
         {
             if (value == null || value is DBNull)
@@ -598,6 +1058,9 @@ namespace Titanic.Entity.WebApplication
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ToResponse.
+        /// </summary>
         private static Dictionary<string, EntityApiColumnValueResponse> ToResponse(Orm.Entity entity)
         {
             return entity.Values.ToDictionary(
@@ -612,44 +1075,11 @@ namespace Titanic.Entity.WebApplication
 
         #endregion Request Handling
 
-        #region Value Normalization
-
-        private static Dictionary<string, object?> NormalizeValues(IReadOnlyDictionary<string, object?> values)
-        {
-            return values.ToDictionary(
-                x => x.Key,
-                x => NormalizeJsonValue(x.Value),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        private static object? NormalizeJsonValue(object? value)
-        {
-            return value is System.Text.Json.JsonElement element
-                ? NormalizeJsonElement(element)
-                : value;
-        }
-
-        private static object? NormalizeJsonElement(System.Text.Json.JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                System.Text.Json.JsonValueKind.Null => null,
-                System.Text.Json.JsonValueKind.Undefined => null,
-                System.Text.Json.JsonValueKind.String => element.GetString(),
-                System.Text.Json.JsonValueKind.True => true,
-                System.Text.Json.JsonValueKind.False => false,
-                System.Text.Json.JsonValueKind.Number when element.TryGetInt32(out var intValue) => intValue,
-                System.Text.Json.JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
-                System.Text.Json.JsonValueKind.Number when element.TryGetDecimal(out var decimalValue) => decimalValue,
-                System.Text.Json.JsonValueKind.Number => element.GetDouble(),
-                _ => throw new NotSupportedException($"JSON value kind '{element.ValueKind}' is not supported in Entity API.")
-            };
-        }
-
-        #endregion Value Normalization
-
         #region Path Helpers
 
+        /// <summary>
+        /// Инициализирует новый экземпляр NormalizeApiPath.
+        /// </summary>
         private static string NormalizeApiPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -662,46 +1092,6 @@ namespace Titanic.Entity.WebApplication
             return normalized.EndsWith('/') ? normalized.TrimEnd('/') : normalized;
         }
 
-        private static EntityManagerStructureResponse ToStructureResponse(BaseEntityManager manager)
-        {
-            return new EntityManagerStructureResponse
-            {
-                ManagerName = manager.Name,
-                NamespacePatterns = manager.StructureScope.NamespacePatterns.ToList(),
-                Entities = manager.StructureScope.EntitiesStructure
-                    .OrderBy(entity => entity.TableName, StringComparer.OrdinalIgnoreCase)
-                    .Select(entity => new EntityStructureResponse
-                    {
-                        EntityTypeName = entity.EntityType.FullName ?? entity.EntityType.Name,
-                        EntityTypeShortName = entity.EntityType.Name,
-                        TableName = entity.TableName,
-                        IsView = entity.IsView,
-                        IsLocalizationDisabled = entity.IsLocalizationDisabled,
-                        Columns = entity.ColumnsStructure
-                            .OrderBy(column => column.PropertyName, StringComparer.OrdinalIgnoreCase)
-                            .Select(column => new EntityColumnStructureResponse
-                            {
-                                PropertyName = column.PropertyName,
-                                ColumnName = column.ColumnName,
-                                DataValueType = column.DataValueType,
-                                IsNullable = column.IsNullable,
-                                IsPrimary = column.IsPrimary,
-                                IsDisplay = column.IsDisplay,
-                                IsLocalized = column.IsLocalized,
-                                IsReference = column.IsReference,
-                                ReferenceTableName = column.ReferenceTableName
-                            })
-                            .ToList()
-                    })
-                    .ToList()
-            };
-        }
-
         #endregion Path Helpers
     }
 }
-
-
-
-
-

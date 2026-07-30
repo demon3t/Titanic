@@ -1,11 +1,11 @@
-﻿using Titanic.Db.Enums;
+using Titanic.Db.Enums;
 
 namespace Titanic.Entity.WebApplication.Api
 {
     /// <summary>
-    /// HTTP-модель колонки сущности из структуры менеджера.
+    /// HTTP-модель структуры колонки Entity API.
     /// </summary>
-    public sealed class EntityColumnStructureResponse
+    public sealed class EntityApiStructureColumnResponse
     {
         /// <summary>
         /// Имя CLR-свойства.
@@ -18,37 +18,32 @@ namespace Titanic.Entity.WebApplication.Api
         public string ColumnName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Тип значения колонки.
+        /// Тип значения.
         /// </summary>
         public DataValueType DataValueType { get; set; }
 
         /// <summary>
-        /// Допускает ли колонка null.
+        /// Признак nullable-колонки.
         /// </summary>
         public bool IsNullable { get; set; }
 
         /// <summary>
-        /// Признак первичной колонки.
+        /// Признак primary key.
         /// </summary>
         public bool IsPrimary { get; set; }
 
         /// <summary>
-        /// Признак отображаемой колонки.
+        /// Признак display-колонки.
         /// </summary>
         public bool IsDisplay { get; set; }
 
         /// <summary>
-        /// Признак локализуемой колонки.
-        /// </summary>
-        public bool IsLocalized { get; set; }
-
-        /// <summary>
-        /// Признак ссылочной колонки.
+        /// Признак reference-колонки.
         /// </summary>
         public bool IsReference { get; set; }
 
         /// <summary>
-        /// Имя таблицы, на которую ссылается колонка.
+        /// Таблица ссылки, если колонка reference.
         /// </summary>
         public string? ReferenceTableName { get; set; }
     }

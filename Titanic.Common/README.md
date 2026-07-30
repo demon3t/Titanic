@@ -2,7 +2,7 @@
 
 ## Роль в архитектуре
 
-`Titanic.Common` — нижний инфраструктурный слой решения. Он задаёт базовый пользовательский контекст и web-механику, которыми пользуются `Titanic.Db` и `Titanic.Entity`.
+`Titanic.Common` — нижний инфраструктурный слой решения. Он задаёт общий пользовательский контекст и web-механику, которыми пользуются `Titanic.Db` и `Titanic.Entity`.
 
 Пакет не знает о SQL builder и Entity ORM, поэтому может использоваться как самостоятельная база для авторизации, `UserConnection` и ASP.NET Core-инфраструктуры.
 
@@ -10,7 +10,7 @@
 
 Используйте `Titanic.Common`, если нужно:
 
-- описать пользовательский контекст через `UserConnection`;
+- описать пользователя и его культуру через `UserConnection`;
 - организовать авторизацию по заголовку для Entity API;
 - подключить Swagger, API explorer и базовую web-инфраструктуру;
 - получить общий слой, который не зависит от `Titanic.Db` и `Titanic.Entity`.
@@ -19,7 +19,7 @@
 
 ### Пользовательский контекст
 
-- `UserConnection` — базовый контракт пользовательского контекста, который пользовательское приложение может расширить своими полями.
+- `UserConnection` — контекст пользователя, содержащий `UserId` и `UserCulture`.
 - `UserCulture` — культура пользователя, содержащая `Id` и `Name`.
 
 ### Авторизация
@@ -31,6 +31,11 @@
 - `MockEntityAuthorizationHandler` — тестовый обработчик для локальной отладки.
 - `BaseHeaderAuthorizationHandler<TCollection, TRequirement>` — базовый handler для чтения ключа из заголовка.
 - `BaseMockHeaderAuthorizationHandler<TCollection, TRequirement>` — базовый mock handler.
+
+### Фабрика классов
+
+- `ClassFactory` — статическая фабрика регистрации и создания объектов по типу или имени.
+- `ConstructorArgument` — именованный аргумент конструктора для ручной передачи значений при создании объекта.
 
 ### ASP.NET Core extensions
 
@@ -59,17 +64,9 @@ builder
 Создание `UserConnection`:
 
 ```csharp
-public sealed class MyUserConnection : UserConnection
-{
-    public Guid ContactId { get; init; }
-    public string? TimeZoneId { get; init; }
-}
-
-var userConnection = new MyUserConnection
+var userConnection = new UserConnection
 {
     UserId = Guid.NewGuid(),
-    ContactId = Guid.NewGuid(),
-    TimeZoneId = "Europe/Moscow",
     Culture = new UserCulture
     {
         Id = Guid.NewGuid(),

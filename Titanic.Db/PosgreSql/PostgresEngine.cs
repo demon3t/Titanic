@@ -37,6 +37,12 @@ namespace Titanic.Db.PosgreSql
             return $"\"{identifier.Replace("\"", "\"\"")}\"";
         }
 
+        /// <summary>
+        /// Преобразовать значение параметра в SQL-литерал, совместимый с PostgreSQL.
+        /// </summary>
+        /// <typeparam name="T">Тип значения параметра.</typeparam>
+        /// <param name="param">Значение параметра, которое нужно сериализовать в SQL.</param>
+        /// <returns>SQL-литерал для вставки в текст запроса при форматировании констант.</returns>
         public override string GetParameterSqlString<T>(T param)
         {
             return param switch

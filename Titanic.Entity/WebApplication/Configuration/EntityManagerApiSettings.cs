@@ -1,5 +1,4 @@
-﻿using Titanic.Common.Services.Authorization.Interfaces;
-using Titanic.Entity.WebApplication.Api;
+﻿using Titanic.Entity.WebApplication.Api;
 
 namespace Titanic.Entity.WebApplication.Configuration
 {
@@ -21,24 +20,15 @@ namespace Titanic.Entity.WebApplication.Configuration
         public string Path { get; set; } = "/entity";
 
         /// <summary>
-        /// Имя HTTP-заголовка, из которого API будет читать токен авторизации.
+        /// Имя HTTP-заголовка, из которого API будет читать ключ авторизации.
         /// </summary>
         public string AuthorizationHeaderName { get; set; } = "X-Entity-Key";
 
         /// <summary>
-        /// Полное имя типа провайдера, который ищет <see cref="Common.Session.UserConnection" /> по токену.
-        /// Тип должен реализовывать <see cref="IUserConnectionTokenProvider" />.
+        /// Полное имя типа провайдера авторизации API.
+        /// Тип должен реализовывать <see cref="IEntityApiAuthorizationProvider" />.
         /// </summary>
         public string? AuthorizationProviderType { get; set; }
-
-        /// <summary>
-        /// Полное имя типа провайдера поиска <see cref="Common.Session.UserConnection" />
-        /// для endpoint-а структуры менеджера.
-        /// Тип должен реализовывать <see cref="IUserConnectionTokenProvider" />.
-        /// Провайдер реализуется на стороне пользовательского приложения и сам решает,
-        /// кто имеет доступ к структуре менеджера.
-        /// </summary>
-        public string? StructureAuthorizationProviderType { get; set; }
 
         /// <summary>
         /// Режим обработки batch-запросов Entity API по умолчанию.

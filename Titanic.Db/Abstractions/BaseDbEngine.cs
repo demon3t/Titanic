@@ -233,6 +233,21 @@ namespace Titanic.Db.Abstractions
         }
 
         /// <summary>
+        /// Получить SQL представление логического оператора для текущего диалекта.
+        /// </summary>
+        /// <param name="logicalOperator">Логический оператор, который объединяет дочерние выражения группы.</param>
+        /// <returns>SQL-фрагмент логического оператора.</returns>
+        public virtual string GetLogicalOperatorSql(LogicalOperator logicalOperator)
+        {
+            return logicalOperator switch
+            {
+                LogicalOperator.And => "AND",
+                LogicalOperator.Or => "OR",
+                _ => throw new NotSupportedException($"Logical operator {logicalOperator} is not supported")
+            };
+        }
+
+        /// <summary>
         /// Получить SQL представление канонической SQL-функции для текущего диалекта.
         /// </summary>
         /// <remarks>
@@ -352,7 +367,11 @@ namespace Titanic.Db.Abstractions
                 return expression.Children[0].ToSql(context);
             }
 
-            return $"({string.Join($" {expression.Operator} ", expression.Children.Select(item => item.ToSql(context)))})";
+            var logicalOperatorSql = expression.LogicalOperatorType.HasValue
+                ? context.Engine.GetLogicalOperatorSql(expression.LogicalOperatorType.Value)
+                : expression.Operator ?? throw new InvalidOperationException("Group expression requires a logical operator");
+
+            return $"({string.Join($" {logicalOperatorSql} ", expression.Children.Select(item => item.ToSql(context)))})";
         }
 
         private static string BuildCaseExpression(QueryExpression expression, QueryBuildContext context)

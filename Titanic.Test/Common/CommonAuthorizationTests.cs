@@ -1,5 +1,8 @@
-﻿using Titanic.Common.Services.Authorization.Entity;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Titanic.Common.Services.Authorization.Entity;
 using Titanic.Common.Session;
+using Titanic.Common.WebApplication;
 
 namespace Titanic.Test.Common
 {
@@ -55,6 +58,40 @@ namespace Titanic.Test.Common
             Assert.False(collection.CheckAuthorization("key"));
         }
 
+        [Fact]
+        public void EntityAuthorizationCollection_CheckAuthorization_ShouldCacheExternalAuthorization()
+        {
+            var timeProvider = new AdjustableTimeProvider(DateTimeOffset.Parse("2026-06-06T10:00:00Z"));
+            var connection = CreateConnection();
+            var collection = new ExternalEntityAuthorizationCollection(
+                timeProvider,
+                TimeSpan.FromMinutes(5),
+                "external-key",
+                connection);
+
+            Assert.True(collection.CheckAuthorization("external-key"));
+            Assert.True(collection.CheckAuthorization("external-key"));
+            Assert.Equal(1, collection.LookupCount);
+        }
+
+        [Fact]
+        public void AddHeaderAuthorization_ShouldKeepExistingAuthorizationCollectionRegistration()
+        {
+            var builder = WebApplication.CreateBuilder();
+            var collection = new EntityAuthorizationCollection();
+            builder.Services.AddSingleton(collection);
+
+            builder.AddHeaderAuthorization<
+                EntityAuthorizationHandler,
+                EntityAuthorizationCollection,
+                EntityAuthorizationRequirement>("Entity");
+
+            using var app = builder.Build();
+            var resolvedCollection = app.Services.GetRequiredService<EntityAuthorizationCollection>();
+
+            Assert.Same(collection, resolvedCollection);
+        }
+
         private static UserConnection CreateConnection()
         {
             return new UserConnection
@@ -66,6 +103,39 @@ namespace Titanic.Test.Common
                     Name = "ru-RU"
                 }
             };
+        }
+
+        private sealed class ExternalEntityAuthorizationCollection : EntityAuthorizationCollection
+        {
+            private readonly UserConnection _connection;
+            private readonly string _key;
+
+            public ExternalEntityAuthorizationCollection(
+                TimeProvider timeProvider,
+                TimeSpan maxLifetime,
+                string key,
+                UserConnection connection)
+                : base(timeProvider, maxLifetime)
+            {
+                _key = key;
+                _connection = connection;
+            }
+
+            public int LookupCount { get; private set; }
+
+            public override bool TryGet(string key, out UserConnection? userConnection)
+            {
+                LookupCount++;
+
+                if (!string.Equals(key, _key, StringComparison.Ordinal))
+                {
+                    userConnection = null;
+                    return false;
+                }
+
+                userConnection = _connection;
+                return true;
+            }
         }
 
         private sealed class AdjustableTimeProvider : TimeProvider

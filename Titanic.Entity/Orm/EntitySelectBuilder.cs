@@ -4,15 +4,18 @@ using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
 {
     /// <summary>
-    /// Non-generic ORM SELECT builder. The CLR model is metadata only.
+    /// Негенерик ORM builder SELECT-запросов; CLR-модель используется как metadata.
     /// </summary>
     public class EntitySelectBuilder
     {
+        #region Members
+
         private const string RootAlias = "t0";
         private const string LocalizationColumnName = "SysCultureId";
 
@@ -23,6 +26,7 @@ namespace Titanic.Entity.Orm
         private readonly EntityStructure _rootStructure;
         private readonly EntityStructureScope _structureScope;
         private readonly BaseDbProvider _provider;
+        private readonly BaseEntityManager? _manager;
         private QueryExpression? _whereExpression;
         private int _joinAliasIndex;
 
@@ -32,47 +36,69 @@ namespace Titanic.Entity.Orm
 
         internal Guid? LocalizationId { get; private set; }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         public EntitySelectBuilder(BaseDbProvider provider, Type entityType, UserConnection userConnection)
             : this(provider, Structure.DefaultScope, entityType, userConnection)
         {
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         public EntitySelectBuilder(BaseDbProvider provider, string tableName, UserConnection userConnection)
             : this(provider, Structure.DefaultScope, tableName, userConnection)
         {
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             Type entityType,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(entityType), structureScope, userConnection, manager)
         {
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructureScope structureScope,
             string tableName,
-            UserConnection userConnection)
-            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, structureScope.GetEntityStructure(tableName), structureScope, userConnection, manager)
         {
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructure rootStructure,
-            UserConnection userConnection)
-            : this(provider, rootStructure, Structure.DefaultScope, userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
+            : this(provider, rootStructure, Structure.DefaultScope, userConnection, manager)
         {
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntitySelectBuilder.
+        /// </summary>
         internal EntitySelectBuilder(
             BaseDbProvider provider,
             EntityStructure rootStructure,
             EntityStructureScope structureScope,
-            UserConnection userConnection)
+            UserConnection userConnection,
+            BaseEntityManager? manager = null)
         {
             ArgumentNullException.ThrowIfNull(provider);
             ArgumentNullException.ThrowIfNull(rootStructure);
@@ -82,12 +108,16 @@ namespace Titanic.Entity.Orm
             _provider = provider;
             _rootStructure = rootStructure;
             _structureScope = structureScope;
+            _manager = manager;
             UserConnection = userConnection;
             UseLocalization(userConnection.Culture?.Id);
             Select = provider.Select();
             Select.SetFrom(_rootStructure.TableName, RootAlias);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddColumn.
+        /// </summary>
         public EntitySelectBuilder AddColumn(string path, string? alias = null)
         {
             var resolved = ResolvePath(path, allowTerminalReference: true);
@@ -129,6 +159,9 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddColumns.
+        /// </summary>
         public EntitySelectBuilder AddColumns(params string[] paths)
         {
             foreach (var path in paths)
@@ -139,39 +172,36 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Distinct.
+        /// </summary>
         public EntitySelectBuilder Distinct()
         {
             Select.Distinct();
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Where.
+        /// </summary>
         public EntityWhereItem Where(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.And);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.And);
 
+        /// <summary>
+        /// Инициализирует новый экземпляр And.
+        /// </summary>
         public EntityWhereItem And(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.And);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.And);
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Or.
+        /// </summary>
         public EntityWhereItem Or(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.Or);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.Or);
 
+        /// <summary>
+        /// Инициализирует новый экземпляр OrderBy.
+        /// </summary>
         public EntitySelectBuilder OrderBy(string path, bool desc = false)
         {
             var resolved = ResolvePath(path, allowTerminalReference: false);
@@ -179,6 +209,9 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ThenBy.
+        /// </summary>
         public EntitySelectBuilder ThenBy(string path, bool desc = false) => OrderBy(path, desc);
 
         /// <summary>
@@ -201,50 +234,77 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Take.
+        /// </summary>
         public EntitySelectBuilder Take(int count)
         {
             Select.Limit(count).Take(count);
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Skip.
+        /// </summary>
         public EntitySelectBuilder Skip(int count)
         {
             Select.Limit(int.MaxValue).Skip(count);
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Page.
+        /// </summary>
         public EntitySelectBuilder Page(int page, int pageSize)
         {
             Select.Limit(pageSize).Page(page, pageSize);
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр UseLocalization.
+        /// </summary>
         internal EntitySelectBuilder UseLocalization(Guid? localizationId)
         {
             LocalizationId = localizationId;
             return this;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Build.
+        /// </summary>
         public QueryBuildResult Build()
         {
             ApplyPendingWhere();
             return Select.Build();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ToSql.
+        /// </summary>
         public string ToSql()
         {
             ApplyPendingWhere();
             return Select.ToSql();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ToRecords.
+        /// </summary>
         public List<Entity> ToRecords()
         {
             ApplyPendingWhere();
             return Select.ExecuteReader(BuildRecord);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр FirstOrDefaultRecord.
+        /// </summary>
         public Entity? FirstOrDefaultRecord() => ToRecords().FirstOrDefault();
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateRecord.
+        /// </summary>
         public Entity CreateRecord(IReadOnlyDictionary<string, object?> values)
         {
             ArgumentNullException.ThrowIfNull(values);
@@ -254,33 +314,50 @@ namespace Titanic.Entity.Orm
                 BuildAliasToColumnMap(),
                 _rootStructure,
                 _provider,
-                UserConnection);
+                UserConnection,
+                isNew: false,
+                manager: _manager);
         }
 
+        /// <summary>
+        /// Выполняет reader-запрос.
+        /// </summary>
         public List<T> ExecuteReader<T>(Func<DbDataReader, T> mapRow)
         {
             ApplyPendingWhere();
             return Select.ExecuteReader(mapRow);
         }
 
+        /// <summary>
+        /// Выполняет reader-запрос.
+        /// </summary>
         public List<T> ExecuteReader<T>(Func<IDataReader, T> mapRow)
         {
             ApplyPendingWhere();
             return Select.ExecuteReader(mapRow);
         }
 
+        /// <summary>
+        /// Создаёт Entity Schema Query.
+        /// </summary>
         public List<T> Query<T>(Func<DbDataReader, T> mapRow)
         {
             ApplyPendingWhere();
             return Select.Query(mapRow);
         }
 
+        /// <summary>
+        /// Выполняет scalar-запрос.
+        /// </summary>
         public T? ExecuteScalar<T>()
         {
             ApplyPendingWhere();
             return Select.ExecuteScalar<T>();
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddWhereExpression.
+        /// </summary>
         internal EntitySelectBuilder AddWhereExpression(QueryExpression expression, EntityWhereConnector connector)
         {
             _whereExpression = _whereExpression == null
@@ -292,12 +369,45 @@ namespace Titanic.Entity.Orm
             return this;
         }
 
-        internal QueryExpression BuildWhereColumnExpression(string path)
+        /// <summary>
+        /// Создать fluent-условие WHERE для ORM-пути.
+        /// </summary>
+        private EntityWhereItem CreateWhereItem(string path, EntityWhereConnector connector)
         {
             var resolved = ResolvePath(path, allowTerminalReference: false);
+            return new EntityWhereItem(
+                this,
+                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
+                connector);
+        }
+
+        /// <summary>
+        /// Строит выражение чтения колонки, на которую указывает переданный путь сущности.
+        /// </summary>
+        /// <param name="path">Путь сущности к колонке, используемой в WHERE-выражении.</param>
+        /// <returns>Выражение запроса для найденной колонки.</returns>
+        internal QueryExpression BuildWhereColumnExpression(string path)
+        {
+            return BuildWhereColumnExpression(path, out _);
+        }
+
+        /// <summary>
+        /// Строит выражение чтения колонки и возвращает ее метаданные для вызывающего кода,
+        /// которому нужна нормализация значений с учетом типа.
+        /// </summary>
+        /// <param name="path">Путь сущности к колонке, используемой в WHERE-выражении.</param>
+        /// <param name="column">Метаданные конечной колонки, найденной по переданному пути.</param>
+        /// <returns>Выражение запроса для найденной колонки.</returns>
+        internal QueryExpression BuildWhereColumnExpression(string path, out ColumnStructure column)
+        {
+            var resolved = ResolvePath(path, allowTerminalReference: false);
+            column = resolved.TerminalColumn;
             return BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddMainColumns.
+        /// </summary>
         private void AddMainColumns(EntityStructure structure, string tableAlias, string pathPrefix)
         {
             foreach (var column in structure.GetMainColumnStructure())
@@ -307,6 +417,9 @@ namespace Titanic.Entity.Orm
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddReferenceColumn.
+        /// </summary>
         private void AddReferenceColumn(string path, string? alias, ResolvedPath resolved)
         {
             var key = alias ?? path;
@@ -322,6 +435,9 @@ namespace Titanic.Entity.Orm
             _selectedColumns[displayAlias] = new SelectedColumnMetadata(displayColumn, DisplayAlias: null, IsHidden: true);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AddSelectedColumn.
+        /// </summary>
         private void AddSelectedColumn(string key, QueryExpression expression, string sourcePath, ColumnStructure? column)
         {
             var alias = CreateAliasPrefix(key);
@@ -330,6 +446,9 @@ namespace Titanic.Entity.Orm
             _selectedColumns[alias] = new SelectedColumnMetadata(column, DisplayAlias: null);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildRecord.
+        /// </summary>
         private Entity BuildRecord(DbDataReader reader)
         {
             var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -343,6 +462,9 @@ namespace Titanic.Entity.Orm
             return CreateRecord(values);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildColumnValues.
+        /// </summary>
         private Dictionary<string, ColumnValue> BuildColumnValues(IReadOnlyDictionary<string, object?> values)
         {
             var result = new Dictionary<string, ColumnValue>(StringComparer.OrdinalIgnoreCase);
@@ -385,6 +507,9 @@ namespace Titanic.Entity.Orm
             return result;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildAliasToColumnMap.
+        /// </summary>
         private Dictionary<string, ColumnStructure> BuildAliasToColumnMap()
         {
             var result = _selectedColumns
@@ -402,6 +527,9 @@ namespace Titanic.Entity.Orm
             return result;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ResolvePath.
+        /// </summary>
         private ResolvedPath ResolvePath(string path, bool allowTerminalReference)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -477,6 +605,9 @@ namespace Titanic.Entity.Orm
             throw new InvalidOperationException($"ORM path '{path}' cannot be resolved.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр FinalizeResolvedPath.
+        /// </summary>
         private ResolvedPath FinalizeResolvedPath(
             EntityStructure sourceEntity,
             string sourceAlias,
@@ -500,6 +631,9 @@ namespace Titanic.Entity.Orm
             return new ResolvedPath(targetEntity, targetAlias, targetEntity.GetColumnStructure(referenceColumn.PropertyName), null, null);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EnsureLeftJoin.
+        /// </summary>
         private JoinState EnsureLeftJoin(
             EntityStructure sourceEntity,
             string sourceAlias,
@@ -532,6 +666,9 @@ namespace Titanic.Entity.Orm
             return join;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EnsureReverseJoin.
+        /// </summary>
         private JoinState EnsureReverseJoin(
             EntityStructure sourceEntity,
             string sourceAlias,
@@ -561,6 +698,9 @@ namespace Titanic.Entity.Orm
             return join;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildReadExpression.
+        /// </summary>
         private QueryExpression BuildReadExpression(EntityStructure entity, string tableAlias, ColumnStructure column)
         {
             if (!ShouldUseLocalization(entity, column) || !LocalizationId.HasValue)
@@ -578,6 +718,9 @@ namespace Titanic.Entity.Orm
                 Column.Name(tableAlias, column.ColumnName));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр BuildAggregateExpression.
+        /// </summary>
         private QueryExpression BuildAggregateExpression(
             string path,
             EntityAggregationType aggregationType,
@@ -607,6 +750,9 @@ namespace Titanic.Entity.Orm
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAggregateAlias.
+        /// </summary>
         private static string CreateAggregateAlias(string path, EntityAggregationType aggregationType)
         {
             var normalizedPath = string.Equals(path, "*", StringComparison.OrdinalIgnoreCase)
@@ -615,6 +761,9 @@ namespace Titanic.Entity.Orm
             return $"{aggregationType}_{normalizedPath}";
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EnsureLocalizationJoin.
+        /// </summary>
         private string EnsureLocalizationJoin(EntityStructure entity, string tableAlias)
         {
             var key = $"{tableAlias}:{entity.TableName}";
@@ -644,6 +793,9 @@ namespace Titanic.Entity.Orm
             return alias;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ApplyPendingWhere.
+        /// </summary>
         private void ApplyPendingWhere()
         {
             if (_whereExpression != null)
@@ -652,8 +804,14 @@ namespace Titanic.Entity.Orm
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр NextJoinAlias.
+        /// </summary>
         private string NextJoinAlias() => $"t{++_joinAliasIndex}";
 
+        /// <summary>
+        /// Инициализирует новый экземпляр SplitPath.
+        /// </summary>
         private static List<string> SplitPath(string path)
         {
             var result = new List<string>();
@@ -698,9 +856,15 @@ namespace Titanic.Entity.Orm
             return result;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр IsReverseJoinPart.
+        /// </summary>
         private static bool IsReverseJoinPart(string part)
             => part.StartsWith('[') && part.EndsWith(']');
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ParseReverseJoinDescriptor.
+        /// </summary>
         private static ReverseJoinDescriptor ParseReverseJoinDescriptor(string part)
         {
             var body = part[1..^1];
@@ -715,15 +879,24 @@ namespace Titanic.Entity.Orm
             return new ReverseJoinDescriptor(part, pieces[0], pieces[1], pieces[2]);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр AppendPath.
+        /// </summary>
         private static string AppendPath(string currentPath, string part)
             => string.IsNullOrEmpty(currentPath) ? part : $"{currentPath}.{part}";
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAliasPrefix.
+        /// </summary>
         private static string CreateAliasPrefix(string path)
         {
             var chars = path.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
             return new string(chars).Trim('_');
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр GetLocalizationTableName.
+        /// </summary>
         private static string GetLocalizationTableName(string tableName)
         {
             var lastDotIndex = tableName.LastIndexOf('.');
@@ -731,6 +904,9 @@ namespace Titanic.Entity.Orm
             return $"sys_{name}_lcz";
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр ShouldUseLocalization.
+        /// </summary>
         private static bool ShouldUseLocalization(EntityStructure entity, ColumnStructure column)
         {
             return column.IsLocalized
@@ -757,5 +933,7 @@ namespace Titanic.Entity.Orm
             ColumnStructure? Column,
             string? DisplayAlias,
             bool IsHidden = false);
+
+        #endregion Members
     }
 }

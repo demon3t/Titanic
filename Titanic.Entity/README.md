@@ -1,16 +1,16 @@
-# Titanic.Entity
+﻿# Titanic.Entity
 
-## Роль
+## Роль в архитектуре
 
-`Titanic.Entity` — ORM-слой поверх `Titanic.Db`. Он связывает Entity-модели, metadata, ORM-пути, локализацию, runtime-менеджеры и HTTP API.
+`Titanic.Entity` — ORM-слой поверх `Titanic.Db`. Он связывает SQL builder, metadata-модель сущностей и HTTP API для UI.
 
-Порядок слоёв:
+Слой занимает верхнюю позицию среди базовых пакетов решения:
 
 ```text
 Titanic.Common -> Titanic.Db -> Titanic.Entity
 ```
 
-Если нужен только SQL builder без metadata и HTTP API, используйте [Titanic.Db](../Titanic.Db/README.md).
+Именно здесь находятся Entity-модели, структура колонок, ORM-пути, локализация, `EntityManager`, `EntitySchemaQuery` и автоматическая публикация HTTP endpoint-ов.
 
 ## Когда использовать
 
@@ -20,42 +20,66 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - строить запросы по ORM-путям вместо ручного SQL;
 - работать с `DisplayValue` и локализуемыми колонками;
 - сохранять и удалять сущности через единый ORM-слой;
-- публиковать HTTP API для frontend или внешних клиентов.
+- поднимать HTTP API для frontend или внешних клиентов.
 
-## Основные части
+Если нужен только SQL builder, без metadata и API, достаточно [Titanic.Db](../Titanic.Db/README.md).
+
+## Основные части пакета
 
 ### Менеджеры
 
-- `EntityManager` — основная точка регистрации и получения менеджеров.
-- `BaseEntityManager` — обёртка над `BaseDbProvider`, содержащая провайдер, настройки API и runtime-опции.
-- `EntityDbManager` — стандартная реализация менеджера.
+- `EntityManager` — статическая точка входа для регистрации менеджеров, получения менеджера по типу, создания `EntitySchemaQuery`, `EntitySelectBuilder` и `Entity`.
+- `BaseEntityManager` — базовая обёртка над `BaseDbProvider`; хранит провайдер, настройки API, runtime-опции и проверку схемы БД.
+- `EntityDbManager` — стандартная реализация `BaseEntityManager`.
 
 ### ORM-запросы
 
 - `EntitySchemaQuery` — основная модель чтения сущностей.
 - `EntitySchemaQuery<TEntity>` — generic-обёртка.
-- `ESQ` и `ESQ<TEntity>` — alias-типы совместимости.
-- `EntitySelectBuilder` — построитель ORM SELECT по путям колонок.
-- `EntityQueryColumnCollection` и `EntityQueryColumn` — описание выбираемых колонок.
-- `EntityQueryFilterCollection` и `EntityQueryFilter` — описание фильтров.
-- `EntityWhereItem` — fluent API условий.
+- `ESQ` и `ESQ<TEntity>` — alias-тип для совместимости.
+- `EntitySelectBuilder` — ORM SELECT builder по путям колонок.
+- `EntityQueryColumnCollection`, `EntityQueryColumn` — описание выбираемых колонок.
+- `EntityQueryFilterCollection`, `EntityQueryFilter` — описание фильтров.
+- `EntityWhereItem` — fluent-условия для `EntitySelectBuilder`.
 
-### Сущности и metadata
+### Сущности и значения колонок
 
-- `Entity` — ORM-сущность, представляющая строку БД.
+- `Entity` — ORM-сущность, представляющая запись БД.
+- `ColumnValue` — базовый класс значения колонки с `Value` и `DisplayValue`.
+- `ScalarColumnValue` — значение обычной скалярной колонки.
+- `StringColumnValue` — значение строковой колонки.
+- `ReferenceColumnValue` — значение ссылочной колонки с `DisplayValue` связанной записи.
+
+### Metadata и атрибуты
+
 - `Structure` — сканирует сборки и хранит metadata Entity-моделей.
-- `EntityStructure` — описание таблицы.
-- `ColumnStructure` — описание колонки.
-- `EntitySchemaValidator` — проверка схемы БД при инициализации менеджера.
+- `EntityAttribute`, `PrimaryColumnAttribute`, `DisplayColumnAttribute`, `ColumnAttribute`, `StringColumnAttribute`, `ReferenceColumnAttribute`, `DisableLocalizationAttribute` — атрибуты описания сущностей.
+
+`EntityStructure`, `ColumnStructure`, `EntityStructureScope` и валидаторы схемы являются внутренними runtime-деталями. Внешний код должен получать доступную frontend-структуру через `GET {Api.Path}/structure` или работать с ORM через публичные builders.
 
 ### HTTP API
 
-- `ServiceCollectionExtensions` — регистрация сервисов Entity ORM в DI.
-- `WebApplicationExtensions` — публикация HTTP endpoint-ов.
+- `ServiceCollectionExtensions` — регистрация Entity ORM сервисов в DI.
+- `WebApplicationExtensions` — регистрация и публикация endpoint-ов.
 - `EntityManagerConfig`, `EntityManagerSettings`, `EntityManagerApiSettings`, `EntityManagerOptions` — конфигурация менеджеров и API.
-- `EntityApiRequest` и `EntityApiBatchRequest` — модели HTTP-запросов.
+- `EntityApiRequest`, `EntityApiBatchRequest` — модели HTTP-запросов.
+- `EntityApiManagerStructureResponse` — модель ответа endpoint-а структуры менеджера.
 - `EntityApiOperationType` — операции `Select`, `Save`, `Delete`.
 - `EntityApiBatchExecutionMode` — режимы `Sequential` и `Parallel`.
+
+## Граница публичного API
+
+Публичным контрактом пакета считаются:
+
+- `EntityManager`, `BaseEntityManager`, `EntityDbManager` и web/DI extension-методы;
+- ORM builders: `EntitySchemaQuery`, `ESQ`, `EntitySelectBuilder`, `EntityWhereItem`;
+- модели QueryModel и JSON-модели ESQ: колонки, фильтры, сортировки, логические операции, сравнения и агрегации;
+- `Entity`, `ColumnValue` и наследники значений колонок;
+- атрибуты Entity-моделей и event listener-ов;
+- HTTP API-контракт: `EntityApiRequest`, `EntityApiBatchRequest`, response-модели, enum-ы операций и режимов, `IEntityApiAuthorizationProvider`;
+- event API: базовые listener/provider-типы, transport-контракты и client factory-интерфейсы.
+
+Legacy-модели отдельных операций `EntityApiSaveRequest` и `EntityApiDeleteRequest` оставлены только для совместимости и помечены `[Obsolete]` в формате `Deprecated; RemoveIn=1.4.0; Replacement=...`. Для HTTP-вызовов используйте единую модель `EntityApiRequest` с `operation = Save` или `operation = Delete`.
 
 ## Пример Entity-модели
 
@@ -77,7 +101,7 @@ public sealed class DepartmentEntity
 }
 ```
 
-## Пример запроса
+## Пример чтения через EntitySchemaQuery
 
 ```csharp
 var rows = EntityManager
@@ -106,6 +130,110 @@ app.MapTitanicEntityApi();
 app.Run();
 ```
 
+После `MapTitanicEntityApi()` для каждого менеджера с `Api.AutoRegisterEndpoint = true` публикуются endpoint-ы:
+
+- `GET {Api.Path}/structure`
+- `POST {Api.Path}`
+- `POST {Api.Path}/batch`
+
+## Событийный слой Entity
+
+`Titanic.Entity` поддерживает событийный pipeline вокруг `Save()` и `Delete()`:
+
+- `OnSaving`
+- `OnSaved`
+- `OnInserting`
+- `OnInserted`
+- `OnUpdating`
+- `OnUpdated`
+- `OnDeleting`
+- `OnDeleted`
+
+Событийный слой может работать в двух режимах:
+
+- локально, в том же приложении, где поднят `EntityManager`;
+- внешне, через отдельный listener-сервис.
+
+Режим задаётся настройкой `EventListener` в конфигурации менеджера:
+
+- пустое значение или отсутствие поля — локальный listener;
+- заполненное значение — внешний listener.
+
+Локальный режим означает, что обработчики ищутся по `[EntityEventListener("table_name")]` и вызываются внутри текущего процесса.
+
+Внешний режим означает, что вызов событийного слоя должен идти через transport-слой. Для этого поддерживается единый логический контракт события:
+
+- `managerName`
+- `tableName`
+- `dispatchId`
+- `stage`
+- `isNew`
+- `userConnection`
+- `values`
+
+### HTTP-контракт внешнего listener-а
+
+HTTP listener публикует отдельный endpoint на lifecycle-действие и каждую стадию pipeline:
+
+```text
+POST {EventListenerApi.Path}/create
+POST {EventListenerApi.Path}/on-saving
+POST {EventListenerApi.Path}/on-saved
+POST {EventListenerApi.Path}/on-inserting
+POST {EventListenerApi.Path}/on-inserted
+POST {EventListenerApi.Path}/on-updating
+POST {EventListenerApi.Path}/on-updated
+POST {EventListenerApi.Path}/on-deleting
+POST {EventListenerApi.Path}/on-deleted
+POST {EventListenerApi.Path}/delete
+```
+
+`create` создаёт экземпляр remote listener-а на удалённой стороне, `delete` удаляет его после последней стадии. Один HTTP-вызов `on-*` соответствует одному этапу событийного pipeline.
+
+Минимальный ответ:
+
+```json
+{
+  "success": true,
+  "canceled": false,
+  "cancelReason": null,
+  "errorCode": null,
+  "errorMessage": null
+}
+```
+
+Если listener отменяет операцию, внешний сервис должен вернуть `canceled = true`. Если обработчик падает, он должен вернуть `success = false` и текст ошибки.
+
+### gRPC-контракт внешнего listener-а
+
+Рекомендуемый service:
+
+```text
+EntityEventListenerGrpc.Create(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaving(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnSaved(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnInserted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdating(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnUpdated(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleting(EntityEventGrpcRequest)
+EntityEventListenerGrpc.OnDeleted(EntityEventGrpcRequest)
+EntityEventListenerGrpc.Delete(EntityEventGrpcRequest)
+```
+
+gRPC-контракт повторяет ту же семантику, что и HTTP:
+
+- `Create` создаёт remote listener на время обработки одной сущности;
+- один `On*` вызов = одно событие;
+- `Delete` удаляет remote listener после последней стадии;
+- передаётся `managerName`, `tableName`, `stage`, `isNew`, `userConnection` и типизированные `values`;
+- ответ сообщает, обработано ли событие, было ли оно отменено и есть ли ошибка.
+
+Практический смысл такого разделения:
+
+- локальный listener подходит для лёгкой бизнес-логики рядом с ORM;
+- внешний listener подходит для тяжёлой или изолированной обработки, которую нужно вынести в отдельное приложение.
+
 ## Пример конфигурации
 
 ```json
@@ -123,10 +251,10 @@ app.Run();
           "AutoRegisterEndpoint": true,
           "Path": "/entity/posgreTest",
           "AuthorizationHeaderName": "X-Entity-Key",
-          "AuthorizationProviderType": "MyApp.Security.EntityApiUserConnectionProvider, MyApp",
-          "StructureAuthorizationProviderType": "MyApp.Security.EntityStructureUserConnectionProvider, MyApp",
+          "AuthorizationProviderType": "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
           "DefaultBatchExecutionMode": "Sequential"
         },
+        "EventListener": "",
         "ValidateDatabaseSchemaOnCompile": true,
         "Options": {
           "MaxReadRowCount": 20000
@@ -141,48 +269,25 @@ app.Run();
 
 - `DbProviderName` — имя провайдера, зарегистрированного в `Titanic.Db`.
 - `ManagerType` — тип пользовательского менеджера поверх `BaseEntityManager`.
-- `EntityModelNamespaces` — namespace-patterns для manager-specific структуры.
-- `Api.Path` — базовый route менеджерского HTTP API.
-- `Api.AuthorizationProviderType` — тип пользовательского провайдера, который ищет `UserConnection` по токену для обычных endpoint-ов.
-- `Api.StructureAuthorizationProviderType` — тип отдельного пользовательского провайдера для endpoint-а структуры.
-- `Options.MaxReadRowCount` — максимальное количество строк в одном read-запросе.
+- `EntityModelNamespaces` — список namespace-patterns, по которым менеджер собирает свою структуру сущностей.
+- `Api.Path` — базовый route для HTTP API конкретного менеджера.
+- `Api.AuthorizationProviderType` — тип провайдера, который авторизует запрос и возвращает `UserConnection`.
+- `EventListener` — способ вызова событийного слоя: пусто для локального режима, непустое значение для внешнего listener-сервиса.
+- `Options.MaxReadRowCount` — максимальное количество строк для одного запроса чтения.
 
-## Авторизация Entity API
-
-Поток запроса:
-
-```text
-Клиент
-  -> X-Entity-Key
-  -> Пользовательское backend-приложение
-  -> IUserConnectionTokenProvider
-  -> UserConnection
-  -> Titanic.Entity
-  -> Titanic.Db
-```
-
-Разделение ответственности:
-
-- `Titanic.Common` задаёт только базовый контракт `UserConnection` и интерфейс `IUserConnectionTokenProvider`.
-- `Titanic.Entity` читает токен из `Api.AuthorizationHeaderName`, вызывает пользовательский provider и работает только с возвращённым `UserConnection`.
-- пользовательское приложение само решает, где искать токен, как валидировать пользователя и как заполнять расширенный пользовательский контекст;
-- если приложению нужны дополнительные поля, оно наследует свой тип от `UserConnection`;
-- если provider не вернул пользователя, Entity API отвечает `403 Forbidden`;
-- endpoint структуры использует отдельный provider `Api.StructureAuthorizationProviderType`, поэтому решение о доступе к структуре полностью остаётся на стороне пользовательского приложения.
-
-## Важные особенности
+## Что важно знать про слой
 
 - имя таблицы в `[Entity("...")]` задаётся без схемы;
-- локализуемые колонки читаются через `sys_[table_name]_lcz`;
-- каждый менеджер строит свою собственную структуру через `EntityModelNamespaces`;
-- `UserConnection` обязателен для чтения, сохранения, удаления и локализации;
-- HTTP API — это thin layer над Entity ORM, а не отдельная бизнес-логика.
+- локализуемые колонки читаются через таблицу `sys_[table_name]_lcz`;
+- менеджер получает свою структуру сущностей через `EntityModelNamespaces`;
+- `UserConnection` обязателен для чтения, сохранения, удаления и построения локализации;
+- HTTP API — это оболочка над Entity ORM, а не отдельная прикладная бизнес-логика.
 
-## Куда смотреть дальше
+## Куда идти дальше
 
-- обзор архитектуры: [../ARCHITECTURE.md](../ARCHITECTURE.md)
-- JSON-контракт API: [ENTITY_API.md](ENTITY_API.md)
-- SQL builder: [../Titanic.Db/README.md](../Titanic.Db/README.md)
+- Если нужно понять общий поток данных и место слоя в решении, откройте [../ARCHITECTURE.md](../ARCHITECTURE.md).
+- Если нужен JSON-контракт API для frontend, откройте [ENTITY_API.md](ENTITY_API.md).
+- Если нужно разобраться в SQL builder, вернитесь к [../Titanic.Db/README.md](../Titanic.Db/README.md).
 
 ## Связанные документы
 

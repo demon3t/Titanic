@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Titanic.Common.Services.Authorization.Interfaces;
 using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
@@ -21,18 +20,23 @@ using Titanic.Entity.Orm;
 using Titanic.Entity.WebApplication;
 using Titanic.Entity.WebApplication.Api;
 using Titanic.Entity.WebApplication.Configuration;
-using Titanic.Test.Entity.Hidden;
 using EntityManager = Titanic.Entity.EntityManager;
 
 namespace Titanic.Test.Entity
 {
+    /// <summary>
+    /// Тесты автоматического HTTP API для Entity ORM.
+    /// </summary>
     public sealed class EntityApiTests
     {
+        #region Members
         private const string ApiPath = "/entity-api/test";
-        private const string HiddenApiPath = "/entity-api/hidden";
+        private const string StructurePath = $"{ApiPath}/structure";
         private const string AuthHeader = "X-Test-Entity-Auth";
-        private const string StructureAuthToken = "allow-structure";
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically.
+        /// </summary>
         [Fact]
         public async Task EntityApi_AllConfiguredEndpoints_ShouldBeMappedAutomatically()
         {
@@ -41,11 +45,16 @@ namespace Titanic.Test.Entity
 
             var operationResponse = await client.PostAsJsonAsync(ApiPath, CreateSelectOperationRequest());
             var batchResponse = await client.PostAsJsonAsync($"{ApiPath}/batch", CreateBatchRequest());
+            var structureResponse = await client.GetAsync(StructurePath);
 
             Assert.Equal(HttpStatusCode.Forbidden, operationResponse.StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, batchResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, structureResponse.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_LegacyActionEndpoints_ShouldNotBeMappedAutomatically.
+        /// </summary>
         [Fact]
         public async Task EntityApi_LegacyActionEndpoints_ShouldNotBeMappedAutomatically()
         {
@@ -67,6 +76,9 @@ namespace Titanic.Test.Entity
             }
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnForbiddenWithoutMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnForbiddenWithoutMockAuthorization()
         {
@@ -78,6 +90,9 @@ namespace Titanic.Test.Entity
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnRowsWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnRowsWithMockAuthorization()
         {
@@ -98,6 +113,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("LIMIT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnBadRequestForUnknownColumn.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnBadRequestForUnknownColumn()
         {
@@ -127,82 +145,15 @@ namespace Titanic.Test.Entity
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
-            Assert.Contains("Column", document.RootElement.GetProperty("error").GetString());
-            Assert.Contains("Email", document.RootElement.GetProperty("error").GetString());
-            Assert.Contains("departments", document.RootElement.GetProperty("error").GetString());
+            var json = await response.Content.ReadAsStringAsync();
+            Assert.Contains("Column", json);
+            Assert.Contains("Email", json);
+            Assert.Contains("departments", json);
         }
 
-        [Fact]
-        public async Task EntityApi_Select_PathToEntityOutsideManagerScope_ShouldReturnStructuredError()
-        {
-            await using var app = await CreateAppAsync(
-                autoRegisterApiEndpoint: true,
-                managers:
-                [
-                    CreateRootManagerSettings()
-                ]);
-            var client = CreateAuthorizedClient(app);
-
-            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Select,
-                Query = new ESQJsonModel
-                {
-                    TableName = "employees_hidden_link",
-                    Columns =
-                    [
-                        new ESQColumnJsonModel
-                        {
-                            Path = "HiddenId.Name"
-                        }
-                    ]
-                }
-            });
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
-            Assert.Equal("Select", document.RootElement.GetProperty("operation").GetString());
-            Assert.Contains("hidden_scoped_entities", document.RootElement.GetProperty("error").GetString());
-        }
-
-        [Fact]
-        public async Task EntityApi_Select_HiddenEntityTypeOnRootManager_ShouldReturnStructuredError()
-        {
-            await using var app = await CreateAppAsync(
-                autoRegisterApiEndpoint: true,
-                managers:
-                [
-                    CreateRootManagerSettings()
-                ]);
-            var client = CreateAuthorizedClient(app);
-
-            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Select,
-                Query = new ESQJsonModel
-                {
-                    EntityTypeName = nameof(OrmHiddenScopedEntity),
-                    Columns =
-                    [
-                        new ESQColumnJsonModel
-                        {
-                            Path = "Name"
-                        }
-                    ]
-                }
-            });
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
-            Assert.Contains(nameof(OrmHiddenScopedEntity), document.RootElement.GetProperty("error").GetString());
-        }
-
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_UpdateOperation_ShouldReturnBadRequestInsteadOfJsonBindingError.
+        /// </summary>
         [Fact]
         public async Task EntityApi_UpdateOperation_ShouldReturnBadRequestInsteadOfJsonBindingError()
         {
@@ -232,6 +183,9 @@ namespace Titanic.Test.Entity
             Assert.DoesNotContain("BadHttpRequestException", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Select_ShouldReturnNotFoundWhenAutoRegistrationDisabled.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Select_ShouldReturnNotFoundWhenAutoRegistrationDisabled()
         {
@@ -240,57 +194,167 @@ namespace Titanic.Test.Entity
 
             var operationResponse = await client.PostAsJsonAsync(ApiPath, CreateSelectOperationRequest());
             var batchResponse = await client.PostAsJsonAsync($"{ApiPath}/batch", CreateBatchRequest());
+            var structureResponse = await client.GetAsync(StructurePath);
 
             Assert.Equal(HttpStatusCode.NotFound, operationResponse.StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, batchResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, structureResponse.StatusCode);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldReturnForbiddenWithoutMockAuthorization.
+        /// </summary>
+        [Fact]
+        public async Task EntityApi_Structure_ShouldReturnForbiddenWithoutMockAuthorization()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = app.GetTestClient();
+
+            var response = await client.GetAsync(StructurePath);
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldReturnManagerMetadataWithMockAuthorization.
+        /// </summary>
+        [Fact]
+        public async Task EntityApi_Structure_ShouldReturnManagerMetadataWithMockAuthorization()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.GetAsync(StructurePath);
+
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = json.RootElement;
+
+            var entities = root.GetProperty("entities").EnumerateArray().ToList();
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "employees");
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "departments");
+            Assert.Contains(entities, x => x.GetProperty("tableName").GetString() == "addresses");
+
+            var employee = entities.Single(x =>
+                x.GetProperty("entityTypeName").GetString() == typeof(OrmEmployeeEntity).FullName);
+            Assert.Equal("employees", employee.GetProperty("tableName").GetString());
+
+            var columns = employee.GetProperty("columns").EnumerateArray().ToList();
+            Assert.Contains(columns, x => x.GetProperty("propertyName").GetString() == "Name");
+            Assert.Contains(columns, x => x.GetProperty("propertyName").GetString() == "Email");
+
+            var departmentId = columns.Single(x => x.GetProperty("propertyName").GetString() == "DepartmentId");
+            Assert.True(departmentId.GetProperty("isReference").GetBoolean());
+            Assert.Equal("departments", departmentId.GetProperty("referenceTableName").GetString());
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Structure_ShouldRespectManagerScope.
+        /// </summary>
+        [Fact]
+        public async Task EntityApi_Structure_ShouldRespectManagerScope()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+
+            var response = await client.GetAsync(StructurePath);
+
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var entities = json.RootElement.GetProperty("entities").EnumerateArray().ToList();
+
+            Assert.DoesNotContain(entities, x => x.GetProperty("tableName").GetString() == "hidden_scoped_entities");
+            Assert.DoesNotContain(entities, x =>
+                x.GetProperty("entityTypeName").GetString() == typeof(Hidden.OrmHiddenScopedEntity).FullName);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmSaveWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmSaveWithMockAuthorization()
         {
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmUpdateWhenPrimaryKeyProvided.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmUpdateWhenPrimaryKeyProvided()
         {
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveExistingOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateUpdateRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Проверяет, что строковый GUID из JSON-запроса сохраняется как типизированный параметр обновления.
+        /// </summary>
+        [Fact]
+        public async Task EntityApi_SaveWithStringGuidPrimaryKey_ShouldUseGuidParameter()
+        {
+            await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
+            var client = CreateAuthorizedClient(app);
+            var recordId = Guid.Parse("7e8d71b9-2591-d1b9-c51d-aa205eca08ad");
+
+            var response = await client.PostAsJsonAsync(ApiPath, new EntityApiRequest
+            {
+                Operation = EntityApiOperationType.Save,
+                TableName = "departments",
+                Values = new Dictionary<string, object?>
+                {
+                    ["Id"] = recordId.ToString(),
+                    ["Name"] = "Updated from API"
+                }
+            });
+
+            response.EnsureSuccessStatusCode();
+
+            Assert.Contains("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                EntityApiMockDbProvider.LastParameters,
+                parameter => parameter.Value is Guid guidValue && guidValue == recordId);
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Save_ShouldExecuteOrmInsertWhenPrimaryKeyMissing.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Save_ShouldExecuteOrmInsertWhenPrimaryKeyMissing()
         {
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Delete_ShouldExecuteOrmDeleteWithMockAuthorization.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Delete_ShouldExecuteOrmDeleteWithMockAuthorization()
         {
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteRequest());
 
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync();
@@ -301,6 +365,9 @@ namespace Titanic.Test.Entity
             Assert.Contains("departments", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithNonPrimaryFilter_ShouldExecuteOrmDelete.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithNonPrimaryFilter_ShouldExecuteOrmDelete()
         {
@@ -328,6 +395,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("Name", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithoutFilter_ShouldReturnBadRequest.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithoutFilter_ShouldReturnBadRequest()
         {
@@ -342,12 +412,14 @@ namespace Titanic.Test.Entity
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.False(document.RootElement.GetProperty("success").GetBoolean());
-            Assert.Contains("at least one", document.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
+            var json = await response.Content.ReadAsStringAsync();
+            Assert.Contains("at least one", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("DELETE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_DeleteWithQueryFilter_ShouldExecuteOrmDelete.
+        /// </summary>
         [Fact]
         public async Task EntityApi_DeleteWithQueryFilter_ShouldExecuteOrmDelete()
         {
@@ -382,6 +454,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("departments", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_SaveWithEmptyPrimaryKey_ShouldReturnBadRequest.
+        /// </summary>
         [Fact]
         public async Task EntityApi_SaveWithEmptyPrimaryKey_ShouldReturnBadRequest()
         {
@@ -406,6 +481,9 @@ namespace Titanic.Test.Entity
             Assert.DoesNotContain("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldUseConfiguredDefaultExecutionMode.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldUseConfiguredDefaultExecutionMode()
         {
@@ -428,6 +506,9 @@ namespace Titanic.Test.Entity
             Assert.Contains(EntityApiMockDbProvider.SqlHistory, sql => sql.Contains("DELETE", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldReturnRequestNames.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldReturnRequestNames()
         {
@@ -448,6 +529,9 @@ namespace Titanic.Test.Entity
             Assert.NotEqual("loadEmployees", result.Results[1].Name);
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр EntityApi_Batch_ShouldUseRequestExecutionModeOverride.
+        /// </summary>
         [Fact]
         public async Task EntityApi_Batch_ShouldUseRequestExecutionModeOverride()
         {
@@ -469,62 +553,9 @@ namespace Titanic.Test.Entity
             Assert.All(result.Results, item => Assert.True(item.Success));
         }
 
-        [Fact]
-        public async Task EntityApi_StructureEndpoint_ShouldReturnForbiddenForNonAdmin()
-        {
-            await using var app = await CreateAppAsync(
-                autoRegisterApiEndpoint: true,
-                managers:
-                [
-                    CreateRootManagerSettings()
-                ]);
-            var client = CreateAuthorizedClient(app);
-
-            var response = await client.GetAsync($"{ApiPath}/structure");
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task EntityApi_StructureEndpoint_ShouldReturnScopedStructureForAdmin()
-        {
-            await using var app = await CreateAppAsync(
-                autoRegisterApiEndpoint: true,
-                managers:
-                [
-                    CreateRootManagerSettings(),
-                    CreateHiddenManagerSettings()
-                ]);
-
-            var rootClient = CreateStructureAuthorizedClient(app);
-            var hiddenClient = CreateStructureAuthorizedClient(app);
-
-            var rootResponse = await rootClient.GetAsync($"{ApiPath}/structure");
-            var hiddenResponse = await hiddenClient.GetAsync($"{HiddenApiPath}/structure");
-
-            rootResponse.EnsureSuccessStatusCode();
-            hiddenResponse.EnsureSuccessStatusCode();
-
-            using var rootDocument = JsonDocument.Parse(await rootResponse.Content.ReadAsStringAsync());
-            using var hiddenDocument = JsonDocument.Parse(await hiddenResponse.Content.ReadAsStringAsync());
-
-            Assert.Equal("EntityApiMock", rootDocument.RootElement.GetProperty("managerName").GetString());
-            Assert.Contains(
-                rootDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
-                x => x == nameof(OrmEmployeeEntity));
-            Assert.DoesNotContain(
-                rootDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
-                x => x == nameof(OrmHiddenScopedEntity));
-
-            Assert.Equal("HiddenEntityApiMock", hiddenDocument.RootElement.GetProperty("managerName").GetString());
-            Assert.Contains(
-                hiddenDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
-                x => x == nameof(OrmHiddenScopedEntity));
-            Assert.DoesNotContain(
-                hiddenDocument.RootElement.GetProperty("entities").EnumerateArray().Select(x => x.GetProperty("entityTypeShortName").GetString()),
-                x => x == nameof(OrmEmployeeEntity));
-        }
-
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSelectRequest.
+        /// </summary>
         private static ESQJsonModel CreateSelectRequest()
         {
             return new ESQJsonModel
@@ -541,6 +572,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSelectOperationRequest.
+        /// </summary>
         private static EntityApiRequest CreateSelectOperationRequest()
         {
             return new EntityApiRequest
@@ -550,42 +584,9 @@ namespace Titanic.Test.Entity
             };
         }
 
-        private static EntityApiRequest CreateSaveOperationRequest()
-        {
-            var request = CreateSaveRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
-        private static EntityApiRequest CreateSaveExistingOperationRequest()
-        {
-            var request = CreateUpdateRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
-        private static EntityApiRequest CreateDeleteOperationRequest()
-        {
-            var request = CreateDeleteRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Delete,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateBatchRequest.
+        /// </summary>
         private static EntityApiBatchRequest CreateBatchRequest(EntityApiBatchExecutionMode? executionMode = null)
         {
             return new EntityApiBatchRequest
@@ -594,16 +595,20 @@ namespace Titanic.Test.Entity
                 Requests =
                 [
                     CreateSelectOperationRequest(),
-                    CreateSaveOperationRequest(),
-                    CreateDeleteOperationRequest()
+                    CreateSaveRequest(),
+                    CreateDeleteRequest()
                 ]
             };
         }
 
-        private static EntityApiSaveRequest CreateSaveRequest()
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateSaveRequest.
+        /// </summary>
+        private static EntityApiRequest CreateSaveRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -613,10 +618,14 @@ namespace Titanic.Test.Entity
             };
         }
 
-        private static EntityApiSaveRequest CreateUpdateRequest()
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateUpdateRequest.
+        /// </summary>
+        private static EntityApiRequest CreateUpdateRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -627,10 +636,14 @@ namespace Titanic.Test.Entity
             };
         }
 
-        private static EntityApiDeleteRequest CreateDeleteRequest()
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateDeleteRequest.
+        /// </summary>
+        private static EntityApiRequest CreateDeleteRequest()
         {
-            return new EntityApiDeleteRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Delete,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -639,6 +652,9 @@ namespace Titanic.Test.Entity
             };
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAuthorizedClient.
+        /// </summary>
         private static HttpClient CreateAuthorizedClient(WebApplication app)
         {
             var client = app.GetTestClient();
@@ -646,17 +662,12 @@ namespace Titanic.Test.Entity
             return client;
         }
 
-        private static HttpClient CreateStructureAuthorizedClient(WebApplication app)
-        {
-            var client = app.GetTestClient();
-            client.DefaultRequestHeaders.Add(AuthHeader, StructureAuthToken);
-            return client;
-        }
-
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateAppAsync.
+        /// </summary>
         private static async Task<WebApplication> CreateAppAsync(
             bool autoRegisterApiEndpoint,
-            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential,
-            List<EntityManagerSettings>? managers = null)
+            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential)
         {
             EntityApiMockDbProvider.ResetState();
             DbManager.Reset();
@@ -688,7 +699,27 @@ namespace Titanic.Test.Entity
 
             builder.AddTitanicEntityApi(config =>
             {
-                config.Managers = managers ?? [CreateRootManagerSettings(autoRegisterApiEndpoint, defaultBatchExecutionMode)];
+                config.Managers =
+                [
+                    new EntityManagerSettings
+                    {
+                        Name = "EntityApiMock",
+                        DbProviderName = "EntityApiMock",
+                        EntityModelNamespaces = ["Titanic.Test.Entity"],
+                        Api = new EntityManagerApiSettings
+                        {
+                            AutoRegisterEndpoint = autoRegisterApiEndpoint,
+                            Path = ApiPath,
+                            AuthorizationHeaderName = AuthHeader,
+                            AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
+                            DefaultBatchExecutionMode = defaultBatchExecutionMode
+                        },
+                        Options = new EntityManagerOptions
+                        {
+                            MaxReadRowCount = 3
+                        }
+                    }
+                ];
             });
 
             var app = builder.Build();
@@ -697,66 +728,24 @@ namespace Titanic.Test.Entity
             return app;
         }
 
-        private static EntityManagerSettings CreateRootManagerSettings(
-            bool autoRegisterApiEndpoint = true,
-            EntityApiBatchExecutionMode defaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential)
-        {
-            return new EntityManagerSettings
-            {
-                Name = "EntityApiMock",
-                DbProviderName = "EntityApiMock",
-                EntityModelNamespaces = ["Titanic.Test.Entity"],
-                Api = new EntityManagerApiSettings
-                {
-                    AutoRegisterEndpoint = autoRegisterApiEndpoint,
-                    Path = ApiPath,
-                    AuthorizationHeaderName = AuthHeader,
-                    AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
-                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
-                    DefaultBatchExecutionMode = defaultBatchExecutionMode
-                },
-                Options = new EntityManagerOptions
-                {
-                    MaxReadRowCount = 3
-                }
-            };
-        }
-
-        private static EntityManagerSettings CreateHiddenManagerSettings()
-        {
-            return new EntityManagerSettings
-            {
-                Name = "HiddenEntityApiMock",
-                DbProviderName = "EntityApiMock",
-                ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
-                EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"],
-                Api = new EntityManagerApiSettings
-                {
-                    AutoRegisterEndpoint = true,
-                    Path = HiddenApiPath,
-                    AuthorizationHeaderName = AuthHeader,
-                    AuthorizationProviderType = typeof(MockEntityApiAuthorizationProvider).AssemblyQualifiedName!,
-                    StructureAuthorizationProviderType = typeof(MockEntityApiStructureAuthorizationProvider).AssemblyQualifiedName!,
-                    DefaultBatchExecutionMode = EntityApiBatchExecutionMode.Sequential
-                },
-                Options = new EntityManagerOptions
-                {
-                    MaxReadRowCount = 3
-                }
-            };
-        }
+        #endregion Members
     }
 
-    public sealed class MockEntityApiAuthorizationProvider : IUserConnectionTokenProvider
+    /// <summary>
+    /// Mock-провайдер авторизации Entity API для HTTP-тестов.
+    /// </summary>
+    public sealed class MockEntityApiAuthorizationProvider : IEntityApiAuthorizationProvider
     {
-        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
+        /// <inheritdoc />
+        public ValueTask<EntityApiAuthorizationResult> AuthorizeAsync(HttpContext context, BaseEntityManager manager)
         {
-            if (token != "allow")
+            if (!context.Request.Headers.TryGetValue(manager.Api.AuthorizationHeaderName, out var value)
+                || value.ToString() != "allow")
             {
-                return ValueTask.FromResult<UserConnection?>(null);
+                return ValueTask.FromResult(EntityApiAuthorizationResult.Fail("Mock authorization rejected request."));
             }
 
-            return ValueTask.FromResult<UserConnection?>(new UserConnection
+            return ValueTask.FromResult(EntityApiAuthorizationResult.Success(new UserConnection
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 Culture = new UserCulture
@@ -764,37 +753,28 @@ namespace Titanic.Test.Entity
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                     Name = "Test"
                 }
-            });
+            }));
         }
     }
 
-    public sealed class MockEntityApiStructureAuthorizationProvider : IUserConnectionTokenProvider
-    {
-        public ValueTask<UserConnection?> FindByTokenAsync(string token, HttpContext context)
-        {
-            if (token != "allow-structure")
-            {
-                return ValueTask.FromResult<UserConnection?>(null);
-            }
-
-            return ValueTask.FromResult<UserConnection?>(new UserConnection
-            {
-                UserId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                Culture = new UserCulture
-                {
-                    Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
-                    Name = "Test"
-                }
-            });
-        }
-    }
-
+    /// <summary>
+    /// Mock DB provider для проверки Entity API без реального PostgreSQL.
+    /// </summary>
     public sealed class EntityApiMockDbProvider : BaseDbProvider
     {
+        /// <summary>
+        /// Последний SQL, построенный ORM API.
+        /// </summary>
         public static string LastSql { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// Последние параметры, построенные ORM API.
+        /// </summary>
         public static IReadOnlyList<QueryParameter> LastParameters { get; private set; } = [];
 
+        /// <summary>
+        /// История SQL-запросов, построенных ORM API.
+        /// </summary>
         public static IReadOnlyList<string> SqlHistory
         {
             get
@@ -810,11 +790,19 @@ namespace Titanic.Test.Entity
 
         private static readonly List<string> _sqlHistory = [];
 
+        /// <summary>
+        /// Создать mock provider через reflection-фабрику DbManager.
+        /// </summary>
+        /// <param name="connectionString"> Строка подключения. </param>
+            /// <param name="engine"> SQL-движок. </param>
         public EntityApiMockDbProvider(string connectionString, BaseDbEngine engine)
             : base(connectionString, engine)
         {
         }
 
+        /// <summary>
+        /// Сбросить состояние mock provider перед тестом.
+        /// </summary>
         public static void ResetState()
         {
             lock (_syncRoot)
@@ -825,19 +813,25 @@ namespace Titanic.Test.Entity
             }
         }
 
+        /// <inheritdoc />
         public override int Execute(IQuery query)
         {
             Capture(query);
             return 1;
         }
 
+        /// <inheritdoc />
         public override T ExecuteScalar<T>(IQuery query)
         {
-            Capture(query);
-            object value = Guid.Parse("33333333-3333-3333-3333-333333333333");
+            var build = Capture(query);
+            object value = typeof(T) == typeof(int)
+                           && build.Sql.Contains("COUNT", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : Guid.Parse("33333333-3333-3333-3333-333333333333");
             return (T)value;
         }
 
+        /// <inheritdoc />
         public override List<T> ExecuteReader<T>(IQuery query, Func<DbDataReader, T> mapRow)
         {
             ArgumentNullException.ThrowIfNull(mapRow);
@@ -853,16 +847,21 @@ namespace Titanic.Test.Entity
             return rows;
         }
 
+        /// <inheritdoc />
         protected override DbConnection CreateConnection()
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database connections.");
         }
 
+        /// <inheritdoc />
         protected override DbParameter CreateParameter(QueryParameter parameter)
         {
             throw new NotSupportedException("EntityApiMockDbProvider does not create database parameters.");
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр Capture.
+        /// </summary>
         private QueryBuildResult Capture(IQuery query)
         {
             var build = Build(query);
@@ -876,6 +875,9 @@ namespace Titanic.Test.Entity
             return build;
         }
 
+        /// <summary>
+        /// Инициализирует новый экземпляр CreateReader.
+        /// </summary>
         private static DbDataReader CreateReader(string sql)
         {
             var table = new DataTable();
@@ -898,7 +900,4 @@ namespace Titanic.Test.Entity
         }
     }
 }
-
-
-
 

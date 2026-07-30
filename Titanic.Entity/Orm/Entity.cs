@@ -1,7 +1,9 @@
-﻿using Titanic.Common.Session;
+using Titanic.Common.Session;
 using Titanic.Db;
 using Titanic.Db.Abstractions;
 using Titanic.Db.Enums;
+using Titanic.Entity.Events;
+using Titanic.Entity.Interfaces;
 using Titanic.Entity.Strurture;
 
 namespace Titanic.Entity.Orm
@@ -17,6 +19,11 @@ namespace Titanic.Entity.Orm
         /// Значения считанных или установленных колонок по SQL-алиасу или имени колонки.
         /// </summary>
         private readonly Dictionary<string, ColumnValue> _values;
+
+        /// <summary>
+        /// Снимок значений сущности до текущей операции сохранения или удаления.
+        /// </summary>
+        private readonly Dictionary<string, object?> _oldValues;
 
         /// <summary>
         /// Соответствие ORM-пути к SQL-алиасу выбранной колонки.
@@ -43,6 +50,21 @@ namespace Titanic.Entity.Orm
         /// </summary>
         private readonly UserConnection _userConnection;
 
+        /// <summary>
+        /// Менеджер Entity ORM, создавший текущую сущность.
+        /// </summary>
+        private readonly BaseEntityManager? _manager;
+
+        /// <summary>
+        /// Признак того, что сущность была создана как новая запись и ещё не была сохранена.
+        /// </summary>
+        private bool _isNew;
+
+        /// <summary>
+        /// Стадии remote pipeline, которые уже были выполнены в составе batched transport-вызова.
+        /// </summary>
+        private readonly HashSet<EntityEventStage> _batchedRemoteStages = [];
+
         #endregion Fields
 
         #region Constructors
@@ -56,20 +78,33 @@ namespace Titanic.Entity.Orm
         /// <param name="structure"> Метаданные корневой сущности. </param>
         /// <param name="provider"> Провайдер БД. </param>
         /// <param name="userConnection"> Контекст пользователя. </param>
+        /// <param name="isNew"> Признак новой записи. </param>
+        /// <param name="manager"> Менеджер Entity ORM. </param>
+        /// <param name="oldValues"> Снимок старых значений сущности. </param>
         internal Entity(
             Dictionary<string, ColumnValue> values,
             Dictionary<string, string> pathToAlias,
             Dictionary<string, ColumnStructure> aliasToColumn,
             EntityStructure structure,
             BaseDbProvider provider,
-            UserConnection userConnection)
+            UserConnection userConnection,
+            bool isNew,
+            BaseEntityManager? manager = null,
+            IReadOnlyDictionary<string, object?>? oldValues = null)
         {
             _values = values;
+            _oldValues = oldValues != null
+                ? CopyValues(oldValues)
+                : isNew
+                    ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    : CopyColumnValues(values);
             _pathToAlias = pathToAlias;
             _aliasToColumn = aliasToColumn;
             _structure = structure;
             _provider = provider;
             _userConnection = userConnection ?? throw new ArgumentNullException(nameof(userConnection));
+            _isNew = isNew;
+            _manager = manager;
         }
 
         #endregion Constructors
@@ -87,16 +122,24 @@ namespace Titanic.Entity.Orm
         public IReadOnlyDictionary<string, ColumnValue> Values => _values;
 
         /// <summary>
-        /// Признак новой сущности без заполненного первичного ключа.
+        /// Старые значения колонок до текущей операции сохранения или удаления.
         /// </summary>
-        public bool IsNew
-        {
-            get
-            {
-                var primaryColumn = _structure.GetPrimaryColumnStructure();
-                return !TryGetColumnValue(primaryColumn, out var value) || IsDefaultPrimaryValue(value);
-            }
-        }
+        public IReadOnlyDictionary<string, object?> OldValues => _oldValues;
+
+        /// <summary>
+        /// Признак новой сущности, которая ещё не была сохранена в БД.
+        /// </summary>
+        public bool IsNew => _isNew;
+
+        /// <summary>
+        /// Имя таблицы корневой сущности.
+        /// </summary>
+        internal string TableName => _structure.TableName;
+
+        /// <summary>
+        /// Идентификатор текущего событийного pipeline для внешнего listener-а.
+        /// </summary>
+        internal string EventDispatchId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
         /// Известные ORM-пути выбранных колонок и соответствующие им SQL-алиасы.
@@ -179,7 +222,7 @@ namespace Titanic.Entity.Orm
 
             var alias = ResolveAlias(pathOrAlias) ?? pathOrAlias;
             var column = ResolveColumn(alias, pathOrAlias);
-            var normalizedValue = NormalizeValue(column, value);
+            var normalizedValue = EntityValueNormalizer.NormalizeColumnValue(column, value);
             if (_values.TryGetValue(alias, out var existing))
             {
                 existing.Value = normalizedValue;
@@ -213,16 +256,39 @@ namespace Titanic.Entity.Orm
         /// <returns> <see langword="true" />, если операция выполнена. </returns>
         public bool Save()
         {
-            var primaryColumn = _structure.GetPrimaryColumnStructure();
-            var hasPrimaryValue = TryGetColumnValue(primaryColumn, out var primaryValue)
-                && !IsDefaultPrimaryValue(primaryValue);
+            DispatchEvent(EntityEventStage.Saving);
 
-            if (hasPrimaryValue && UpdateEntity(primaryColumn, primaryValue) > 0)
+            if (!_isNew)
             {
-                return true;
+                var primaryColumn = _structure.GetPrimaryColumnStructure();
+                if (!TryGetColumnValue(primaryColumn, out var primaryValue) || IsDefaultPrimaryValue(primaryValue))
+                {
+                    throw new InvalidOperationException("Entity primary key value is required for Save() of existing record.");
+                }
+
+                if (EntityExists(primaryColumn, primaryValue))
+                {
+                    DispatchEvent(EntityEventStage.Updating);
+
+                    if (UpdateEntity(primaryColumn, primaryValue) > 0)
+                    {
+                        DispatchEvent(EntityEventStage.Updated);
+                        DispatchEvent(EntityEventStage.Saved);
+                        RefreshOldValues();
+                        return true;
+                    }
+                }
             }
 
+            var insertPrimaryColumn = _structure.GetPrimaryColumnStructure();
+            var hasPrimaryValue = TryGetColumnValue(insertPrimaryColumn, out var insertPrimaryValue)
+                && !IsDefaultPrimaryValue(insertPrimaryValue);
+            DispatchEvent(EntityEventStage.Inserting);
             InsertEntity(includePrimary: hasPrimaryValue);
+            _isNew = false;
+            DispatchEvent(EntityEventStage.Inserted);
+            DispatchEvent(EntityEventStage.Saved);
+            RefreshOldValues();
             return true;
         }
 
@@ -232,6 +298,8 @@ namespace Titanic.Entity.Orm
         /// <returns> <see langword="true" />, если строка была удалена. </returns>
         public bool Delete()
         {
+            DispatchEvent(EntityEventStage.Deleting);
+
             var primaryColumn = _structure.GetPrimaryColumnStructure();
             if (!TryGetColumnValue(primaryColumn, out var primaryValue) || IsDefaultPrimaryValue(primaryValue))
             {
@@ -243,6 +311,11 @@ namespace Titanic.Entity.Orm
                 .Where("t", primaryColumn.ColumnName)
                 .IsEqual(Column.Parameter(primaryValue))
                 .Execute();
+
+            if (affected > 0)
+            {
+                DispatchEvent(EntityEventStage.Deleted);
+            }
 
             return affected > 0;
         }
@@ -351,6 +424,111 @@ namespace Titanic.Entity.Orm
             }
 
             return new ScalarColumnValue(alias, column?.DataValueType ?? DataValueType.String, value);
+        }
+
+        /// <summary>
+        /// Заменяет снимок старых значений сущности.
+        /// </summary>
+        /// <param name="values">Старые значения по ORM-путям, именам колонок или SQL-алиасам.</param>
+        /// <returns>Текущая сущность для fluent-цепочки.</returns>
+        internal Entity SetOldValues(IReadOnlyDictionary<string, object?> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+
+            _oldValues.Clear();
+            foreach (var value in values)
+            {
+                _oldValues[value.Key] = value.Value;
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Создаёт полный transport-снимок сущности, достаточный для восстановления её состояния в удалённом listener-е.
+        /// </summary>
+        /// <returns>Полный снимок сущности.</returns>
+        internal EntityEventEntitySnapshot CreateTransportSnapshot()
+        {
+            return new EntityEventEntitySnapshot
+            {
+                TableName = TableName,
+                IsNew = _isNew,
+                Paths = _pathToAlias.ToDictionary(
+                    x => x.Key,
+                    x => x.Value,
+                    StringComparer.OrdinalIgnoreCase),
+                Columns = _values.ToDictionary(
+                    x => x.Key,
+                    x => new EntityEventColumnSnapshot
+                    {
+                        Alias = x.Key,
+                        DataValueType = (int)x.Value.DataValueType,
+                        IsReference = x.Value is ReferenceColumnValue,
+                        Value = x.Value.Value,
+                        DisplayValue = x.Value.DisplayValue
+                    },
+                    StringComparer.OrdinalIgnoreCase),
+                OldValues = CopyValues(_oldValues)
+            };
+        }
+
+        /// <summary>
+        /// Полностью восстанавливает состояние сущности из transport-снимка.
+        /// </summary>
+        /// <param name="snapshot">Transport-снимок сущности.</param>
+        /// <returns>Текущая сущность для fluent-цепочки.</returns>
+        internal Entity ApplyTransportSnapshot(EntityEventEntitySnapshot snapshot)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+
+            _isNew = snapshot.IsNew;
+            _values.Clear();
+            foreach (var column in snapshot.Columns)
+            {
+                _values[column.Key] = CreateTransportColumnValue(column.Key, column.Value);
+            }
+
+            if (snapshot.Paths.Count > 0)
+            {
+                _pathToAlias.Clear();
+                foreach (var path in snapshot.Paths)
+                {
+                    _pathToAlias[path.Key] = path.Value;
+                }
+            }
+
+            _oldValues.Clear();
+            foreach (var oldValue in snapshot.OldValues)
+            {
+                _oldValues[oldValue.Key] = BaseEntityEventProvider.NormalizeValue(oldValue.Value);
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Помечает стадии, которые уже были выполнены удалённым listener-ом в составе одного batched transport-вызова.
+        /// </summary>
+        /// <param name="stages">Стадии, которые не нужно повторно отправлять отдельными сообщениями.</param>
+        internal void MarkBatchedRemoteStages(IEnumerable<EntityEventStage> stages)
+        {
+            ArgumentNullException.ThrowIfNull(stages);
+
+            foreach (var stage in stages)
+            {
+                _batchedRemoteStages.Add(stage);
+            }
+        }
+
+        /// <summary>
+        /// Проверяет, была ли стадия уже выполнена удалённым listener-ом в составе batched transport-вызова.
+        /// </summary>
+        /// <param name="stage">Стадия pipeline.</param>
+        /// <returns><see langword="true" />, если отдельный transport-вызов нужно пропустить.</returns>
+        internal bool TryConsumeBatchedRemoteStage(EntityEventStage stage)
+        {
+            return _batchedRemoteStages.Remove(stage);
         }
 
         #endregion Internal Methods
@@ -462,6 +640,24 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
+        /// Проверяет, существует ли строка корневой сущности по первичному ключу.
+        /// </summary>
+        /// <param name="primaryColumn">Метаданные первичной колонки.</param>
+        /// <param name="primaryValue">Значение первичного ключа.</param>
+        /// <returns><see langword="true" />, если строка найдена.</returns>
+        private bool EntityExists(ColumnStructure primaryColumn, object? primaryValue)
+        {
+            var value = _provider.Select(primaryColumn.ColumnName)
+                .From(_structure.TableName).As("t")
+                .Where("t", primaryColumn.ColumnName)
+                .IsEqual(Column.Parameter(primaryValue))
+                .Limit(1).Take(1)
+                .ExecuteScalar<object>();
+
+            return value != null && value is not DBNull;
+        }
+
+        /// <summary>
         /// Получить колонки корневой сущности, доступные для записи.
         /// </summary>
         /// <param name="includePrimary"> Включать ли первичную колонку. </param>
@@ -519,6 +715,68 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
+        /// Обновляет снимок старых значений после успешного сохранения.
+        /// </summary>
+        private void RefreshOldValues()
+        {
+            _oldValues.Clear();
+            foreach (var value in ToDictionary())
+            {
+                _oldValues[value.Key] = value.Value;
+            }
+        }
+
+        /// <summary>
+        /// Создаёт копию словаря сырых значений.
+        /// </summary>
+        /// <param name="values">Исходный словарь значений.</param>
+        /// <returns>Копия словаря значений.</returns>
+        private static Dictionary<string, object?> CopyValues(IReadOnlyDictionary<string, object?> values)
+        {
+            return values.ToDictionary(
+                x => x.Key,
+                x => x.Value,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Создаёт снимок сырых значений из объектов значений колонок.
+        /// </summary>
+        /// <param name="values">Значения колонок сущности.</param>
+        /// <returns>Снимок сырых значений.</returns>
+        private static Dictionary<string, object?> CopyColumnValues(IReadOnlyDictionary<string, ColumnValue> values)
+        {
+            return values.ToDictionary(
+                x => x.Key,
+                x => x.Value.Value,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Восстанавливает объект значения колонки из transport-снимка.
+        /// </summary>
+        /// <param name="alias">Алиас колонки.</param>
+        /// <param name="snapshot">Снимок колонки.</param>
+        /// <returns>Восстановленное значение колонки.</returns>
+        private static ColumnValue CreateTransportColumnValue(string alias, EntityEventColumnSnapshot snapshot)
+        {
+            var value = BaseEntityEventProvider.NormalizeValue(snapshot.Value);
+            var displayValue = BaseEntityEventProvider.NormalizeValue(snapshot.DisplayValue);
+            var dataValueType = Enum.IsDefined(typeof(DataValueType), snapshot.DataValueType)
+                ? (DataValueType)snapshot.DataValueType
+                : DataValueType.String;
+
+            ColumnValue result = snapshot.IsReference
+                ? new ReferenceColumnValue(alias, dataValueType, value, displayValue)
+                : dataValueType == DataValueType.String
+                    ? new StringColumnValue(alias, value)
+                    : new ScalarColumnValue(alias, dataValueType, value);
+
+            result.DisplayValue = displayValue;
+            return result;
+        }
+
+        /// <summary>
         /// Проверить, считается ли значение первичного ключа незаполненным.
         /// </summary>
         /// <param name="value"> Проверяемое значение первичного ключа. </param>
@@ -541,21 +799,17 @@ namespace Titanic.Entity.Orm
         }
 
         /// <summary>
-        /// Нормализовать входное значение по типу колонки.
+        /// Выполнить этап pipeline событийного слоя.
         /// </summary>
-        /// <param name="column"> Метаданные колонки. </param>
-        /// <param name="value"> Исходное значение. </param>
-        /// <returns> Значение в CLR-типе, подходящем для провайдера БД. </returns>
-        private static object? NormalizeValue(ColumnStructure? column, object? value)
+        /// <param name="stage"> Этап pipeline. </param>
+        private void DispatchEvent(EntityEventStage stage)
         {
-            if (column?.DataValueType == DataValueType.Guid
-                && value is string stringValue
-                && Guid.TryParse(stringValue, out var guidValue))
+            if (_manager == null)
             {
-                return guidValue;
+                return;
             }
 
-            return value;
+            BaseEntityEventProvider.DispatchEntityEvent(this, _manager, stage);
         }
 
         #endregion Private Methods

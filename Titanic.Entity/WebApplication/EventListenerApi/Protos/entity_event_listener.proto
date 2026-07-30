@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+option csharp_namespace = "Titanic.Entity.Events.Grpc";
+
+package titanic.entity.events;
+
+service EntityEventListenerGrpc {
+  rpc Create (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnSaving (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnSaved (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnInserting (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnInserted (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnUpdating (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnUpdated (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnDeleting (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc OnDeleted (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc Delete (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+  rpc Dispatch (EntityEventGrpcRequest) returns (EntityEventGrpcResponse);
+}
+
+enum EntityEventGrpcStage {
+  UNSPECIFIED = 0;
+  SAVING = 1;
+  SAVED = 2;
+  INSERTING = 3;
+  INSERTED = 4;
+  UPDATING = 5;
+  UPDATED = 6;
+  DELETING = 7;
+  DELETED = 8;
+}
+
+message EntityEventGrpcRequest {
+  string manager_name = 1;
+  string table_name = 2;
+  EntityEventGrpcStage stage = 3;
+  bool is_new = 4;
+  EntityEventGrpcUserConnection user_connection = 5;
+  map<string, EntityEventGrpcValue> values = 6;
+  string dispatch_id = 7;
+  map<string, EntityEventGrpcValue> old_values = 8;
+  EntityEventGrpcEntitySnapshot entity = 9;
+  repeated EntityEventGrpcStage stages = 10;
+}
+
+message EntityEventGrpcUserConnection {
+  string user_id = 1;
+  EntityEventGrpcUserCulture culture = 2;
+}
+
+message EntityEventGrpcUserCulture {
+  string id = 1;
+  string name = 2;
+}
+
+message EntityEventGrpcResponse {
+  bool success = 1;
+  bool canceled = 2;
+  string cancel_reason = 3;
+  string error_message = 4;
+  map<string, EntityEventGrpcValue> values = 5;
+  EntityEventGrpcEntitySnapshot entity = 6;
+}
+
+message EntityEventGrpcEntitySnapshot {
+  string table_name = 1;
+  bool is_new = 2;
+  map<string, string> paths = 3;
+  map<string, EntityEventGrpcColumnSnapshot> columns = 4;
+  map<string, EntityEventGrpcValue> old_values = 5;
+}
+
+message EntityEventGrpcColumnSnapshot {
+  string alias = 1;
+  int32 data_value_type = 2;
+  bool is_reference = 3;
+  EntityEventGrpcValue value = 4;
+  EntityEventGrpcValue display_value = 5;
+}
+
+message EntityEventGrpcValue {
+  oneof kind {
+    bool null_value = 1;
+    bool bool_value = 2;
+    string string_value = 3;
+    sint32 int32_value = 4;
+    sint64 int64_value = 5;
+    double double_value = 6;
+    string decimal_value = 7;
+    string guid_value = 8;
+    string date_time_value = 9;
+    string date_time_offset_value = 10;
+    bytes bytes_value = 11;
+  }
+}

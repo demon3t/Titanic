@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <PackageId>Titanic.Entity</PackageId>
-    <Version>1.1.2</Version>
+    <Version>1.2.0</Version>
     <Authors>demon3t</Authors>
     <Description>Entity ORM and HTTP API layer for Titanic.</Description>
     <RepositoryUrl>https://github.com/demon3t/Titanic</RepositoryUrl>
@@ -26,12 +26,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.35.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.76.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.81.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Titanic.Common\Titanic.Common.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Titanic.Db\Titanic.Db.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Abstractions\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="WebApplication\EventListenerApi\Protos\entity_event_listener.proto" GrpcServices="Both" />
   </ItemGroup>
 
   <Target Name="IncludeCommonOutputInPackage" DependsOnTargets="ResolveReferences">

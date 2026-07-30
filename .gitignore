@@ -24,5 +24,7 @@
 *.tsbuildinfo
 **/appsettings*.local.json
 !/ARCHITECTURE.md
-!/LICENSE.txt
 
+
+local-secrets/
+Titanic.Entity/ENTITY_OPENAPI.json

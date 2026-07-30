@@ -9,7 +9,7 @@ namespace Titanic.Db.Abstractions
     /// Хранит заранее созданные <see cref="DbConnection"/> в стеке,
     /// уменьшая накладные расходы на открытие соединения.
     /// </summary>
-    public sealed class BaseDbConnectionPool : IDisposable
+    internal sealed class BaseDbConnectionPool : IDisposable
     {
         private readonly Func<DbConnection> _factory;
         private readonly Func<DbConnection, bool> _isConnectionHealthy;
@@ -67,6 +67,7 @@ namespace Titanic.Db.Abstractions
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
+            var shouldCreatePooledConnection = false;
             lock (_lock)
             {
                 while (_available.Count > 0)
@@ -87,7 +88,25 @@ namespace Titanic.Db.Abstractions
                 {
                     _currentSize++;
                     _activeCount++;
-                    return null!; // placeholder; will be created and returned outside of lock wait branch
+                    shouldCreatePooledConnection = true;
+                }
+            }
+
+            if (shouldCreatePooledConnection)
+            {
+                try
+                {
+                    return _factory();
+                }
+                catch
+                {
+                    lock (_lock)
+                    {
+                        _currentSize--;
+                        _activeCount--;
+                    }
+
+                    throw;
                 }
             }
 

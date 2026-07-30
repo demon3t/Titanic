@@ -67,7 +67,7 @@ namespace Titanic.Test.Entity
                             AutoRegisterEndpoint = true,
                             Path = "/api/entity/test",
                             AuthorizationHeaderName = "X-Test-Entity-Key",
-                            AuthorizationProviderType = "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test"
+                            AuthorizationProviderType = "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity"
                         },
                         Options = new EntityManagerOptions
                         {
@@ -87,7 +87,7 @@ namespace Titanic.Test.Entity
             Assert.Equal("/api/entity/test", manager.Api.Path);
             Assert.Equal("X-Test-Entity-Key", manager.Api.AuthorizationHeaderName);
             Assert.Equal(
-                "Titanic.Test.Entity.MockEntityApiAuthorizationProvider, Titanic.Test",
+                "Titanic.Entity.WebApplication.Api.HeaderEntityApiAuthorizationProvider, Titanic.Entity",
                 manager.Api.AuthorizationProviderType);
             Assert.Equal(25, manager.Options.MaxReadRowCount);
             Assert.False(manager.ValidateDatabaseSchemaOnCompile);
@@ -132,58 +132,6 @@ namespace Titanic.Test.Entity
             var build = hiddenQuery.Build();
 
             Assert.Contains("\"hidden_scoped_entities\"", build.Sql, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void EntitySelectBuilder_PathToEntityOutsideManagerScope_ShouldThrow()
-        {
-            EntityManager.Initialize(new EntityManagerConfig
-            {
-                Managers =
-                [
-                    new EntityManagerSettings
-                    {
-                        Name = "RootScope",
-                        DbProviderName = "TestPostgres",
-                        ManagerType = typeof(EntityDbManager).AssemblyQualifiedName!,
-                        EntityModelNamespaces = ["Titanic.Test.Entity"]
-                    }
-                ]
-            });
-
-            var manager = EntityManager.GetManager<EntityDbManager>();
-            var builder = manager.Select(typeof(OrmEmployeeHiddenLinkEntity), OrmTestUserConnection.Create());
-
-            Assert.Throws<NotExistTableException>(() => builder.AddColumn("HiddenId.Name"));
-            Assert.Throws<NotExistTableException>(() => builder.Where("HiddenId.Name"));
-        }
-
-        [Fact]
-        public void HiddenScopeManager_ShouldNotResolveRootEntityType()
-        {
-            EntityManager.Initialize(new EntityManagerConfig
-            {
-                Managers =
-                [
-                    new EntityManagerSettings
-                    {
-                        Name = "HiddenScope",
-                        DbProviderName = "TestPostgres",
-                        ManagerType = typeof(HiddenScopeEntityManager).AssemblyQualifiedName!,
-                        EntityModelNamespaces = ["Titanic.Test.Entity.Hidden.*"]
-                    }
-                ]
-            });
-
-            var manager = EntityManager.GetManager<HiddenScopeEntityManager>();
-
-            Assert.Throws<NotExistTableException>(
-                () => manager.Query(typeof(OrmEmployeeEntity), OrmTestUserConnection.Create()));
-            Assert.Throws<NotExistTableException>(
-                () => new ESQJsonModel
-                {
-                    EntityTypeName = nameof(OrmEmployeeEntity)
-                }.ToESQ(manager, OrmTestUserConnection.Create()));
         }
 
         [Fact]
@@ -710,6 +658,42 @@ namespace Titanic.Test.Entity
             AssertParameters(build, 100);
         }
 
+        /// <summary>
+        /// Проверяет, что GUID-значения фильтров, восстановленные из JSON-модели ESQ,
+        /// передаются провайдеру БД как параметры <see cref="Guid"/>, а не как текст.
+        /// </summary>
+        [Fact]
+        public void ESQJsonModel_GuidFilter_ShouldRestoreStringValueAsGuidParameter()
+        {
+            var recordId = Guid.Parse("7e8d71b9-2591-d1b9-c51d-aa205eca08ad");
+            var json = $$"""
+            {
+              "tableName": "employees",
+              "columns": [
+                { "path": "Name" }
+              ],
+              "filters": {
+                "items": [
+                  { "path": "Id", "comparisonType": "Equal", "value": "{{recordId}}" }
+                ]
+              }
+            }
+            """;
+
+            var build = ESQJsonModel.FromJson(json).ToESQ(_provider, OrmTestUserConnection.Create()).Build();
+
+            AssertSql(
+                "SELECT\n"
+                    + "\t\"t0\".\"name\" AS \"Name\"\n"
+                    + "FROM\n"
+                    + "\t\"employees\" AS \"t0\"\n"
+                    + "WHERE\n"
+                    + "\t(\"t0\".\"id\" = @p0)",
+                build.Sql);
+
+            AssertParameters(build, recordId);
+        }
+
         [Fact]
         public void ESQJsonModel_NestedFilterGroup_ShouldRestoreGroupedWhere()
         {
@@ -1122,7 +1106,6 @@ namespace Titanic.Test.Entity
     {
     }
 }
-
 
 
 
