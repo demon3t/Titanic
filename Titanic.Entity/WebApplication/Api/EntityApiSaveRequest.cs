@@ -3,7 +3,7 @@ namespace Titanic.Entity.WebApplication.Api
     /// <summary>
     /// Legacy HTTP-модель создания или обновления сущности.
     /// </summary>
-    [Obsolete("Will be removed in 1.4.0. Use EntityApiRequest with Operation = EntityApiOperationType.Save instead.")]
+    [Obsolete("Deprecated; RemoveIn=1.4.0; Replacement=EntityApiRequest with Operation = EntityApiOperationType.Save")]
     public sealed class EntityApiSaveRequest
     {
         /// <summary>
