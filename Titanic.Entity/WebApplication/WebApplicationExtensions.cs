@@ -865,7 +865,7 @@ namespace Titanic.Entity.WebApplication
         /// <summary>
         /// Инициализирует новый экземпляр CreateRequestEntity.
         /// </summary>
-        [Obsolete("Use CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest) instead. This method will be removed in 1.4.0.")]
+        [Obsolete("Will be removed in 1.4.0. Use CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest) instead.")]
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
@@ -877,7 +877,7 @@ namespace Titanic.Entity.WebApplication
         /// <summary>
         /// Инициализирует новый экземпляр CreateRequestEntity.
         /// </summary>
-        [Obsolete("Use CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest) instead. This method will be removed in 1.4.0.")]
+        [Obsolete("Will be removed in 1.4.0. Use CreateRequestEntity(BaseEntityManager, UserConnection, EntityApiRequest) instead.")]
         private static Orm.Entity CreateRequestEntity(
             BaseEntityManager manager,
             UserConnection userConnection,
