@@ -6,7 +6,7 @@ namespace Titanic.Entity.WebApplication.Api
     /// <summary>
     /// JSON-конвертер типа операции Entity API, который не роняет HTTP pipeline на неизвестном значении.
     /// </summary>
-    public sealed class EntityApiOperationTypeJsonConverter : JsonConverter<EntityApiOperationType>
+    internal sealed class EntityApiOperationTypeJsonConverter : JsonConverter<EntityApiOperationType>
     {
         #region JsonConverter
 

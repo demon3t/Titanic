@@ -277,7 +277,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -293,7 +293,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveExistingOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateUpdateRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -338,7 +338,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -354,7 +354,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteRequest());
 
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync();
@@ -585,51 +585,6 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateSaveOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateSaveOperationRequest()
-        {
-            var request = CreateSaveRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateSaveExistingOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateSaveExistingOperationRequest()
-        {
-            var request = CreateUpdateRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Save,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateDeleteOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateDeleteOperationRequest()
-        {
-            var request = CreateDeleteRequest();
-            return new EntityApiRequest
-            {
-                Operation = EntityApiOperationType.Delete,
-                TableName = request.TableName,
-                EntityTypeName = request.EntityTypeName,
-                Values = request.Values
-            };
-        }
-
-        /// <summary>
         /// Инициализирует новый экземпляр CreateBatchRequest.
         /// </summary>
         private static EntityApiBatchRequest CreateBatchRequest(EntityApiBatchExecutionMode? executionMode = null)
@@ -640,8 +595,8 @@ namespace Titanic.Test.Entity
                 Requests =
                 [
                     CreateSelectOperationRequest(),
-                    CreateSaveOperationRequest(),
-                    CreateDeleteOperationRequest()
+                    CreateSaveRequest(),
+                    CreateDeleteRequest()
                 ]
             };
         }
@@ -649,10 +604,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateSaveRequest.
         /// </summary>
-        private static EntityApiSaveRequest CreateSaveRequest()
+        private static EntityApiRequest CreateSaveRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -665,10 +621,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateUpdateRequest.
         /// </summary>
-        private static EntityApiSaveRequest CreateUpdateRequest()
+        private static EntityApiRequest CreateUpdateRequest()
         {
-            return new EntityApiSaveRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Save,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {
@@ -682,10 +639,11 @@ namespace Titanic.Test.Entity
         /// <summary>
         /// Инициализирует новый экземпляр CreateDeleteRequest.
         /// </summary>
-        private static EntityApiDeleteRequest CreateDeleteRequest()
+        private static EntityApiRequest CreateDeleteRequest()
         {
-            return new EntityApiDeleteRequest
+            return new EntityApiRequest
             {
+                Operation = EntityApiOperationType.Delete,
                 TableName = "departments",
                 Values = new Dictionary<string, object?>
                 {

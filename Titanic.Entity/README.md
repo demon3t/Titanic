@@ -53,10 +53,9 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 ### Metadata и атрибуты
 
 - `Structure` — сканирует сборки и хранит metadata Entity-моделей.
-- `EntityStructure` — описание таблицы.
-- `ColumnStructure` — описание колонки.
-- `EntitySchemaValidator` — проверка схемы БД при инициализации менеджера.
 - `EntityAttribute`, `PrimaryColumnAttribute`, `DisplayColumnAttribute`, `ColumnAttribute`, `StringColumnAttribute`, `ReferenceColumnAttribute`, `DisableLocalizationAttribute` — атрибуты описания сущностей.
+
+`EntityStructure`, `ColumnStructure`, `EntityStructureScope` и валидаторы схемы являются внутренними runtime-деталями. Внешний код должен получать доступную frontend-структуру через `GET {Api.Path}/structure` или работать с ORM через публичные builders.
 
 ### HTTP API
 
@@ -67,6 +66,20 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - `EntityApiManagerStructureResponse` — модель ответа endpoint-а структуры менеджера.
 - `EntityApiOperationType` — операции `Select`, `Save`, `Delete`.
 - `EntityApiBatchExecutionMode` — режимы `Sequential` и `Parallel`.
+
+## Граница публичного API
+
+Публичным контрактом пакета считаются:
+
+- `EntityManager`, `BaseEntityManager`, `EntityDbManager` и web/DI extension-методы;
+- ORM builders: `EntitySchemaQuery`, `ESQ`, `EntitySelectBuilder`, `EntityWhereItem`;
+- модели QueryModel и JSON-модели ESQ: колонки, фильтры, сортировки, логические операции, сравнения и агрегации;
+- `Entity`, `ColumnValue` и наследники значений колонок;
+- атрибуты Entity-моделей и event listener-ов;
+- HTTP API-контракт: `EntityApiRequest`, `EntityApiBatchRequest`, response-модели, enum-ы операций и режимов, `IEntityApiAuthorizationProvider`;
+- event API: базовые listener/provider-типы, transport-контракты и client factory-интерфейсы.
+
+Legacy-модели отдельных операций `EntityApiSaveRequest` и `EntityApiDeleteRequest` оставлены только для совместимости и помечены `[Obsolete]` в формате `Deprecated; RemoveIn=1.4.0; Replacement=...`. Для HTTP-вызовов используйте единую модель `EntityApiRequest` с `operation = Save` или `operation = Delete`.
 
 ## Пример Entity-модели
 

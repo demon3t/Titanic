@@ -21,7 +21,9 @@ jobs:
 
       - name: Run repository smell check
         shell: pwsh
-        run: ./.github/scripts/check-mojibake.ps1 -RepoRoot $PWD -FirstMatchPerFile
+        run: |
+          ./.github/scripts/check-mojibake.ps1 -RepoRoot $PWD -FirstMatchPerFile
+          ./.github/scripts/check-obsolete-removals.ps1 -RepoRoot $PWD
 
   build-and-test:
     needs: repository-smell-check

@@ -7,7 +7,7 @@ namespace Titanic.Entity.Orm
     /// <summary>
     /// Backward-compatible short alias for EntitySchemaQuery.
     /// </summary>
-    [Obsolete("Use EntitySchemaQuery instead.")]
+    [Obsolete("Deprecated; RemoveIn=1.4.0; Replacement=EntitySchemaQuery")]
     public class ESQ : EntitySchemaQuery
     {
         public ESQ(BaseDbProvider provider, Type entityType, UserConnection userConnection)

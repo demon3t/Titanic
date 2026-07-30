@@ -25,7 +25,7 @@ namespace Titanic.Db.Abstractions
         /// <summary>
         /// Пул подключений, используемый провайдером.
         /// </summary>
-        public BaseDbConnectionPool? Pool => _pool;
+        internal BaseDbConnectionPool? Pool => _pool;
 
         /// <summary>
         /// Движок SQL-диалекта провайдера.
