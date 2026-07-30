@@ -79,7 +79,7 @@ Titanic.Common -> Titanic.Db -> Titanic.Entity
 - HTTP API-контракт: `EntityApiRequest`, `EntityApiBatchRequest`, response-модели, enum-ы операций и режимов, `IEntityApiAuthorizationProvider`;
 - event API: базовые listener/provider-типы, transport-контракты и client factory-интерфейсы.
 
-Legacy-модели отдельных операций `Save`/`Delete` не являются публичным контрактом. Для HTTP-вызовов используйте только единую модель `EntityApiRequest` с `operation = Save` или `operation = Delete`.
+Legacy-модели отдельных операций `EntityApiSaveRequest` и `EntityApiDeleteRequest` оставлены только для совместимости и помечены `[Obsolete]`. Для HTTP-вызовов используйте единую модель `EntityApiRequest` с `operation = Save` или `operation = Delete`.
 
 ## Пример Entity-модели
 
