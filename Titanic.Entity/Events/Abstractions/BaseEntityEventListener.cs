@@ -13,9 +13,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnSaving(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается после общей операции сохранения сущности.
@@ -23,9 +21,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnSaved(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается перед вставкой новой сущности.
@@ -33,9 +29,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnInserting(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается после вставки новой сущности.
@@ -43,9 +37,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnInserted(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается перед обновлением существующей сущности.
@@ -53,9 +45,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnUpdating(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается после обновления существующей сущности.
@@ -63,9 +53,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnUpdated(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается перед удалением сущности.
@@ -73,9 +61,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnDeleting(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Вызывается после удаления сущности.
@@ -83,9 +69,7 @@ namespace Titanic.Entity.Events
         /// <param name="entity"> Текущая ORM-сущность. </param>
         /// <param name="args"> Аргументы события. </param>
         public virtual void OnDeleted(global::Titanic.Entity.Orm.Entity entity, EntityEventArgs args)
-        {
-            ValidateArguments(entity, args);
-        }
+            => ValidateArguments(entity, args);
 
         /// <summary>
         /// Проверить аргументы обработчика событий Entity ORM.

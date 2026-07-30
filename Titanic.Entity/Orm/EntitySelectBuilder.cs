@@ -185,37 +185,19 @@ namespace Titanic.Entity.Orm
         /// Инициализирует новый экземпляр Where.
         /// </summary>
         public EntityWhereItem Where(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.And);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.And);
 
         /// <summary>
         /// Инициализирует новый экземпляр And.
         /// </summary>
         public EntityWhereItem And(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.And);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.And);
 
         /// <summary>
         /// Инициализирует новый экземпляр Or.
         /// </summary>
         public EntityWhereItem Or(string path)
-        {
-            var resolved = ResolvePath(path, allowTerminalReference: false);
-            return new EntityWhereItem(
-                this,
-                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
-                EntityWhereConnector.Or);
-        }
+            => CreateWhereItem(path, EntityWhereConnector.Or);
 
         /// <summary>
         /// Инициализирует новый экземпляр OrderBy.
@@ -385,6 +367,18 @@ namespace Titanic.Entity.Orm
                     : QueryExpression.And(_whereExpression, expression);
 
             return this;
+        }
+
+        /// <summary>
+        /// Создать fluent-условие WHERE для ORM-пути.
+        /// </summary>
+        private EntityWhereItem CreateWhereItem(string path, EntityWhereConnector connector)
+        {
+            var resolved = ResolvePath(path, allowTerminalReference: false);
+            return new EntityWhereItem(
+                this,
+                BuildReadExpression(resolved.CurrentEntity, resolved.TerminalAlias, resolved.TerminalColumn),
+                connector);
         }
 
         /// <summary>
