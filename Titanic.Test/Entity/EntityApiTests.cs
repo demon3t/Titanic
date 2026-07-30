@@ -277,7 +277,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -293,7 +293,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveExistingOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateUpdateRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("UPDATE", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -309,7 +309,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateSaveRequest());
 
             response.EnsureSuccessStatusCode();
             Assert.Contains("INSERT", EntityApiMockDbProvider.LastSql, StringComparison.OrdinalIgnoreCase);
@@ -325,7 +325,7 @@ namespace Titanic.Test.Entity
             await using var app = await CreateAppAsync(autoRegisterApiEndpoint: true);
             var client = CreateAuthorizedClient(app);
 
-            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteOperationRequest());
+            var response = await client.PostAsJsonAsync(ApiPath, CreateDeleteRequest());
 
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync();
@@ -556,30 +556,6 @@ namespace Titanic.Test.Entity
         }
 
         /// <summary>
-        /// Инициализирует новый экземпляр CreateSaveOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateSaveOperationRequest()
-        {
-            return CreateSaveRequest();
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateSaveExistingOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateSaveExistingOperationRequest()
-        {
-            return CreateUpdateRequest();
-        }
-
-        /// <summary>
-        /// Инициализирует новый экземпляр CreateDeleteOperationRequest.
-        /// </summary>
-        private static EntityApiRequest CreateDeleteOperationRequest()
-        {
-            return CreateDeleteRequest();
-        }
-
-        /// <summary>
         /// Инициализирует новый экземпляр CreateBatchRequest.
         /// </summary>
         private static EntityApiBatchRequest CreateBatchRequest(EntityApiBatchExecutionMode? executionMode = null)
@@ -590,8 +566,8 @@ namespace Titanic.Test.Entity
                 Requests =
                 [
                     CreateSelectOperationRequest(),
-                    CreateSaveOperationRequest(),
-                    CreateDeleteOperationRequest()
+                    CreateSaveRequest(),
+                    CreateDeleteRequest()
                 ]
             };
         }
